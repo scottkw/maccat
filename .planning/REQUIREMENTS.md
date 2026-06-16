@@ -22,14 +22,14 @@ Requirements for this milestone (v2.1.0). Each maps to a roadmap phase.
 
 ### Auto-Install Output
 
-- [ ] **GEN-01**: Homebrew packages are emitted as guarded `brew install <name>` lines that install a formula or cask and are safe to re-run (cask idempotency guard); the cataloged version appears as a `# cataloged: …` comment. A name that is both a formula and a cask is noted as needing manual `--cask`/`--formula`.
-- [ ] **GEN-02**: App Store apps that carry an ID are emitted as `mas install <id>` lines (version as comment); App Store apps from a pre-MAS-01 catalog (no ID) degrade to the manual checklist rather than emitting a broken command.
-- [ ] **GEN-03**: VS Code and Cursor extensions are emitted as `code --install-extension <id>` / `cursor --install-extension <id>` lines with a PATH guard (`command -v`) and an idempotency guard (`--list-extensions` pre-check or `--force`); ids lowercased.
-- [ ] **GEN-04**: The generated script uses `#!/usr/bin/env bash` + `set -Eeuo pipefail`, opens with a provenance + "review before running" header (source catalog name, generation date), orders sections conventionally (formulae → casks → mas → code → cursor → manual checklist), and `shlex.quote()`s every catalog-derived value (injection-safe).
+- [x] **GEN-01**: Homebrew packages are emitted as guarded `brew install <name>` lines that install a formula or cask and are safe to re-run (cask idempotency guard); the cataloged version appears as a `# cataloged: …` comment. A name that is both a formula and a cask is noted as needing manual `--cask`/`--formula`.
+- [x] **GEN-02**: App Store apps that carry an ID are emitted as `mas install <id>` lines (version as comment); App Store apps from a pre-MAS-01 catalog (no ID) degrade to the manual checklist rather than emitting a broken command.
+- [x] **GEN-03**: VS Code and Cursor extensions are emitted as `code --install-extension <id>` / `cursor --install-extension <id>` lines with a PATH guard (`command -v`) and an idempotency guard (`--list-extensions` pre-check or `--force`); ids lowercased.
+- [x] **GEN-04**: The generated script uses `#!/usr/bin/env bash` + `set -Eeuo pipefail`, opens with a provenance + "review before running" header (source catalog name, generation date), orders sections conventionally (formulae → casks → mas → code → cursor → manual checklist), and `shlex.quote()`s every catalog-derived value (injection-safe).
 
 ### Manual Checklist
 
-- [ ] **MAN-01**: Non-deterministic sources — Setapp apps, web-installed `/Applications`, Chrome/Firefox extensions, and AI-CLI MCP servers / plugins / skills / agents — are emitted as a manual checklist (runtime `echo` reminders after the automated installs), listed by name. No fabricated install commands.
+- [x] **MAN-01**: Non-deterministic sources — Setapp apps, web-installed `/Applications`, Chrome/Firefox extensions, and AI-CLI MCP servers / plugins / skills / agents — are emitted as a manual checklist (runtime `echo` reminders after the automated installs), listed by name. No fabricated install commands.
 
 ## v2 Requirements
 
@@ -77,11 +77,11 @@ Updated during roadmap creation.
 | PARSE-01 | Phase 24 | Complete |
 | RST-01 | Phase 26 | Pending |
 | RST-02 | Phase 26 | Pending |
-| GEN-01 | Phase 25 | Pending |
-| GEN-02 | Phase 25 | Pending |
-| GEN-03 | Phase 25 | Pending |
-| GEN-04 | Phase 25 | Pending |
-| MAN-01 | Phase 25 | Pending |
+| GEN-01 | Phase 25 | Complete |
+| GEN-02 | Phase 25 | Complete |
+| GEN-03 | Phase 25 | Complete |
+| GEN-04 | Phase 25 | Complete |
+| MAN-01 | Phase 25 | Complete |
 
 **Coverage:**
 - v1 requirements: 9 total
