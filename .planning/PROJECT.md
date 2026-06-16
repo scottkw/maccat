@@ -41,30 +41,21 @@ for keeping a restorable, diffable history of a machine's full software + toolin
   byte-unmodified. Adversarial code review caught a tautological parity gate (goldens written from
   Python) and an ID-erasing normalization bug — both fixed before completion.
 
-## Current Milestone: v1.1.0 Repo Separation & CI Build
+- **v1.1.0 Repo Separation & CI Build** (2026-06-16) — extracted `maccat` into a new **public**
+  GitHub repo (`github.com/scottkw/maccat`) from a **fresh git history** (code + tests + build
+  tooling + docs + zsh reference + `.planning/`), with zero personal catalog data in the tree or log;
+  added a CI `.pyz` build + artifact upload on push/PR and a tag-triggered `release.yml` that
+  publishes a GitHub Release with `maccat.pyz` (no third-party action). Reduced **this** repo to
+  catalog-data-only (catalog folders + `machine-labels.tsv` + archives kept; code/tooling/`.planning/`
+  removed; README now points to the public tool repo). A human checkpoint before the public push
+  caught a private-a private Git host-host leak the plan missed. 12/12 requirements; audit PASSED. **GSD home
+  moved to the maccat repo** — future feature work happens there; this repo is now data-only.
 
-**Goal:** Extract `maccat` into a clean, generic public GitHub repo with an automated `.pyz`
-build/release pipeline, leaving this repo as catalog-data-only — clearing the runway for
-feature development.
+## Current Milestone
 
-**Target features:**
-- New **public** GitHub repo (created via `gh` CLI) holding the maccat code, tests, build
-  tooling, docs, the zsh reference, and `.planning/` GSD history — started from a **fresh git
-  history** (current state only) so no personal catalog data is ever exposed
-- All **setup-specific content genericized** (README, example config, default paths,
-  `personal`/`office` examples) so the repo reads as a general-purpose open-source tool
-- This repo reduced to **catalog-data-only** (catalog folders + `machine-labels.tsv` + archives);
-  code/tests/docs/planning removed
-- **GitHub Action** that builds the `.pyz` and runs the test suite (ruff + mypy + pytest) on every
-  push/PR to `main`
-- On a **version-tag** push, the Action publishes a **GitHub Release** with the compiled `.pyz` attached
-- maccat verified to run correctly against a genuinely external catalog repo after the split
-
-**Deferred (still):** PKG-04 (pipx/PyPI channel) — distribution-adjacent but out of scope for this
-migration milestone.
-
-After this milestone, all future GSD/feature work happens in the **new** repo (planning moves with
-the code).
+_None — v1.1.0 shipped and this repo is now catalog-data-only. The `maccat` tool, its CI/release
+pipeline, and the GSD planning history live at **github.com/scottkw/maccat**. All future
+development and milestones happen there._
 
 ## Next Candidate Milestone
 

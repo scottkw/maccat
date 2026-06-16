@@ -51,7 +51,7 @@ def normalize_catalog_body(text: str) -> str:
 
     Volatile (replaced):
     - 14-digit timestamps anywhere in text → TIMESTAMP
-    - Square-bracket machine labels like [computer-two] → [MACHINE]
+    - Square-bracket machine labels like [computer-one] → [MACHINE]
 
     Stable (asserted exactly after normalization):
     - Section headers, separator lines, item lines, sort order, (none found)

@@ -64,10 +64,10 @@ but produces user-surprising behavior, so the strongest items are Warnings.
 **File:** `update-list.sh:2390-2391` (consumers), `update-list.sh:439-570` (producer)
 **Issue:** Phase 10 changed `CURRENT_MACHINE` from `$MACHINE_LABEL` to `$TARGET_LOCATION`, but
 left the entire `resolve_machine_label` subsystem in place and still wired into the main block
-(2381). The result: a user who runs `--machine "Kens Fancy Laptop"`, or who picks/creates a label
-in the interactive menu, sees the script echo `Machine label: Kens Fancy Laptop` — yet the actual
+(2381). The result: a user who runs `--machine "computer Fancy Laptop"`, or who picks/creates a label
+in the interactive menu, sees the script echo `Machine label: computer Fancy Laptop` — yet the actual
 catalog filename and the TSV value are both `personal` (the `TARGET_LOCATION`). Verified in
-fixture: with `TARGET_LOCATION=personal` and `MACHINE_LABEL="Kens Fancy Laptop"`, the file written
+fixture: with `TARGET_LOCATION=personal` and `MACHINE_LABEL="computer Fancy Laptop"`, the file written
 is `MyHost<TAB>personal` and the filename uses `personal`. The supplied/chosen label has zero
 effect. This violates the project's fail-fast / "make beliefs pay rent" conventions: an option
 that prints a confirmation but does nothing is worse than an option that errors.

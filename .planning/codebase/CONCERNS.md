@@ -57,7 +57,7 @@
 - Recommendations: Verify the a private Git host repo is set to private. Rotate a private Git host credentials periodically. Consider whether the office machine catalogs (`office/` directory) fall under any employer data policies before committing to an external server.
 
 **Hostname embedded in filenames and commit messages:**
-- Risk: Machine hostnames (`computer-one.local`, `computer-two.local`, `computer-two.local`) are embedded in every filename and every commit message. These reveal machine naming conventions and network topology. All 128 commits include hostname data.
+- Risk: Machine hostnames (`computer-one.local`, `computer-two.local`, `computer-one.local`) are embedded in every filename and every commit message. These reveal machine naming conventions and network topology. All 128 commits include hostname data.
 - Files: `update-list.sh` line 431, 478; all catalog files
 - Current mitigation: Private a private Git host instance.
 - Recommendations: If the repo is ever made public or shared, hostnames in git history cannot be removed without a full history rewrite.

@@ -37,7 +37,7 @@ mac-software-list/
 **`office/`:**
 - Purpose: Holds software catalogs from office/work macOS machines
 - Contains: Timestamped `.txt` catalog files, one per script run
-- Key files: Most-recent `mac-software-list-[computer-two.local]-*.txt`
+- Key files: Most-recent `mac-software-list-[computer-one.local]-*.txt`
 
 **`office/archive/`:**
 - Purpose: Long-term storage for office catalogs older than 60 days
@@ -71,7 +71,7 @@ mac-software-list/
 - Examples:
   - `mac-software-list-[computer-one.local]-20260612130331.txt`
   - `mac-software-list-[computer-two.local]-20260607205427.txt`
-  - `mac-software-list-[computer-two.local]-20260602071629.txt`
+  - `mac-software-list-[computer-one.local]-20260602071629.txt`
 
 **Directories:**
 - Two fixed top-level output directories: `personal/` and `office/`

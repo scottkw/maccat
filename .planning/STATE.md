@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1.0
 milestone_name: Repo Separation & CI Build
-status: planning
-last_updated: "2026-06-15T23:55:00.000Z"
-last_activity: 2026-06-15
+status: Awaiting next milestone
+stopped_at: Phase 20 Plan 01 complete — MIG-05 verified. Ready for Plan 20-02 (MIG-04 strip, human checkpoint required).
+last_updated: "2026-06-16T05:06:59.227Z"
+last_activity: 2026-06-16 — Milestone v1.1.0 completed and archived
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -20,16 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-15)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 18 — Public Repo Migration (Genericized, Fresh History)
+**Current focus:** Phase 20 — Cut-Over & External-Catalog Verification
 
 ## Current Position
 
-Phase: 18 of 20 (Public Repo Migration)
-Plan: — (ready to plan)
-Status: Ready to plan
-Last activity: 2026-06-15 — Roadmap created for v1.1.0 (Phases 18-20, coarse granularity)
-
-Progress: [░░░░░░░░░░] 0%
+Phase: Milestone v1.1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-16 — Milestone v1.1.0 completed and archived
 
 ## Performance Metrics
 
@@ -53,6 +52,8 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 18 P02 | 5 | 4 tasks | 313 files |
+| Phase 20 P02 | 5 | 2 tasks | 104 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,9 @@ Recent decisions affecting current work:
 - **Fresh history (MIG-03):** New public repo via clean `git init` of a prepared/genericized tree — NOT a `git filter-branch` of this repo's history (saturated with personal catalog commits). Zero personal data in tree or log.
 - **Genericization timing (2026-06-15):** GEN-01..04 happen as part of preparing the clean tree in Phase 18, so no personal data is ever committed to the new repo's first commit.
 - **GEN-03 cleanup list:** remove committed `dist/maccat.pyz`, the three stray root test scripts (`test-parse-arguments-11-02.sh`, `test-rename-back-12-02.sh`, `test-rename-front-12-01.sh`), `venv/`, and any `personal`/`office` catalog folders.
+- [Phase ?]: PUBLIC, branch main, single-commit fresh history, 0/0/0 privacy gate
+- **CI-02 (2026-06-16):** Build job runs parallel to test matrix (not sequential) — avoids 3 redundant artifact uploads from the PYTHONHASHSEED matrix
+- **CI-03 (2026-06-16):** Release workflow uses gh release create in a run step (no third-party action); release job on ubuntu-latest (zipapp is OS-agnostic); permissions: contents: write only
 
 ### Pending Todos
 
@@ -88,6 +92,10 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-15T23:55:00.000Z
-Stopped at: Created v1.1.0 roadmap (Phases 18-20); REQUIREMENTS.md traceability mapped 12/12
+Last session: 2026-06-16T05:02:29.125Z
+Stopped at: Phase 20 Plan 01 complete — MIG-05 verified. Ready for Plan 20-02 (MIG-04 strip, human checkpoint required).
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

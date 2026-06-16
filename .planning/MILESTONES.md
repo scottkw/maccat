@@ -1,5 +1,23 @@
 # Milestones
 
+## v1.1.0 Repo Separation & CI Build (Shipped: 2026-06-16)
+
+**Phases completed:** 3 phases, 6 plans, 8 tasks
+
+**Delivered:** Separated the `maccat` code from the private catalog data — extracted the code into a new **public** GitHub repo (`github.com/scottkw/maccat`) with an automated build/release pipeline, leaving this repo as catalog-data-only on its private remote.
+
+**Key accomplishments:**
+
+- **Public repo from a fresh history (Phase 18):** created `github.com/scottkw/maccat` (public, `main`) via `gh`, migrated genericized code/tests/build-tooling/docs/zsh-reference/`.planning` from a clean `git init` (not a history filter) so **zero personal catalog data** appears in the tree or git log; added MIT LICENSE, an install-from-Releases README, and `config.example.toml`. A two-surface privacy gate + manual scrub removed personal hostnames AND the private a private Git host host string from the migrated `.planning/` docs before the first push.
+- **CI build + release pipeline (Phase 19):** the migrated macOS test workflow runs green on push/PR; added a `.pyz` build + `actions/upload-artifact` step (CI-02) and a separate tag-triggered `release.yml` that publishes a GitHub Release with `maccat.pyz` via `gh release create` — no third-party action, `contents: write` only (CI-03). Proven end-to-end with a throwaway `v0.0.1-ci-test` tag, then cleaned up.
+- **Cut-over (Phase 20):** verified `maccat` catalogs correctly against an external disposable catalog repo (MIG-05), then reduced this repo to catalog-data-only — removed `src/tests/scripts/docs/.github/pyproject.toml/update-list.sh/CLAUDE.md` etc., kept the catalog folders + `machine-labels.tsv` + archives, and pointed the README at the public tool repo (MIG-04).
+
+**Notable:** the adversarial plan-checker caught two real blockers in Phase 18 before execution (`.planning/` migrated but not genericized; a privacy-gate regex that would false-positive on legitimate code), and a human checkpoint before the irreversible public push surfaced a third leak (the private a private Git host host) the plan had missed. 12/12 requirements satisfied; milestone audit PASSED.
+
+**GSD home moved:** future feature work happens in the maccat repo; this repo no longer carries `.planning/`.
+
+---
+
 ## v1.0.0 Python Port & Distribution (Shipped: 2026-06-15)
 
 **Phases completed:** 5 phases, 21 plans, 19 tasks

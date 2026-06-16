@@ -19,7 +19,7 @@ macOS machines and inspection of the committed output files in the `personal/` a
 `office/` directories.
 
 Evidence of correctness is indirect: the git log records successful runs across multiple
-machines (`computer-one.local`, `computer-two.local`, `computer-two.local`),
+machines (`computer-one.local`, `computer-two.local`, `computer-one.local`),
 and the presence of timestamped `.txt` catalog files proves the script executed without
 aborting.
 

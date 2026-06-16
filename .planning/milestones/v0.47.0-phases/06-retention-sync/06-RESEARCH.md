@@ -676,7 +676,7 @@ This is a rename/refactor of existing file-management logic, not a data migratio
 
 | Category | Items Found | Action Required |
 |----------|-------------|------------------|
-| Stored data | 72 files in `personal/archive/` (all older than 30 days per verification); 8 files in `personal/main/` | First run with new code: 7 of 8 main-folder files archived (6 older Kens- files + computer-two.local is only one for its host so stays); 72 archive files pruned (all are >30d old per verification) |
+| Stored data | 72 files in `personal/archive/` (all older than 30 days per verification); 8 files in `personal/main/` | First run with new code: 7 of 8 main-folder files archived (6 older computer- files + computer-two.local is only one for its host so stays); 72 archive files pruned (all are >30d old per verification) |
 | Live service config | None | None |
 | OS-registered state | None | None |
 | Secrets/env vars | None | None |
