@@ -72,9 +72,23 @@ class MasCollector(Collector):
                     )
                 ]
             )
-        result = subprocess.run(
-            ["mas", "list"], capture_output=True, text=True, shell=False
-        )
+        try:
+            result = subprocess.run(
+                ["mas", "list"], capture_output=True, text=True, shell=False
+            )
+        except OSError as exc:
+            # TOCTOU / broken symlink / exec failure: warn-and-continue per the
+            # project's graceful-degradation constraint instead of crashing the CLI.
+            print(f"  WARNING: could not run mas: {exc}", file=sys.stderr)
+            return CollectorResult(
+                sections=[
+                    Section(
+                        title=TITLE,
+                        items=["Could not retrieve App Store list."],
+                        raw=True,
+                    )
+                ]
+            )
         if result.returncode != 0:
             return CollectorResult(
                 sections=[
