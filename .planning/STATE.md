@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1.0
 milestone_name: Reinstall from Catalog
-status: ready_to_plan
-stopped_at: Phase 25 complete (1/1) — ready to discuss Phase 26
-last_updated: 2026-06-16T20:33:51.915Z
-last_activity: 2026-06-16 -- Phase 25 execution started
+status: executing
+stopped_at: Roadmap created for v2.1.0 (Phases 24-26)
+last_updated: "2026-06-16T21:21:05.118Z"
+last_activity: 2026-06-16 -- Phase 26 execution started
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 3
+  completed_phases: 2
+  total_plans: 4
   completed_plans: 3
-  percent: 33
+  percent: 67
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 26 — picker + cli wiring + integration
+**Current focus:** Phase 26 — picker-cli-wiring-integration
 
 ## Current Position
 
-Phase: 26
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-16
+Phase: 26 (picker-cli-wiring-integration) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 26
+Last activity: 2026-06-16 -- Phase 26 execution started
 
 ```
 [===========>                              ] Phase 0/3 complete (0%)

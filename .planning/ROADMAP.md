@@ -96,7 +96,7 @@ Full phase details archived in [milestones/v2.0.0-ROADMAP.md](milestones/v2.0.0-
 
 - [x] **Phase 24: Catalog Format Fix + Parser Foundation** — MasCollector emits App Store ID; reverse parser with round-trip contract test (completed 2026-06-16)
 - [x] **Phase 25: Script Emitter** — All auto-install renderers (brew/mas/extensions) + manual checklist + script structure + injection safety (completed 2026-06-16)
-- [ ] **Phase 26: Picker + CLI Wiring + Integration** — `--from`/interactive picker + `maccat reinstall` subcommand wired into `cli.py`
+- [x] **Phase 26: Picker + CLI Wiring + Integration** — `--from`/interactive picker + `maccat reinstall` subcommand wired into `cli.py` (completed 2026-06-16)
 
 ## Phase Details
 
@@ -139,7 +139,7 @@ Plans:
   4. Running `maccat reinstall --from <fixture>` in an integration test confirms the output file exists, contains the expected shebang and provenance header, and the `--rename` guard does not fire
 **Plans**: 1 plan
 Plans:
-- [ ] 26-01-PLAN.md — picker.py + reinstall/cli.py + cli.py wiring + integration tests (RST-01, RST-02)
+- [x] 26-01-PLAN.md — picker.py + reinstall/cli.py + cli.py wiring + integration tests (RST-01, RST-02)
 
 ## Progress
 
@@ -173,4 +173,4 @@ Phases execute in numeric order: 24 → 25 → 26
 | 23. Retire the zsh Reference | v2.0.0 | 3/3 | Complete | 2026-06-16 |
 | 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 2/2 | Complete    | 2026-06-16 |
 | 25. Script Emitter | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
-| 26. Picker + CLI Wiring + Integration | v2.1.0 | 0/1 | Not started | - |
+| 26. Picker + CLI Wiring + Integration | v2.1.0 | 1/1 | Complete   | 2026-06-16 |
