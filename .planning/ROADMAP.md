@@ -116,7 +116,12 @@ Plans:
   2. A generated catalog's "Setapp Applications" and "Web-installed Applications" sections show each app with its version from `Info.plist` — e.g. `Fantastical (3.8.4)` instead of `Fantastical`.
   3. When a version cannot be read (missing `Info.plist`, absent `CFBundleShortVersionString` key, or brew returning no version), the item still appears by name only and the run completes without error.
   4. Two consecutive runs on the same machine produce byte-identical catalog sections (deterministic, stably sorted — FMT-04 preserved).
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 22-01-PLAN.md — Plist version helper + Homebrew versioned output + unit tests
+- [ ] 22-02-PLAN.md — Setapp + WebApps versioned output using plist helper + tests
+- [ ] 22-03-PLAN.md — Skip 3 invalidated parity cases + full suite gate
 
 ### Phase 23: Retire the zsh Reference
 **Goal**: `update-list.sh`, the `zsh_parity` test suite, and the CI `zsh -n` gate are gone; the test suite stands on its own with direct collector tests backfilling the lost coverage; README and docs describe maccat as the standalone tool.
@@ -157,5 +162,5 @@ Phases execute in numeric order: 21 → 22 → 23
 | 19. CI Build & Release Pipeline | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 20. Cut-Over & External-Catalog Verification | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 21. CLI Cleanup | v2.0.0 | 2/2 | Complete   | 2026-06-16 |
-| 22. Versioned Catalog | v2.0.0 | 0/TBD | Not started | - |
+| 22. Versioned Catalog | v2.0.0 | 0/3 | Not started | - |
 | 23. Retire the zsh Reference | v2.0.0 | 0/TBD | Not started | - |
