@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0.0
 milestone_name: Standalone maccat — CLI Cleanup & Versioned Catalog
-status: executing
-stopped_at: Completed 23-01-PLAN.md
-last_updated: "2026-06-16T15:48:27.052Z"
+status: verifying
+stopped_at: "Completed 23-03-PLAN.md (ZSH-04: scrub README zsh refs)"
+last_updated: "2026-06-16T15:52:22.479Z"
 last_activity: 2026-06-16
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
-  percent: 67
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-16)
 
 Phase: 23 (Retire the zsh Reference) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-16
 
-Progress: [█████████░] 88%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [█████████░] 88%
 | Phase 22 P22-03 | 110s | 2 tasks | 1 files |
 | Phase 23-retire-zsh-reference P23-01 | 5min | 1 tasks | 1 files |
 | Phase 23-retire-zsh-reference P02 | 120 | 3 tasks | 43 files |
+| Phase 23-retire-zsh-reference P03 | 5m | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,7 @@ Recent decisions affecting current work:
 - [Phase ?]: test_naming.py confirmed unchanged — personal/office are filename fixture strings, not flag references
 - [Phase ?]: Manually created _locales/en/ in test to write JSON array as messages.json — avoids _make_ext locales kwarg
 - [Phase ?]: Retire zsh reference (ZSH-01, ZSH-02)
+- [Phase ?]: Placed v1.0.0 history note above Troubleshooting section for natural placement
 
 ### Pending Todos
 
@@ -87,6 +89,6 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-06-16T15:48:27.045Z
-Stopped at: Completed 23-01-PLAN.md
+Last session: 2026-06-16T15:52:22.472Z
+Stopped at: Completed 23-03-PLAN.md (ZSH-04: scrub README zsh refs)
 Resume file: None

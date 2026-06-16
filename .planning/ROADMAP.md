@@ -88,7 +88,7 @@ zsh reference and its byte-parity gate.
 
 - [x] **Phase 21: CLI Cleanup** - Remove `--personal`, `--office`, and `--machine`; `--computer NAME` becomes the sole named-folder flag (completed 2026-06-16)
 - [x] **Phase 22: Versioned Catalog** - Add versions to Homebrew formulae/casks, Setapp, and web-installed apps; preserve determinism and graceful degradation (completed 2026-06-16)
-- [ ] **Phase 23: Retire the zsh Reference** - Delete `update-list.sh` and the parity test suite; backfill coverage; scrub docs
+- [x] **Phase 23: Retire the zsh Reference** - Delete `update-list.sh` and the parity test suite; backfill coverage; scrub docs (completed 2026-06-16)
 
 ## Phase Details
 
@@ -137,7 +137,7 @@ Plans:
 Plans:
 - [x] 23-01-PLAN.md — Backfill chrome_name + vsc_name helper tests (ZSH-03 gap fill)
 - [x] 23-02-PLAN.md — Delete update-list.sh, parity suite, tests/golden/, CI zsh -n step, conftest golden fixtures (ZSH-01 + ZSH-02)
-- [ ] 23-03-PLAN.md — Scrub README: remove zsh reference section, update CLI docs to --computer (ZSH-04)
+- [x] 23-03-PLAN.md — Scrub README: remove zsh reference section, update CLI docs to --computer (ZSH-04)
 
 ## Progress
 
@@ -168,4 +168,4 @@ Phases execute in numeric order: 21 → 22 → 23
 | 20. Cut-Over & External-Catalog Verification | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 21. CLI Cleanup | v2.0.0 | 2/2 | Complete   | 2026-06-16 |
 | 22. Versioned Catalog | v2.0.0 | 3/3 | Complete   | 2026-06-16 |
-| 23. Retire the zsh Reference | v2.0.0 | 2/3 | In Progress|  |
+| 23. Retire the zsh Reference | v2.0.0 | 3/3 | Complete   | 2026-06-16 |
