@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1.0
 milestone_name: Reinstall from Catalog
-status: executing
-stopped_at: Roadmap created for v2.1.0 (Phases 24-26)
-last_updated: "2026-06-16T18:59:38.421Z"
+status: ready_to_plan
+stopped_at: Phase 24 complete (2/2) — ready to discuss Phase 25
+last_updated: 2026-06-16T19:37:05.908Z
 last_activity: 2026-06-16 -- Phase 24 execution started
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 2
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 24 — catalog-format-fix-parser-foundation
+**Current focus:** Phase 25 — script emitter
 
 ## Current Position
 
-Phase: 24 (catalog-format-fix-parser-foundation) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 24
-Last activity: 2026-06-16 -- Phase 24 execution started
+Phase: 25
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-06-16
 
 ```
 [===========>                              ] Phase 0/3 complete (0%)
@@ -38,7 +38,7 @@ Last activity: 2026-06-16 -- Phase 24 execution started
 
 **Velocity:**
 
-- Total plans completed: 29 (prior milestones)
+- Total plans completed: 31 (prior milestones)
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -49,6 +49,7 @@ Last activity: 2026-06-16 -- Phase 24 execution started
 | 24. Catalog Format Fix + Parser Foundation | 0/TBD | - | - |
 | 25. Script Emitter | 0/TBD | - | - |
 | 26. Picker + CLI Wiring + Integration | 0/TBD | - | - |
+| 24 | 2 | - | - |
 
 *Updated after each plan completion*
 

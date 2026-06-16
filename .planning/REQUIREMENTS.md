@@ -9,11 +9,11 @@ Requirements for this milestone (v2.1.0). Each maps to a roadmap phase.
 
 ### Catalog Format
 
-- [ ] **MAS-01**: The App Store section preserves the numeric App Store ID — emits `AppName (version) [id]` (the version is not double-parenthesized; `mas list` column 3 already wraps it in parens). `MasCollector` + its tests are updated. (No parity suite to break — retired in v2.0.0.)
+- [x] **MAS-01**: The App Store section preserves the numeric App Store ID — emits `AppName (version) [id]` (the version is not double-parenthesized; `mas list` column 3 already wraps it in parens). `MasCollector` + its tests are updated. (No parity suite to break — retired in v2.0.0.)
 
 ### Catalog Parsing
 
-- [ ] **PARSE-01**: A parser reads a catalog's sectioned plain text back into structured per-source items, honoring `emit_item`'s four line shapes (`name (version) [id]`, `name (version)`, `name [id]`, `name`) and its degradations (id-promoted-to-name, name-only). A round-trip contract test locks the parser ↔ `catalog/format.py` coupling so the two cannot drift.
+- [x] **PARSE-01**: A parser reads a catalog's sectioned plain text back into structured per-source items, honoring `emit_item`'s four line shapes (`name (version) [id]`, `name (version)`, `name [id]`, `name`) and its degradations (id-promoted-to-name, name-only). A round-trip contract test locks the parser ↔ `catalog/format.py` coupling so the two cannot drift.
 
 ### Reinstall Command
 
@@ -73,8 +73,8 @@ Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAS-01 | Phase 24 | Pending |
-| PARSE-01 | Phase 24 | Pending |
+| MAS-01 | Phase 24 | Complete |
+| PARSE-01 | Phase 24 | Complete |
 | RST-01 | Phase 26 | Pending |
 | RST-02 | Phase 26 | Pending |
 | GEN-01 | Phase 25 | Pending |

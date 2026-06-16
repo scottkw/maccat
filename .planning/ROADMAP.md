@@ -167,6 +167,6 @@ Phases execute in numeric order: 24 → 25 → 26
 | 21. CLI Cleanup | v2.0.0 | 2/2 | Complete | 2026-06-16 |
 | 22. Versioned Catalog | v2.0.0 | 3/3 | Complete | 2026-06-16 |
 | 23. Retire the zsh Reference | v2.0.0 | 3/3 | Complete | 2026-06-16 |
-| 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 2/2 | Complete   | 2026-06-16 |
+| 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 2/2 | Complete    | 2026-06-16 |
 | 25. Script Emitter | v2.1.0 | 0/TBD | Not started | - |
 | 26. Picker + CLI Wiring + Integration | v2.1.0 | 0/TBD | Not started | - |
