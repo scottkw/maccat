@@ -103,26 +103,18 @@ Enter your choice (1 or 2):
 Or specify it directly:
 
 ```bash
-# Save to the "home" computer-folder
-python3 maccat.pyz --personal
-
-# Save to the "work" computer-folder
-python3 maccat.pyz --office
-
-# Skip the interactive prompt
-python3 maccat.pyz --personal --no-commit
+# Skip the interactive folder-selection prompt
+python3 maccat.pyz --computer MyMac
 ```
 
 ### Options
 
 | Option | Description |
 |--------|-------------|
-| `--personal` | Save the catalog to the `personal/` computer-folder |
-| `--office` | Save the catalog to the `office/` computer-folder |
+| `--computer NAME` | Select (or create) the named computer-folder non-interactively |
 | `--catalog-dir <path>` | Path to the catalog git repository (overrides config and env) |
 | `--no-commit` | Skip automatic git commit and push |
 | `--archive-days N` | Set the archive-retention period in days for this run (default: 30) |
-| `--machine "Label"` | Set the machine label for this run's catalog filename without being prompted |
 | `--rename` | Separate mode: rename a machine label across all catalog files, then commit |
 
 ## Machine Identity
@@ -133,7 +125,7 @@ Catalog files are named with a **friendly machine label** you choose, instead of
 
 On each run, the label is resolved in this order:
 
-1. **`--machine "Label"` flag** — used as-is for this run, and saved to the map.
+1. **`--computer NAME` flag** — used as-is for this run, and saved to the map.
 2. **Saved entry** — if this machine's hostname is already in `machine-labels.tsv`, its label is used automatically with no prompt.
 3. **Interactive menu** — on a new machine with no saved label, you get a numbered menu of all known labels plus a **"Create new label"** option:
 
@@ -155,7 +147,7 @@ Mappings live in **`machine-labels.tsv`** at the catalog repo root — a git-tra
 
 **Labels** may contain spaces, apostrophes, letters, digits, and `-` `_` `.` — but **not** `/`, `[`, `]`, tabs, or newlines, and not leading/trailing whitespace. Invalid labels are rejected with an error.
 
-**Non-interactive runs** (cron, piped stdin) on a machine with no saved label and no `--machine` flag **fail fast** with a clear error rather than hanging — pass `--machine "<machine-label>"` in that case.
+**Non-interactive runs** (cron, piped stdin) on a machine with no saved label and no `--computer` flag **fail fast** with a clear error rather than hanging — pass `--computer NAME` in that case.
 
 ## Renaming a Machine
 
@@ -211,14 +203,14 @@ Added personal catalog for [<machine-label>] at YYYYMMDDHHMMSS
 ### Disabling Auto-commit
 
 ```bash
-python3 maccat.pyz --personal --no-commit
+python3 maccat.pyz --no-commit
 ```
 
 The retention and archive prune still run on disk with `--no-commit` — only the git commit/push step is skipped.
 
 ## Output
 
-The script generates a file named:
+maccat generates a file named:
 
 ```
 mac-software-list-[<machine-label>]-YYYYMMDDHHMMSS.txt
@@ -318,9 +310,7 @@ maccat reads on-disk config and manifests for the tools it catalogs — no separ
 
 No setup is needed for the AI CLIs (Claude Code, Codex, OpenCode, Gemini), editors (VS Code, Cursor), or browsers (Chrome, Firefox) — maccat auto-detects whichever are installed and silently skips the rest.
 
-## Zsh Reference Script
-
-`update-list.sh` is a Zsh implementation kept in this repo as a parity reference — the Python test suite includes live equivalence checks against it. It is not the recommended installation path; use the `.pyz` from Releases instead.
+maccat was originally implemented as a Zsh script and ported to Python in v1.0.0.
 
 ## Troubleshooting
 
