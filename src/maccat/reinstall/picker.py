@@ -14,6 +14,7 @@ per PKG-03 (lazy import pattern).
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -102,6 +103,14 @@ def resolve_catalog_path(
         p = Path(args.from_path).expanduser().resolve()
         if not p.is_file():
             sys.exit(f"ERROR: Catalog file not found or not a regular file: {p}")
+        # WR-01: Path.is_file() returns True for a file the user cannot read
+        # (e.g. mode 0o000). Probe readability here so an unreadable --from
+        # path fails with the project's clean ERROR convention instead of an
+        # uncaught PermissionError traceback mid-pipeline (parse_catalog ->
+        # read_text). os.access uses the real uid/gid, matching the eventual
+        # read.
+        if not os.access(p, os.R_OK):
+            sys.exit(f"ERROR: Catalog file is not readable: {p}")
         return p
 
     # ------------------------------------------------------------------

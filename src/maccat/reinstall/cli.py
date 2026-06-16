@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -60,7 +61,15 @@ def run_reinstall(
         # User quit the interactive picker — no file written, exit cleanly
         return
 
-    catalog = parse_catalog(catalog_path)
+    # WR-01: parse_catalog -> Path.read_text can raise OSError (e.g. the file
+    # became unreadable after resolution, or a picker-resolved catalog is
+    # unreadable). Convert it to the project's clean ERROR convention instead
+    # of letting a raw traceback escape. The --from branch also probes
+    # readability up-front in resolve_catalog_path; this is the catch-all.
+    try:
+        catalog = parse_catalog(catalog_path)
+    except OSError as exc:
+        sys.exit(f"ERROR: Could not read catalog file {catalog_path}: {exc}")
     script = emit_reinstall_script(
         catalog,
         source_name=catalog_path.name,

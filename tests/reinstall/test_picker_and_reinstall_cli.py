@@ -9,12 +9,10 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helper: build a minimal Namespace the way argparse would
@@ -111,6 +109,28 @@ class TestResolveCatalogPathFromBranch:
         with pytest.raises(SystemExit) as exc:
             resolve_catalog_path(args)
         assert exc.value.code != 0
+
+    @pytest.mark.skipif(
+        os.geteuid() == 0,
+        reason="root bypasses file permission checks; 0o000 is still readable",
+    )
+    def test_exits_cleanly_on_unreadable_file(self, tmp_path: Path) -> None:
+        """WR-01: an existing-but-unreadable --from file fails with a clean
+        SystemExit (ERROR: ...), not an uncaught PermissionError traceback."""
+        from maccat.reinstall.picker import resolve_catalog_path
+
+        f = tmp_path / "mac-software-list-[TestMac]-20260616120000.txt"
+        f.write_text("x", encoding="utf-8")
+        os.chmod(f, 0o000)
+        try:
+            args = _make_args(from_path=str(f))
+            with pytest.raises(SystemExit) as exc:
+                resolve_catalog_path(args)
+            assert exc.value.code != 0
+            assert "not readable" in str(exc.value)
+        finally:
+            # Restore mode so tmp_path teardown can remove the file.
+            os.chmod(f, 0o644)
 
 
 # ---------------------------------------------------------------------------
