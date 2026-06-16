@@ -95,7 +95,7 @@ Full phase details archived in [milestones/v2.0.0-ROADMAP.md](milestones/v2.0.0-
 ### v2.1.0 Reinstall from Catalog (Phases 24-26)
 
 - [x] **Phase 24: Catalog Format Fix + Parser Foundation** — MasCollector emits App Store ID; reverse parser with round-trip contract test (completed 2026-06-16)
-- [ ] **Phase 25: Script Emitter** — All auto-install renderers (brew/mas/extensions) + manual checklist + script structure + injection safety
+- [x] **Phase 25: Script Emitter** — All auto-install renderers (brew/mas/extensions) + manual checklist + script structure + injection safety (completed 2026-06-16)
 - [ ] **Phase 26: Picker + CLI Wiring + Integration** — `--from`/interactive picker + `maccat reinstall` subcommand wired into `cli.py`
 
 ## Phase Details
@@ -126,7 +126,7 @@ Plans:
   5. Every catalog-derived value inserted into shell command position is processed through `shlex.quote()` — no bare f-string interpolation in shell context
 **Plans**: 1 plan
 Plans:
-- [ ] 25-01-PLAN.md — emitter.py + test_emitter.py (all renderers, injection safety, bash -n test)
+- [x] 25-01-PLAN.md — emitter.py + test_emitter.py (all renderers, injection safety, bash -n test)
 
 ### Phase 26: Picker + CLI Wiring + Integration
 **Goal**: `maccat reinstall` is a working subcommand that resolves a catalog, generates `reinstall.sh`, and prints its path
@@ -170,5 +170,5 @@ Phases execute in numeric order: 24 → 25 → 26
 | 22. Versioned Catalog | v2.0.0 | 3/3 | Complete | 2026-06-16 |
 | 23. Retire the zsh Reference | v2.0.0 | 3/3 | Complete | 2026-06-16 |
 | 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 2/2 | Complete    | 2026-06-16 |
-| 25. Script Emitter | v2.1.0 | 0/TBD | Not started | - |
+| 25. Script Emitter | v2.1.0 | 1/1 | Complete   | 2026-06-16 |
 | 26. Picker + CLI Wiring + Integration | v2.1.0 | 0/TBD | Not started | - |
