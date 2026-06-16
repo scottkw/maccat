@@ -1,0 +1,4 @@
+# web-installed-applications: zsh hardcodes /Applications -- synthetic Python fixture only
+# zsh parity for this section is [ASSUMED] per 17-RESEARCH.md §Assumptions A1
+Applications
+FakeWebApp.app

@@ -1,0 +1,16 @@
+# maccat example configuration
+#
+# Copy this file to ~/.config/maccat/config.toml and edit as needed.
+#
+# Configuration precedence (highest to lowest):
+#   1. --catalog-dir <path>   command-line flag
+#   2. MACCAT_CATALOG_DIR     environment variable
+#   3. ~/.config/maccat/config.toml  (this file)
+#   4. error — catalog_dir is required
+#
+# maccat writes catalog snapshots to the directory pointed to by catalog_dir.
+# That directory should be a git repo so snapshots are version-controlled
+# and synced across your machines.
+
+# Path to your catalog git repository (required — no default).
+catalog_dir = "/path/to/your/catalog-repo"

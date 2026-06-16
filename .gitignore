@@ -1,0 +1,40 @@
+# Python virtual environment
+venv/
+.venv/
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.pyc
+*.egg-info/
+dist/
+build/
+*.pyz
+
+# pytest cache
+.pytest_cache/
+
+# mypy cache
+.mypy_cache/
+
+# ruff cache
+.ruff_cache/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+# But DO track the synthetic .vscode test fixture (golden parity needs it committed;
+# the broad .vscode/ rule above otherwise silently excludes it, making the
+# vscode-extensions golden assert content absent from the repo / CI).
+!tests/golden/fixtures/fake_home/.vscode/
+!tests/golden/fixtures/fake_home/.vscode/**
+
+# Personal catalog data — never commit personal snapshots to this repo
+personal/
+office/
+machine-labels.tsv
+mac-software-list-*.txt
+*-[*].txt

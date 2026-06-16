@@ -1,0 +1,347 @@
+# maccat
+
+A Python tool that catalogs all software **and developer tooling** installed on your macOS machine — applications, plus the extensions, plugins, MCP servers, and skills/agents of your AI coding CLIs, editors, and browsers. Each catalog is named with a **friendly machine label** you choose, each run keeps only the newest catalog **per machine** in the main folder, archives the rest, auto-prunes the archive after a configurable number of days (default 30), and syncs every change via git.
+
+## Overview
+
+This tool generates comprehensive text-based catalogs of your installed software and tooling from multiple sources:
+
+**Applications**
+
+- **Homebrew packages** (formulae and casks)
+- **Mac App Store applications** (via the `mas` CLI)
+- **Setapp applications**
+- **Web-installed applications** (DMG, PKG, direct downloads)
+
+**AI coding CLI tooling** (name + version + ID where available)
+
+- **Claude Code** — plugins, MCP servers, and skills/agents
+- **Codex** — MCP servers
+- **OpenCode** — plugins, MCP servers, and agents
+- **Gemini CLI** — extensions and MCP servers
+
+**Editor extensions**
+
+- **VS Code** and **Cursor** — installed extensions (human-readable display names resolved)
+
+**Browser extensions** (across all profiles)
+
+- **Google Chrome** — user-installed extensions (built-in Google components excluded)
+- **Firefox** — user-installed extensions and themes (built-in/system add-ons excluded)
+
+Each catalog is timestamped and named with a **friendly machine label** you choose (see [Machine Identity](#machine-identity)) for easy identification across multiple Macs. Every source **degrades gracefully** — if a tool or browser isn't installed, its section is written with a short "not installed / none found" note and the run continues.
+
+> **Privacy:** MCP server entries capture **name + transport type only** (e.g. `my-server [stdio]`). Environment values, headers, tokens, and auth-bearing URLs are **never** written to the catalog — the file is git-committed and pushed, so secrets must not leak into it.
+
+## Installation
+
+maccat ships as a self-contained Python zipapp (`.pyz`). No installation of the package itself is needed — download the file and run it directly.
+
+**Requirements:** Python >= 3.11, macOS.
+
+### Download from GitHub Releases
+
+1. Go to the [Releases page](https://github.com/scottkw/maccat/releases) and download the latest `maccat.pyz`.
+2. Make it executable (optional but convenient):
+   ```bash
+   chmod +x maccat.pyz
+   ```
+3. Run it:
+   ```bash
+   python3 maccat.pyz --catalog-dir /path/to/your/catalog-repo
+   # or, if executable:
+   ./maccat.pyz --catalog-dir /path/to/your/catalog-repo
+   ```
+
+The **catalog repo** is a separate git repository where maccat writes its snapshot files. You can create a new one or use an existing repo — maccat just needs a directory with a git remote configured.
+
+## Configuration
+
+maccat needs to know where your catalog repo lives. Resolution order (highest priority first):
+
+1. **`--catalog-dir <path>`** — command-line flag (takes precedence over everything)
+2. **`MACCAT_CATALOG_DIR`** — environment variable
+3. **`~/.config/maccat/config.toml`** — config file (`catalog_dir` key)
+4. **Error** — if none of the above is set, maccat exits with an error
+
+### Config file
+
+Copy `config.example.toml` to `~/.config/maccat/config.toml` and set `catalog_dir`:
+
+```toml
+catalog_dir = "/path/to/your/catalog-repo"
+```
+
+See `config.example.toml` for the full template with comments.
+
+## Usage
+
+### Basic run
+
+```bash
+# Using the config file (~/.config/maccat/config.toml)
+python3 maccat.pyz
+
+# Explicitly specify the catalog repo
+python3 maccat.pyz --catalog-dir ~/my-catalog-repo
+
+# Using the environment variable
+MACCAT_CATALOG_DIR=~/my-catalog-repo python3 maccat.pyz
+```
+
+If no computer-folder argument is provided, you'll be prompted to choose a folder:
+
+```
+Where would you like to save this catalog?
+
+  1) home
+  2) work
+
+Enter your choice (1 or 2):
+```
+
+Or specify it directly:
+
+```bash
+# Save to the "home" computer-folder
+python3 maccat.pyz --personal
+
+# Save to the "work" computer-folder
+python3 maccat.pyz --office
+
+# Skip the interactive prompt
+python3 maccat.pyz --personal --no-commit
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--personal` | Save the catalog to the `personal/` computer-folder |
+| `--office` | Save the catalog to the `office/` computer-folder |
+| `--catalog-dir <path>` | Path to the catalog git repository (overrides config and env) |
+| `--no-commit` | Skip automatic git commit and push |
+| `--archive-days N` | Set the archive-retention period in days for this run (default: 30) |
+| `--machine "Label"` | Set the machine label for this run's catalog filename without being prompted |
+| `--rename` | Separate mode: rename a machine label across all catalog files, then commit |
+
+## Machine Identity
+
+Catalog files are named with a **friendly machine label** you choose, instead of the raw hostname. Each Mac remembers its label, so you're only prompted the first time.
+
+### How the label is resolved
+
+On each run, the label is resolved in this order:
+
+1. **`--machine "Label"` flag** — used as-is for this run, and saved to the map.
+2. **Saved entry** — if this machine's hostname is already in `machine-labels.tsv`, its label is used automatically with no prompt.
+3. **Interactive menu** — on a new machine with no saved label, you get a numbered menu of all known labels plus a **"Create new label"** option:
+
+   ```
+   Select a machine label for this run:
+
+     1) My Laptop
+     2) Work iMac
+     3) Create new label
+
+   Enter your choice (1-3):
+   ```
+
+   Whatever you pick (existing label or a new one you type) is saved, so subsequent runs on this machine resolve it automatically.
+
+### The hostname → label map
+
+Mappings live in **`machine-labels.tsv`** at the catalog repo root — a git-tracked, tab-delimited file (`hostname<TAB>label`, one per line; `#` comments and blank lines are ignored). Because it's committed, every machine converges on the same roster of labels when it pulls, which powers the selection menu and the rename feature.
+
+**Labels** may contain spaces, apostrophes, letters, digits, and `-` `_` `.` — but **not** `/`, `[`, `]`, tabs, or newlines, and not leading/trailing whitespace. Invalid labels are rejected with an error.
+
+**Non-interactive runs** (cron, piped stdin) on a machine with no saved label and no `--machine` flag **fail fast** with a clear error rather than hanging — pass `--machine "<machine-label>"` in that case.
+
+## Renaming a Machine
+
+`--rename` is a **separate mode** (it doesn't generate a catalog) that rewrites a machine label everywhere it appears — across all computer-folders and their archives — in a single self-committing operation:
+
+```bash
+python3 maccat.pyz --rename
+```
+
+It pulls the latest changes, presents a menu of known labels, asks for the new label, and then:
+
+- Renames every matching `mac-software-list-[OLD]-...txt` to `[NEW]` across all directories (preserving timestamps).
+- Updates the `machine-labels.tsv` entry to the new label.
+- Stages all the moves plus the map change and commits/pushes in **one commit**.
+
+Safety behavior:
+
+- If a destination filename already exists, that individual file is **skipped** (never overwritten) and reported.
+- If **no** files match the chosen label anywhere, nothing is changed — no map edit, no commit.
+- `--rename` requires an interactive terminal; combine with `--no-commit` to perform the renames on disk without committing.
+
+## Retention & Archiving
+
+On **every run**, maccat keeps the selected computer-folder lean and self-prunes its archive. Two operations run automatically, scoped to the folder you targeted — the other folder is never touched:
+
+**1. Keep newest-per-machine (retention)**
+
+- The main folder keeps only the **newest catalog per machine** — one current snapshot per label.
+- All older catalogs for each machine are moved into that folder's `archive/` subfolder.
+
+**2. Prune the archive (configurable retention, default 30 days)**
+
+- Catalogs in `archive/` whose filename timestamp is **older than the retention period** are **hard-deleted** from disk.
+- The retention period defaults to **30 days**. Set it per run with `--archive-days N`.
+- Age is determined by the timestamp in the filename; an unparseable filename is skipped (never deleted).
+
+Both operations degrade gracefully — an empty folder, a missing `archive/` directory, or an unparseable filename never aborts the run, and the newest catalog for each machine is never archived or deleted.
+
+## Git Integration
+
+By default, maccat automatically commits and pushes changes to git after generating a catalog:
+
+- **Auto-commit**: The new catalog file is automatically committed with a detailed message
+- **Auto-push**: Changes are pushed to the remote repository
+- **All changes in one commit**: The commit stages the entire targeted folder, so the new catalog, catalogs moved to `archive/`, catalogs removed by the archive prune, and any new/changed machine-label mapping are all synced together.
+
+### Commit Message Format
+
+```
+Added personal catalog for [<machine-label>] at YYYYMMDDHHMMSS
+```
+
+### Disabling Auto-commit
+
+```bash
+python3 maccat.pyz --personal --no-commit
+```
+
+The retention and archive prune still run on disk with `--no-commit` — only the git commit/push step is skipped.
+
+## Output
+
+The script generates a file named:
+
+```
+mac-software-list-[<machine-label>]-YYYYMMDDHHMMSS.txt
+```
+
+For example: `mac-software-list-[My Laptop]-20260601153045.txt`
+
+### Catalog Contents
+
+Each catalog contains sections, in this order:
+
+**Applications**
+
+1. **Homebrew Packages** — All formulae and casks installed via Homebrew
+2. **App Store Applications** — Apps installed from the Mac App Store
+3. **Setapp Applications** — Apps from the Setapp subscription service
+4. **Web-installed Applications** — Other apps in /Applications
+
+**AI coding CLI tooling**
+
+5. **Claude Code Plugins** / **Claude Code MCP Servers** / **Claude Code Skills & Agents**
+6. **Codex MCP Servers**
+7. **OpenCode Plugins** / **OpenCode MCP Servers** / **OpenCode Agents**
+8. **Gemini CLI Extensions** / **Gemini CLI MCP Servers**
+
+**Editor & browser extensions**
+
+9. **VS Code Extensions** / **Cursor Extensions**
+10. **Google Chrome Extensions** / **Firefox Extensions** (all profiles)
+
+Items within every section are emitted in a uniform `name (version) [id]` format (degrading to `name [id]` or `name` when a field is unavailable) and **stably sorted**, so two consecutive runs on an unchanged machine produce an identical catalog (an empty diff).
+
+## Example Output
+
+```
+Installed Mac Software List
+------------------------------------
+
+Homebrew Packages
+------------------------------------
+autoconf
+automake
+bash
+curl
+git
+...
+
+App Store Applications
+------------------------------------
+Keynote (14.0)
+Numbers (14.0)
+Pages (14.0)
+Xcode (15.0)
+...
+
+Claude Code MCP Servers
+------------------------------------
+my-server [stdio]
+...
+
+Claude Code Skills & Agents
+------------------------------------
+brainstorming
+debugging
+...
+
+VS Code Extensions
+------------------------------------
+Auto Rename Tag (0.1.10) [formulahendry.auto-rename-tag]
+GitLens — Git supercharged (15.0.0) [eamodio.gitlens]
+...
+
+Google Chrome Extensions
+------------------------------------
+Bitwarden Password Manager (2026.5.1) [nngceckbapebfimnlniiiahkandclblb]
+...
+```
+
+## Prerequisites
+
+maccat reads on-disk config and manifests for the tools it catalogs — no separate integration setup is needed. The following optional tools extend what maccat can catalog:
+
+- **Homebrew** — for listing brew packages
+  ```bash
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  ```
+
+- **mas** (Mac App Store CLI) — for listing App Store apps
+  ```bash
+  brew install mas
+  ```
+
+- **jq** — preferred JSON parser; falls back to the built-in `/usr/bin/plutil` if absent
+  ```bash
+  brew install jq
+  ```
+
+No setup is needed for the AI CLIs (Claude Code, Codex, OpenCode, Gemini), editors (VS Code, Cursor), or browsers (Chrome, Firefox) — maccat auto-detects whichever are installed and silently skips the rest.
+
+## Zsh Reference Script
+
+`update-list.sh` is a Zsh implementation kept in this repo as a parity reference — the Python test suite includes live equivalence checks against it. It is not the recommended installation path; use the `.pyz` from Releases instead.
+
+## Troubleshooting
+
+### "mas is not installed" warning
+
+```bash
+brew install mas
+```
+
+### "Homebrew is not installed" warning
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+### Permission denied running maccat.pyz
+
+```bash
+chmod +x maccat.pyz
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

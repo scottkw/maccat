@@ -1,0 +1,1 @@
+vscomp.test-ext (1.2.3) [vscomp.test-ext]

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "maccat"
+version = "1.0.0"
+description = "Catalog every piece of software on your Mac — apps, extensions, plugins, MCP servers."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+# Zero runtime deps — stdlib only; no third-party packages at runtime
+
+[project.scripts]
+maccat = "maccat.__main__:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0",
+    "ruff>=0.15",
+    "mypy>=1.10",
+]
+
+[tool.hatchling.build.targets.wheel]
+packages = ["src/maccat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "safety_invariant: explicit destructive-op safety invariants (TEST-03)",
+    "zsh_parity: live Python-vs-zsh equivalence (CR-02); sources update-list.sh in real zsh. Runs on macOS CI; auto-skipped when zsh is not on PATH.",
+]
+
+[tool.ruff]
+src = ["src"]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+strict = true
+python_version = "3.11"

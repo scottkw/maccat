@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        pythonhashseed: [0, 42, "random"]
+
+    env:
+      PYTHONHASHSEED: ${{ matrix.pythonhashseed }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dev dependencies
+        run: python -m venv venv && ./venv/bin/pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ./venv/bin/ruff check src tests
+
+      - name: Type check (mypy)
+        run: PYTHONPATH=src ./venv/bin/mypy --strict src/maccat
+
+      - name: Run tests
+        run: PYTHONPATH=src ./venv/bin/pytest -x -q
+
+      - name: Check update-list.sh syntax (TEST-04)
+        run: zsh -n update-list.sh

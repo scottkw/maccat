@@ -1,0 +1,1 @@
+"""Catalog output format layer."""

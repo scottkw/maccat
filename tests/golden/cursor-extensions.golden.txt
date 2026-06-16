@@ -1,0 +1,1 @@
+cursor.test-ext (2.0.0) [cursor.test-ext]
