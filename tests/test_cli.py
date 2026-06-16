@@ -135,8 +135,9 @@ class TestRenameFlag:
         monkeypatch.setattr(sys, "argv", ["maccat", "--rename", "--computer", "box"])
         from maccat.cli import run
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exc:
             run()
+        assert exc.value.code != 0
 
 
 

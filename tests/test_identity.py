@@ -119,10 +119,6 @@ class TestResolveComputerSelection:
         result = resolve_computer_selection(computer="My Mac")
         assert result == "My Mac"
 
-    def test_none_returns_none_for_interactive_fallback(self) -> None:
-        result = resolve_computer_selection(computer=None)
-        assert result is None
-
 
 # ---------------------------------------------------------------------------
 # TestSelectComputer

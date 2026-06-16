@@ -7,7 +7,6 @@ rename-machine workflow.
 Zsh analogs:
   validate_computer_name         update-list.sh lines 117–141
   validate_computer_name_quiet   update-list.sh lines 156–175
-  parse_arguments (subset)       update-list.sh lines 199–268  (flag-alias + mutual-exclusion)
   select_computer                update-list.sh lines 308–490
   upsert_machine_label           update-list.sh lines 557–606
   rename_machine                 update-list.sh lines 637–923
