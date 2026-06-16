@@ -124,7 +124,9 @@ Plans:
   3. VS Code and Cursor extension lines include a `command -v` PATH guard, a `--list-extensions | grep -qi` idempotency check, and use the lowercased marketplace ID as the install key
   4. Setapp apps, web-installed apps, browser extensions, and all AI-CLI tooling (MCP servers, plugins, skills, agents) appear exclusively in the manual checklist as `echo` statements — no fabricated install commands are emitted for these sources
   5. Every catalog-derived value inserted into shell command position is processed through `shlex.quote()` — no bare f-string interpolation in shell context
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 25-01-PLAN.md — emitter.py + test_emitter.py (all renderers, injection safety, bash -n test)
 
 ### Phase 26: Picker + CLI Wiring + Integration
 **Goal**: `maccat reinstall` is a working subcommand that resolves a catalog, generates `reinstall.sh`, and prints its path
