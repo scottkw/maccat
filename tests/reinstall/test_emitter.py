@@ -822,6 +822,50 @@ class TestRuntimeExecution:
             f"Manual Checklist sentinel missing — script aborted:\n{result.stdout}"
         )
 
+    def test_editor_install_nonzero_does_not_abort(self) -> None:
+        """WR-01 regression: a failing editor `--install-extension` must NOT abort
+        the whole run under `set -Eeuo pipefail`.
+
+        The other runtime tests stub the editors with `_EDITOR_PRESENT`, whose
+        `--list-extensions` reports the extension already installed — that
+        short-circuits the `&&` chain so the `--install-extension` command (and its
+        brace-group `|| echo WARN` guard) NEVER runs. This test stubs `code`/`cursor`
+        so the extension is reported ABSENT (guard proceeds to install) and the
+        install exits non-zero. With the brace-group guard in place the non-zero exit
+        is consumed: the WARN line prints and the Manual Checklist sentinel still
+        prints (exit 0). Without the guard, the run would abort mid-script.
+        """
+        editor_install_fails = (
+            "#!/usr/bin/env bash\n"
+            # Report the extension as NOT installed so the guard proceeds to install.
+            'if [ "$1" = "--list-extensions" ]; then echo "other.ext"; exit 0; fi\n'
+            # The install itself fails (bad id, offline marketplace, etc.).
+            'if [ "$1" = "--install-extension" ]; then echo "ext: failed" >&2; exit 1; fi\n'
+            "exit 0\n"
+        )
+        stubs = {
+            # brew/mas already-installed or absent so they do not interfere.
+            "brew": "#!/usr/bin/env bash\nexit 0\n",
+            "mas": "#!/usr/bin/env bash\nexit 1\n",
+            "code": editor_install_fails,
+            "cursor": editor_install_fails,
+        }
+        script = emit_reinstall_script(
+            self._catalog_with_all_sources(), source_name="t.txt", generated="2026-06-16"
+        )
+        result = run_script_with_stubs(script, stubs)
+        assert result.returncode == 0, (
+            f"script aborted (exit {result.returncode}); stderr:\n{result.stderr}\n"
+            f"stdout:\n{result.stdout}"
+        )
+        assert "WARN: code --install-extension failed" in result.stdout, (
+            f"expected editor WARN line in output:\n{result.stdout}"
+        )
+        assert self._SENTINEL in result.stdout, (
+            "Manual Checklist sentinel missing — script aborted before the end:\n"
+            f"{result.stdout}"
+        )
+
     def test_everything_already_installed_runs_clean(self) -> None:
         """When every guard's idempotency check matches, nothing installs and the
         run reaches the end (exit 0) with the Manual Checklist sentinel printed.
