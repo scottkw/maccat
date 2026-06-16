@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0.0
 milestone_name: Standalone maccat — CLI Cleanup & Versioned Catalog
 status: planning
-last_updated: "2026-06-16T13:35:19.597Z"
+last_updated: "2026-06-16"
 last_activity: 2026-06-16
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,19 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-15)
+See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 20 — Cut-Over & External-Catalog Verification
+**Current focus:** Phase 21 — CLI Cleanup (ready to plan)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 21 of 23 (CLI Cleanup)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-16 — Milestone v2.0.0 started
+Status: Ready to plan
+Last activity: 2026-06-16 — Roadmap created for v2.0.0 (3 phases, 14 requirements mapped)
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -41,18 +43,11 @@ Last activity: 2026-06-16 — Milestone v2.0.0 started
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 18. Public Repo Migration | 0/? | - | - |
-| 19. CI Build & Release Pipeline | 0/? | - | - |
-| 20. Cut-Over & External-Catalog Verification | 0/? | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: -
-- Trend: -
+| 21. CLI Cleanup | 0/TBD | - | - |
+| 22. Versioned Catalog | 0/TBD | - | - |
+| 23. Retire the zsh Reference | 0/TBD | - | - |
 
 *Updated after each plan completion*
-| Phase 18 P02 | 5 | 4 tasks | 313 files |
-| Phase 20 P02 | 5 | 2 tasks | 104 files |
 
 ## Accumulated Context
 
@@ -61,19 +56,13 @@ Last activity: 2026-06-16 — Milestone v2.0.0 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- **Roadmap (2026-06-15):** 3 phases (coarse), Phases 18-20. Order 18 → 19 → 20. Phase 18 = genericized clean tree + new public repo + fresh git history. Phase 19 = CI build + tag-gated Release in the new repo. Phase 20 = external-catalog verification, THEN reduce this repo to catalog-data-only (cut-over last, source tree stays intact until new repo proven).
-- **Brownfield (2026-06-15):** Code, tests (`tests/`), build script (`scripts/build-pyz.sh`), and an existing CI test workflow (`.github/workflows/ci.yml`) already exist in this repo. This milestone MOVES them and ADDS build+release to CI — it does not re-create the test suite from scratch.
-- **Fresh history (MIG-03):** New public repo via clean `git init` of a prepared/genericized tree — NOT a `git filter-branch` of this repo's history (saturated with personal catalog commits). Zero personal data in tree or log.
-- **Genericization timing (2026-06-15):** GEN-01..04 happen as part of preparing the clean tree in Phase 18, so no personal data is ever committed to the new repo's first commit.
-- **GEN-03 cleanup list:** remove committed `dist/maccat.pyz`, the three stray root test scripts (`test-parse-arguments-11-02.sh`, `test-rename-back-12-02.sh`, `test-rename-front-12-01.sh`), `venv/`, and any `personal`/`office` catalog folders.
-- [Phase ?]: PUBLIC, branch main, single-commit fresh history, 0/0/0 privacy gate
-- **CI-02 (2026-06-16):** Build job runs parallel to test matrix (not sequential) — avoids 3 redundant artifact uploads from the PYTHONHASHSEED matrix
-- **CI-03 (2026-06-16):** Release workflow uses gh release create in a run step (no third-party action); release job on ubuntu-latest (zipapp is OS-agnostic); permissions: contents: write only
+- **Roadmap (2026-06-16):** 3 phases (coarse), Phases 21-23. Order: CLI Cleanup first (independent, no deps), then Versioned Catalog (breaks parity goldens anyway), then zsh Retirement last (backfill tests written against final versioned collector behavior).
+- **Phase 22 implementation notes:** Homebrew versions via `brew list --formula --versions` / `--cask --versions`. Setapp + web-installed via stdlib `plistlib` reading `Info.plist` CFBundleShortVersionString. Graceful degradation: name-only when version unavailable. Raw-write sections stay raw (no flush_section).
+- **Phase 21 scope:** Remove from `cli.py`: `--personal`, `--office`, `--machine` args and the mutual-exclusion group. Remove from `identity.py`: the `personal`/`office`/`machine` parameters from `resolve_computer_selection`. Remove from `cli.py` step 3 guard and step 6 call. Update docstrings and `--help`.
 
 ### Pending Todos
 
-- Phase 20 planning: MIG-05 verification MUST use an isolated/disposable external catalog dir (`mktemp -d`) — never the user's real `personal/`/`office/` trees. maccat/update-list.sh are destructive (prune/delete/move/commit) when run live.
-- Phase 18 planning: confirm the new repo name and `gh repo create` visibility/flags before any push.
+None.
 
 ### Blockers/Concerns
 
@@ -81,20 +70,14 @@ None currently.
 
 ## Deferred Items
 
-Items acknowledged and carried forward from previous milestone close:
-
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Browser state | CHR-02 / FF-02 — extension enabled/disabled state | v2 | 2026-06-12 |
-| Future tooling | CDX-02 — Codex plugins (arrived after installed v0.46.0) | v2 | 2026-06-12 |
+| Browser state | CHR-02 / FF-02 — extension enabled/disabled state | v2+ | 2026-06-12 |
+| Future tooling | CDX-02 — Codex plugins (arrived after v0.46.0) | v2+ | 2026-06-12 |
 | Distribution | PKG-04 — pipx/PyPI as second distribution channel | future | 2026-06-14 |
 
 ## Session Continuity
 
-Last session: 2026-06-16T05:02:29.125Z
-Stopped at: Phase 20 Plan 01 complete — MIG-05 verified. Ready for Plan 20-02 (MIG-04 strip, human checkpoint required).
+Last session: 2026-06-16
+Stopped at: Roadmap created — 3 phases defined (21-23), all 14 requirements mapped. Ready to plan Phase 21.
 Resume file: None
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone

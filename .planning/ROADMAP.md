@@ -8,6 +8,7 @@
 - ✅ **v0.49.0 Computer-Folder Model** — Phases 10-12 (shipped 2026-06-14) — [archive](milestones/v0.49.0-ROADMAP.md)
 - ✅ **v1.0.0 Python Port & Distribution** — Phases 13-17 (shipped 2026-06-14) — [archive](milestones/v1.0.0-ROADMAP.md)
 - ✅ **v1.1.0 Repo Separation & CI Build** — Phases 18-20 (shipped 2026-06-16) — [archive](milestones/v1.1.0-ROADMAP.md)
+- 🚧 **v2.0.0 Standalone maccat — CLI Cleanup & Versioned Catalog** — Phases 21-23 (in progress)
 
 ## Phases
 
@@ -68,67 +69,66 @@ Full phase detail: [milestones/v1.0.0-ROADMAP.md](milestones/v1.0.0-ROADMAP.md)
 
 </details>
 
-### ✅ v1.1.0 Repo Separation & CI Build (Shipped 2026-06-16) — [archive](milestones/v1.1.0-ROADMAP.md)
+<details>
+<summary>✅ v1.1.0 Repo Separation & CI Build (Phases 18-20) — SHIPPED 2026-06-16</summary>
 
-**Milestone Goal:** Extract `maccat` into a clean, generic **public** GitHub repo started from a
-fresh git history (code + tests + build tooling + docs + the zsh reference + `.planning/`), genericize
-all setup-specific content, add a GitHub Action that builds the `.pyz` and runs the existing test gates
-on push/PR to `main` plus publishes a Release `.pyz` on a version tag, verify maccat against a genuinely
-external catalog repo, and finally reduce **this** repo to catalog-data-only — clearing the runway for
-feature development in the new repo.
+- [x] Phase 18: Public Repo Migration (Genericized, Fresh History) (2/2 plans) — completed 2026-06-16
+- [x] Phase 19: CI Build & Release Pipeline (2/2 plans) — completed 2026-06-16
+- [x] Phase 20: Cut-Over & External-Catalog Verification (2/2 plans) — completed 2026-06-16
 
-This is a **brownfield infrastructure** milestone: the code, tests (`tests/`), build script
-(`scripts/build-pyz.sh`), and an existing CI test workflow (`.github/workflows/ci.yml` — macOS runner,
-`PYTHONHASHSEED` 0/42/random matrix, ruff/mypy/pytest/`zsh -n`) **already exist** here. This milestone
-*moves* them and *adds* build+release to CI — it does not re-create the test suite from scratch.
+Full details: [milestones/v1.1.0-ROADMAP.md](milestones/v1.1.0-ROADMAP.md)
 
-- [x] **Phase 18: Public Repo Migration (Genericized, Fresh History)** — Stand up the new public repo from a genericized clean tree with zero personal data and a fresh git history (completed 2026-06-16)
-- [x] **Phase 19: CI Build & Release Pipeline** — Extend CI in the new repo to build the `.pyz` per push/PR and publish a Release `.pyz` on a version tag (completed 2026-06-16)
-- [x] **Phase 20: Cut-Over & External-Catalog Verification** — Prove maccat runs against an external catalog repo, then reduce this repo to catalog-data-only (completed 2026-06-16)
+</details>
+
+### 🚧 v2.0.0 Standalone maccat — CLI Cleanup & Versioned Catalog (In Progress)
+
+**Milestone Goal:** Make maccat the standalone canonical tool — collapse folder selection to a
+single `--computer` flag, enrich every software section with version numbers, and retire the
+zsh reference and its byte-parity gate.
+
+- [ ] **Phase 21: CLI Cleanup** - Remove `--personal`, `--office`, and `--machine`; `--computer NAME` becomes the sole named-folder flag
+- [ ] **Phase 22: Versioned Catalog** - Add versions to Homebrew formulae/casks, Setapp, and web-installed apps; preserve determinism and graceful degradation
+- [ ] **Phase 23: Retire the zsh Reference** - Delete `update-list.sh` and the parity test suite; backfill coverage; scrub docs
 
 ## Phase Details
 
-### Phase 18: Public Repo Migration (Genericized, Fresh History)
-**Goal**: A new public GitHub repo exists holding the genericized maccat code, tests, build tooling, docs, the zsh reference, and `.planning/` history — started from a fresh git history that exposes zero personal catalog data anywhere in the tree or the log.
-**Depends on**: Nothing (first phase of this milestone; operates on the current maccat tree as source)
-**Requirements**: MIG-01, MIG-02, MIG-03, GEN-01, GEN-02, GEN-03, GEN-04
+### Phase 21: CLI Cleanup
+**Goal**: `--computer NAME` is the sole named-folder flag; `--personal`, `--office`, and `--machine` are completely removed from the codebase and all dead code paths are gone.
+**Depends on**: Phase 20 (v1.1.0 complete — brownfield Python codebase in place)
+**Requirements**: CLI-03, CLI-04, CLI-05, CLI-06
 **Success Criteria** (what must be TRUE):
-  1. A new **public** GitHub repo (created via `gh`) exists and contains the maccat code (`src/`), tests, `pyproject.toml`, `scripts/build-pyz.sh`, docs, `update-list.sh`, and `.planning/` at their current state
-  2. The new repo's working tree contains **no** personal catalog `.txt` files, hostnames, machine names, committed `dist/maccat.pyz` artifact, stray root throwaway test scripts (`test-parse-arguments-11-02.sh`, `test-rename-back-12-02.sh`, `test-rename-front-12-01.sh`), `venv/`, or `personal`/`office` catalog folders
-  3. The new repo's **entire git log** (every commit, from the initial one) contains zero personal catalog data — confirmed by inspecting the full history, not just the tip
-  4. The README documents install-from-Releases, catalog-dir configuration, and basic usage with no personal paths or values; an example/template config and an open-source LICENSE file are present
-**Plans**: 2 plans
-- [x] 18-01-PLAN.md — Build genericized staging tree (copy include-list, exclude personal data, add LICENSE/.gitignore/example config, rewrite README)
-- [x] 18-02-PLAN.md — Fresh git init + privacy gate (working tree + full log scan), then create public scottkw/maccat and push
+  1. Running `maccat --personal`, `maccat --office`, or `maccat --machine Ken` each produces a standard argparse "unrecognized argument" error — the flags no longer exist.
+  2. Running `maccat --computer MyMac` selects the `MyMac` folder non-interactively, identical behavior to what `--computer` provided before.
+  3. `maccat --help` output mentions only `--computer` for folder selection — no stale `--personal`, `--office`, or `--machine` entries appear.
+  4. The interactive `select_computer` menu, `--rename`, `--no-commit`, `--archive-days`, and `--catalog-dir` flags all behave exactly as before (non-regression verified by the existing test suite passing clean).
+**Plans**: TBD
 
-### Phase 19: CI Build & Release Pipeline
-**Goal**: The new repo's GitHub Actions build the `.pyz` and run the existing test gates on every push/PR to `main`, and publish a versioned GitHub Release with the compiled `.pyz` attached when a version tag is pushed.
-**Depends on**: Phase 18 (the new repo and its `.github/workflows/ci.yml` + `scripts/build-pyz.sh` must already exist there)
-**Requirements**: CI-01, CI-02, CI-03
+### Phase 22: Versioned Catalog
+**Goal**: Every software section in the catalog carries a version number where one is obtainable — Homebrew formulae, Homebrew casks, Setapp apps, and web-installed apps now emit `name (version)` lines; runs stay deterministic and degrade gracefully when a version is unavailable.
+**Depends on**: Phase 21 (CLI cleanup complete; clean baseline before output format changes)
+**Requirements**: VER-01, VER-02, VER-03, VER-04, VER-05, VER-06
 **Success Criteria** (what must be TRUE):
-  1. On every push and pull request to `main` in the new repo, the test workflow runs (pytest + ruff + mypy `--strict` + `zsh -n update-list.sh`, macOS runner, `PYTHONHASHSEED` 0/42/random matrix) and reports pass/fail
-  2. On every push/PR to `main`, CI builds the `.pyz` via `scripts/build-pyz.sh` and uploads it as a downloadable workflow artifact
-  3. Pushing a version tag (e.g. `v1.1.0`) creates a GitHub Release with the freshly compiled `.pyz` attached as a release asset
-**Plans**: 2 plans
-- [x] 19-01-PLAN.md — Confirm green test workflow (CI-01) and add .pyz build + upload-artifact step to ci.yml (CI-02), observed via a real Actions run
-- [x] 19-02-PLAN.md — Add tag-triggered release.yml that builds the .pyz on ubuntu-latest and publishes a GitHub Release via gh release create (CI-03); validate with throwaway tag then clean up
+  1. A generated catalog's "Homebrew Packages" section shows each formula and cask with its version — e.g. `git 2.44.0` instead of `git`.
+  2. A generated catalog's "Setapp Applications" and "Web-installed Applications" sections show each app with its version from `Info.plist` — e.g. `Fantastical (3.8.4)` instead of `Fantastical`.
+  3. When a version cannot be read (missing `Info.plist`, absent `CFBundleShortVersionString` key, or brew returning no version), the item still appears by name only and the run completes without error.
+  4. Two consecutive runs on the same machine produce byte-identical catalog sections (deterministic, stably sorted — FMT-04 preserved).
+**Plans**: TBD
 
-### Phase 20: Cut-Over & External-Catalog Verification
-**Goal**: maccat is proven to catalog correctly against a genuinely external catalog repo via its config resolution, after which this repo is reduced to catalog-data-only as the final cut-over.
-**Depends on**: Phase 18 (new repo must hold the working maccat); Phase 19 (release pipeline proven before cut-over). This phase is intentionally **last** so this repo's source tree stays intact until the new repo is verified.
-**Requirements**: MIG-05, MIG-04
+### Phase 23: Retire the zsh Reference
+**Goal**: `update-list.sh`, the `zsh_parity` test suite, and the CI `zsh -n` gate are gone; the test suite stands on its own with direct collector tests backfilling the lost coverage; README and docs describe maccat as the standalone tool.
+**Depends on**: Phase 22 (version changes land first — they break the parity golden files, making parity retirement the natural next step; ZSH-03 backfill tests are written against the final versioned collector behavior)
+**Requirements**: ZSH-01, ZSH-02, ZSH-03, ZSH-04
 **Success Criteria** (what must be TRUE):
-  1. maccat run from the new repo correctly catalogs against an **external** catalog repo resolved via `--catalog-dir` flag, `MACCAT_CATALOG_DIR` env, and `~/.config/maccat/config.toml` (precedence order honored)
-  2. Verification is performed against an isolated/disposable catalog dir (e.g. `mktemp -d`), never the user's real `personal/`/`office/` trees
-  3. This repo is reduced to **catalog-data-only** — code, tests, build tooling, docs, and `.planning/` removed; catalog folders, `machine-labels.tsv`, and archives remain intact
-**Plans**: 2 plans
-- [x] 20-01-PLAN.md — Verify maccat against an external disposable mktemp catalog dir, non-destructive (MIG-05)
-- [x] 20-02-PLAN.md — Strip this repo to catalog-data-only behind a blocking human checkpoint, push to a private Git host (MIG-04); `.planning/` removal is orchestrator-owned
+  1. `update-list.sh` does not exist in the repo; the CI workflow no longer contains a `zsh -n update-list.sh` step; the `zsh_parity` test directory/files are gone.
+  2. `pytest` passes with no skipped or xfailed tests attributable to the parity removal; `ruff` and `mypy --strict` report zero errors.
+  3. Direct collector tests (static-fixture or parametrized unit tests) cover the four collectors that changed in Phase 22 — at minimum one test per collector verifying version-present and version-absent (graceful degradation) paths.
+  4. The README and any docs that previously referenced `update-list.sh` or byte-parity now describe maccat as the standalone cataloging tool, with no stale zsh references.
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 18 → 19 → 20
+Phases execute in numeric order: 21 → 22 → 23
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -144,11 +144,14 @@ Phases execute in numeric order: 18 → 19 → 20
 | 10. Computer-Folder Identity Foundation | v0.49.0 | 1/1 | Complete | 2026-06-14 |
 | 11. Computer Selection & CLI | v0.49.0 | 2/2 | Complete | 2026-06-14 |
 | 12. Computer Rename | v0.49.0 | 2/2 | Complete | 2026-06-14 |
-| 13. Package Foundation + Output Format | v1.0.0 | 3/3 | Complete    | 2026-06-14 |
-| 14. Config, Identity & Retention | v1.0.0 | 4/4 | Complete    | 2026-06-14 |
-| 15. Collectors | v1.0.0 | 8/8 | Complete    | 2026-06-15 |
-| 16. Git, CLI & Distribution | v1.0.0 | 3/3 | Complete    | 2026-06-15 |
-| 17. Parity & Safety Tests | v1.0.0 | 3/3 | Complete    | 2026-06-15 |
-| 18. Public Repo Migration | v1.1.0 | 2/2 | Complete   | 2026-06-16 |
+| 13. Package Foundation + Output Format | v1.0.0 | 3/3 | Complete | 2026-06-14 |
+| 14. Config, Identity & Retention | v1.0.0 | 4/4 | Complete | 2026-06-14 |
+| 15. Collectors | v1.0.0 | 8/8 | Complete | 2026-06-15 |
+| 16. Git, CLI & Distribution | v1.0.0 | 3/3 | Complete | 2026-06-15 |
+| 17. Parity & Safety Tests | v1.0.0 | 3/3 | Complete | 2026-06-15 |
+| 18. Public Repo Migration | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 19. CI Build & Release Pipeline | v1.1.0 | 2/2 | Complete | 2026-06-16 |
-| 20. Cut-Over & External-Catalog Verification | v1.1.0 | 2/2 | Complete   | 2026-06-16 |
+| 20. Cut-Over & External-Catalog Verification | v1.1.0 | 2/2 | Complete | 2026-06-16 |
+| 21. CLI Cleanup | v2.0.0 | 0/TBD | Not started | - |
+| 22. Versioned Catalog | v2.0.0 | 0/TBD | Not started | - |
+| 23. Retire the zsh Reference | v2.0.0 | 0/TBD | Not started | - |

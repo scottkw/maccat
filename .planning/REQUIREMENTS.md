@@ -71,26 +71,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLI-03 | TBD | Pending |
-| CLI-04 | TBD | Pending |
-| CLI-05 | TBD | Pending |
-| CLI-06 | TBD | Pending |
-| VER-01 | TBD | Pending |
-| VER-02 | TBD | Pending |
-| VER-03 | TBD | Pending |
-| VER-04 | TBD | Pending |
-| VER-05 | TBD | Pending |
-| VER-06 | TBD | Pending |
-| ZSH-01 | TBD | Pending |
-| ZSH-02 | TBD | Pending |
-| ZSH-03 | TBD | Pending |
-| ZSH-04 | TBD | Pending |
+| CLI-03 | Phase 21 | Pending |
+| CLI-04 | Phase 21 | Pending |
+| CLI-05 | Phase 21 | Pending |
+| CLI-06 | Phase 21 | Pending |
+| VER-01 | Phase 22 | Pending |
+| VER-02 | Phase 22 | Pending |
+| VER-03 | Phase 22 | Pending |
+| VER-04 | Phase 22 | Pending |
+| VER-05 | Phase 22 | Pending |
+| VER-06 | Phase 22 | Pending |
+| ZSH-01 | Phase 23 | Pending |
+| ZSH-02 | Phase 23 | Pending |
+| ZSH-03 | Phase 23 | Pending |
+| ZSH-04 | Phase 23 | Pending |
 
 **Coverage:**
 - v1 requirements: 14 total
-- Mapped to phases: 0 (filled by roadmap)
-- Unmapped: 14 ⚠️
+- Mapped to phases: 14
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-16*
-*Last updated: 2026-06-16 — milestone v2.0.0 requirements defined*
+*Last updated: 2026-06-16 — traceability table filled (roadmap v2.0.0 created)*
