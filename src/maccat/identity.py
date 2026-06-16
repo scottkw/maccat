@@ -30,7 +30,7 @@ from maccat.naming import make_catalog_filename, parse_catalog_filename
 def validate_computer_name(val: str) -> None:
     """Fatal validator — raises SystemExit with an actionable message.
 
-    Used for --computer / --machine flag values at resolve time (mirrors
+    Used for --computer flag values at resolve time (mirrors
     update-list.sh lines 117–141 which call ``exit 1``).
 
     Four rules (same as validate_computer_name_quiet):
