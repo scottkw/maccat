@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0.0
 milestone_name: Standalone maccat — CLI Cleanup & Versioned Catalog
-status: executing
+status: verifying
 stopped_at: Roadmap created — 3 phases defined (21-23), all 14 requirements mapped. Ready to plan Phase 21.
-last_updated: "2026-06-16T13:58:40.280Z"
+last_updated: "2026-06-16T14:03:51.906Z"
 last_activity: 2026-06-16
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 0
+  completed_plans: 2
+  percent: 33
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-16)
 
 Phase: 21 (CLI Cleanup) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-16
 
-Progress: [█████░░░░░] 50%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Progress: [█████░░░░░] 50%
 | 23. Retire the zsh Reference | 0/TBD | - | - |
 
 *Updated after each plan completion*
+| Phase 21-cli-cleanup P02 | 8 | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -60,6 +61,7 @@ Recent decisions affecting current work:
 - **Roadmap (2026-06-16):** 3 phases (coarse), Phases 21-23. Order: CLI Cleanup first (independent, no deps), then Versioned Catalog (breaks parity goldens anyway), then zsh Retirement last (backfill tests written against final versioned collector behavior).
 - **Phase 22 implementation notes:** Homebrew versions via `brew list --formula --versions` / `--cask --versions`. Setapp + web-installed via stdlib `plistlib` reading `Info.plist` CFBundleShortVersionString. Graceful degradation: name-only when version unavailable. Raw-write sections stay raw (no flush_section).
 - **Phase 21 scope:** Remove from `cli.py`: `--personal`, `--office`, `--machine` args and the mutual-exclusion group. Remove from `identity.py`: the `personal`/`office`/`machine` parameters from `resolve_computer_selection`. Remove from `cli.py` step 3 guard and step 6 call. Update docstrings and `--help`.
+- [Phase ?]: test_naming.py confirmed unchanged — personal/office are filename fixture strings, not flag references
 
 ### Pending Todos
 
@@ -79,6 +81,6 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-06-16T13:58:40.271Z
+Last session: 2026-06-16T14:03:51.899Z
 Stopped at: Roadmap created — 3 phases defined (21-23), all 14 requirements mapped. Ready to plan Phase 21.
 Resume file: None

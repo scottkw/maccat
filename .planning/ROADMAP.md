@@ -86,7 +86,7 @@ Full details: [milestones/v1.1.0-ROADMAP.md](milestones/v1.1.0-ROADMAP.md)
 single `--computer` flag, enrich every software section with version numbers, and retire the
 zsh reference and its byte-parity gate.
 
-- [ ] **Phase 21: CLI Cleanup** - Remove `--personal`, `--office`, and `--machine`; `--computer NAME` becomes the sole named-folder flag
+- [x] **Phase 21: CLI Cleanup** - Remove `--personal`, `--office`, and `--machine`; `--computer NAME` becomes the sole named-folder flag (completed 2026-06-16)
 - [ ] **Phase 22: Versioned Catalog** - Add versions to Homebrew formulae/casks, Setapp, and web-installed apps; preserve determinism and graceful degradation
 - [ ] **Phase 23: Retire the zsh Reference** - Delete `update-list.sh` and the parity test suite; backfill coverage; scrub docs
 
@@ -105,7 +105,7 @@ zsh reference and its byte-parity gate.
 
 Plans:
 - [x] 21-01-PLAN.md — Remove --personal/--office/--machine from identity.py and cli.py; scrub docstring examples
-- [ ] 21-02-PLAN.md — Update tests to new signature; add removed-flag regression coverage; full suite gate
+- [x] 21-02-PLAN.md — Update tests to new signature; add removed-flag regression coverage; full suite gate
 
 ### Phase 22: Versioned Catalog
 **Goal**: Every software section in the catalog carries a version number where one is obtainable — Homebrew formulae, Homebrew casks, Setapp apps, and web-installed apps now emit `name (version)` lines; runs stay deterministic and degrade gracefully when a version is unavailable.
@@ -156,6 +156,6 @@ Phases execute in numeric order: 21 → 22 → 23
 | 18. Public Repo Migration | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 19. CI Build & Release Pipeline | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 20. Cut-Over & External-Catalog Verification | v1.1.0 | 2/2 | Complete | 2026-06-16 |
-| 21. CLI Cleanup | v2.0.0 | 1/2 | In Progress|  |
+| 21. CLI Cleanup | v2.0.0 | 2/2 | Complete   | 2026-06-16 |
 | 22. Versioned Catalog | v2.0.0 | 0/TBD | Not started | - |
 | 23. Retire the zsh Reference | v2.0.0 | 0/TBD | Not started | - |
