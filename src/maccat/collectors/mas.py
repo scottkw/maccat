@@ -17,31 +17,41 @@ class MasCollector(Collector):
     Raw-write: returns Section(raw=True); orchestrator writes via write_lines(),
     NOT flush_section().
 
-    Awk equivalence: mas list 2>/dev/null | awk '{print $2, $3}'
-    Column 1 is the numeric App Store ID (skipped); columns 2-3 are AppName and (version).
+    Each entry routes through emit_item(name, version, id_) preserving the
+    App Store numeric ID (MAS-01), producing 'AppName (version) [id]' lines.
     """
 
     def available(self) -> bool:
         return shutil.which("mas") is not None
 
     def _parse_mas_output(self, stdout: str) -> list[str]:
-        """Python equivalent of awk '{print $2, $3}'.
+        """Extract id, multi-word name, and version from mas list output.
 
-        Extracts AppName and (version) columns from mas list output.
-        Column 1 is the numeric App Store ID and is skipped.
+        Real mas list format: '<id>  <MultiWordName> (<version>)'
+        Column 1: numeric App Store ID
+        Columns 2..N-1: multi-word app name (joined with spaces)
+        Column N: version wrapped in parens — strip before passing to emit_item.
+
+        Routes through emit_item(name, version, id_) for FMT-01 compliance.
         """
-        lines = []
+        from maccat.catalog.format import emit_item
+
+        lines: list[str] = []
         for line in stdout.splitlines():
             parts = line.split()
-            if len(parts) >= 3:
-                lines.append(f"{parts[1]} {parts[2]}")
-            elif len(parts) == 2:
-                # awk '{print $2, $3}' emits "$2 " (trailing space) when $3 is empty.
-                lines.append(f"{parts[1]} ")
-            # PARITY DEVIATION (intentional, WR-02): a 0/1-field or blank line makes
-            # awk '{print $2, $3}' emit a lone " " (space-only line); we drop it
-            # instead. Real `mas list` always emits >=3 fields, so this only differs
-            # on degenerate input and does not affect golden parity on real data.
+            if len(parts) < 2:
+                continue
+            id_ = parts[0]
+            last = parts[-1]
+            if len(parts) >= 3 and last.startswith("(") and last.endswith(")"):
+                version = last[1:-1]          # strip single parens; avoids ((version))
+                name = " ".join(parts[1:-1])  # middle fields: multi-word app name
+            else:
+                version = ""                  # no version; degrade gracefully
+                name = " ".join(parts[1:])
+            item = emit_item(name, version, id_)
+            if item is not None:
+                lines.append(item)
         return lines
 
     def collect(self) -> CollectorResult:
