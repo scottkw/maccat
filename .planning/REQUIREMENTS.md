@@ -18,10 +18,10 @@ Requirements for this milestone (v2.0.0). Each maps to a roadmap phase.
 
 - [ ] **VER-01**: Homebrew formulae are cataloged with their version.
 - [ ] **VER-02**: Homebrew casks are cataloged with their version.
-- [ ] **VER-03**: Setapp apps are cataloged with their version (read from `Info.plist`).
-- [ ] **VER-04**: Web-installed `/Applications` apps are cataloged with their version (read from `Info.plist`).
-- [ ] **VER-05**: When a version can't be determined for an item, the item still appears (name only) and the run never crashes (graceful degradation).
-- [ ] **VER-06**: Catalog output stays deterministic and stably sorted — two consecutive runs are diff-empty (preserves FMT-04).
+- [x] **VER-03**: Setapp apps are cataloged with their version (read from `Info.plist`).
+- [x] **VER-04**: Web-installed `/Applications` apps are cataloged with their version (read from `Info.plist`).
+- [x] **VER-05**: When a version can't be determined for an item, the item still appears (name only) and the run never crashes (graceful degradation).
+- [x] **VER-06**: Catalog output stays deterministic and stably sorted — two consecutive runs are diff-empty (preserves FMT-04).
 
 ### Retire the zsh Reference
 
@@ -77,10 +77,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLI-06 | Phase 21 | Complete |
 | VER-01 | Phase 22 | Pending |
 | VER-02 | Phase 22 | Pending |
-| VER-03 | Phase 22 | Pending |
-| VER-04 | Phase 22 | Pending |
-| VER-05 | Phase 22 | Pending |
-| VER-06 | Phase 22 | Pending |
+| VER-03 | Phase 22 | Complete |
+| VER-04 | Phase 22 | Complete |
+| VER-05 | Phase 22 | Complete |
+| VER-06 | Phase 22 | Complete |
 | ZSH-01 | Phase 23 | Pending |
 | ZSH-02 | Phase 23 | Pending |
 | ZSH-03 | Phase 23 | Pending |
