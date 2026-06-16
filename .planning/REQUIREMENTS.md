@@ -16,8 +16,8 @@ Requirements for this milestone (v2.0.0). Each maps to a roadmap phase.
 
 ### Versioned Catalog
 
-- [ ] **VER-01**: Homebrew formulae are cataloged with their version.
-- [ ] **VER-02**: Homebrew casks are cataloged with their version.
+- [x] **VER-01**: Homebrew formulae are cataloged with their version.
+- [x] **VER-02**: Homebrew casks are cataloged with their version.
 - [x] **VER-03**: Setapp apps are cataloged with their version (read from `Info.plist`).
 - [x] **VER-04**: Web-installed `/Applications` apps are cataloged with their version (read from `Info.plist`).
 - [x] **VER-05**: When a version can't be determined for an item, the item still appears (name only) and the run never crashes (graceful degradation).
@@ -75,8 +75,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLI-04 | Phase 21 | Complete |
 | CLI-05 | Phase 21 | Complete |
 | CLI-06 | Phase 21 | Complete |
-| VER-01 | Phase 22 | Pending |
-| VER-02 | Phase 22 | Pending |
+| VER-01 | Phase 22 | Complete |
+| VER-02 | Phase 22 | Complete |
 | VER-03 | Phase 22 | Complete |
 | VER-04 | Phase 22 | Complete |
 | VER-05 | Phase 22 | Complete |
