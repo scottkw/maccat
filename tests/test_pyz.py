@@ -143,6 +143,9 @@ def test_pyz_maccat_package_importable_from_pyz() -> None:
         f"Failed to import maccat from .pyz:\n"
         f"stdout: {result.stdout!r}\nstderr: {result.stderr!r}"
     )
-    assert "1.0.0" in result.stdout, (
-        f"Expected '1.0.0' in stdout, got: {result.stdout!r}"
+    from maccat import __version__ as expected_version
+
+    assert expected_version in result.stdout, (
+        f"Expected '{expected_version}' (maccat.__version__) in stdout, "
+        f"got: {result.stdout!r}"
     )
