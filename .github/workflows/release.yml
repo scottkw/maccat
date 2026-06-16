@@ -19,13 +19,47 @@ jobs:
         with:
           python-version: "3.11"
 
+      # The git tag is the single source of truth for the released version.
+      # Stamp it into the package BEFORE building so the published maccat.pyz
+      # always reports the tag version via `--version` (no manual bump to forget).
+      - name: Sync package version to tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Releasing ${GITHUB_REF_NAME} → version ${VERSION}"
+          sed -i -E "s/^__version__ = \".*\"/__version__ = \"${VERSION}\"/" src/maccat/__init__.py
+          sed -i -E "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+          ACTUAL="$(PYTHONPATH=src python3 -m maccat --version)"
+          echo "maccat --version → ${ACTUAL}"
+          if [ "${ACTUAL}" != "maccat ${VERSION}" ]; then
+            echo "ERROR: version sync failed — '${ACTUAL}' != 'maccat ${VERSION}'" >&2
+            exit 1
+          fi
+
       - name: Build maccat.pyz
         run: chmod +x scripts/build-pyz.sh && ./scripts/build-pyz.sh
+
+      # Verify the BUILT artifact reports the tag version (catches any build-path
+      # that bypasses the stamped source).
+      - name: Verify built artifact version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ACTUAL="$(python3 dist/maccat.pyz --version)"
+          echo "dist/maccat.pyz --version → ${ACTUAL}"
+          if [ "${ACTUAL}" != "maccat ${VERSION}" ]; then
+            echo "ERROR: built maccat.pyz reports '${ACTUAL}', expected 'maccat ${VERSION}'" >&2
+            exit 1
+          fi
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/maccat.pyz \
-            --title "${GITHUB_REF_NAME}" \
-            --generate-notes
+          # Idempotent: create the release if absent, otherwise replace its asset.
+          # Lets a re-pushed tag rebuild + re-upload a corrected maccat.pyz.
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" dist/maccat.pyz --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" dist/maccat.pyz \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes
+          fi
