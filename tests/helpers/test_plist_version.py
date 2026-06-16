@@ -8,8 +8,6 @@ from __future__ import annotations
 import plistlib
 from pathlib import Path
 
-import pytest
-
 from maccat.helpers.plist_version import get_plist_version
 
 
