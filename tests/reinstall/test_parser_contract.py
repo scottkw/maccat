@@ -42,6 +42,12 @@ ADVERSARIAL_CASES = [
     # KNOWN LOSSY: embedded paren in name without id is ambiguous;
     # right-anchored matching takes LAST (...) as version by design (CONTEXT.md decision).
     ("App (Beta)", "App", "Beta", None, False),
+    # KNOWN LOSSY (WR-03): nested parens. [^)]+ in the version group cannot span
+    # the inner ")", so the trailing "(...)" is NOT taken as a version — the name
+    # is kept verbatim and the version is dropped. The id is still recovered.
+    ("Foo (Bar (Baz)) [9]", "Foo (Bar (Baz))", None, "9", False),
+    # KNOWN LOSSY (WR-03): nested parens, no id — falls back to name-only.
+    ("Foo (Bar (Baz))", "Foo (Bar (Baz))", None, None, False),
 ]
 
 

@@ -4,6 +4,16 @@ parse_catalog(path) -> ParsedCatalog is the public API consumed by the
 Phase 25 reinstall emitter.  The parser is the logical inverse of
 catalog/format.py::emit_item(); do NOT import emit_item here to avoid
 coupling (the regex is the sole contract between the two modules).
+
+KNOWN LOSSY cases (explicit contract — see ADVERSARIAL_CASES in
+tests/reinstall/test_parser_contract.py):
+  * Nested parentheses in a name ("Foo (Bar (Baz)) [9]"): the version group
+    [^)]+ cannot span the inner ")", so the trailing "(...)" is NOT taken as a
+    version. The name is kept verbatim and the version is dropped (the id, if
+    present, is still recovered). emit_item never emits nested parens, so this
+    only affects hand-edited/external catalogs.
+  * Embedded single-level parens without a distinct version ("App (Beta)"):
+    right-anchored matching takes the LAST "(...)" as the version by design.
 """
 from __future__ import annotations
 
