@@ -80,9 +80,21 @@ The script is never auto-executed.
   skills / agents (identity-only reconfigure reminders).
 - **Never auto-execute** — output a script the user reviews and runs; safe to re-run where practical.
 
-**Key constraint:** AI-CLI MCP/plugins/skills can't be auto-installed — the catalog stores them
-as identity-only (`name [transport]`, no command/url/args/env) by the FMT-03 secret-safety design,
-so they can only be a manual reconfigure reminder.
+- **Catalog-format change (mas ID)** — `MasCollector` currently discards the numeric App Store ID
+  (`awk '{print $2,$3}'`); `mas install` needs it. This milestone changes the App Store section to
+  emit `AppName (version) [id]` so reinstall can emit `mas install <id>`. (Go-forward only: catalogs
+  generated before the change lack the ID, so reinstall degrades those mas entries to the checklist.)
+
+**Key constraints (from research):**
+- AI-CLI MCP/plugins/skills can't be auto-installed — the catalog stores them as identity-only
+  (`name [transport]`, no command/url/args/env) by the FMT-03 secret-safety design → manual checklist only.
+- `brew install <name>` installs a formula OR cask (no catalog change needed for that); only the rare
+  name that is both needs `--cask`/`--formula` disambiguation.
+- Idempotency is the central script concern: brew formula is idempotent, brew cask is NOT (guard with
+  `brew list --cask <n> || brew install --cask <n>`); `code`/`cursor --install-extension` need a
+  PATH/`--list-extensions` guard; `mas install` is ~idempotent (no `--force`). Generated script uses
+  `#!/usr/bin/env bash` + `set -Eeuo pipefail`, `shlex.quote()` on all catalog-derived values, and is
+  written non-executable (0644), never subprocess-run.
 
 ## Next Candidate Milestones
 
@@ -246,6 +258,7 @@ distribution, and v2 items CHR-02/FF-02 enabled-state + CDX-02 Codex plugins whe
 | AI-CLI MCP/plugins/skills are manual-checklist only, never auto-installed | The catalog stores them identity-only (`name [transport]`) by FMT-03 secret-safety — the command/url/args/env needed to reinstall are deliberately absent | — Pending v2.1.0 |
 | Install latest, record the cataloged version as a comment (not version-pinned) | Pinning is unreliable across brew/mas/extensions (no versioned formulae variants, no mas version pin); the cataloged version stays as a reviewable reference | — Pending v2.1.0 |
 | The catalog `.txt` is the reinstall source of truth (parse it back), not a live system scan | Reinstall is about restoring a captured snapshot to a new/wiped machine; parsing the emitted plain-text sections closes the catalog→restore loop | — Pending v2.1.0 |
+| Preserve the mas App Store ID in the catalog (`AppName (version) [id]`) so mas can be auto-installed | `mas install` needs the numeric ID, which the collector currently discards; without it mas auto-install is impossible. Go-forward only (old catalogs lack it → checklist fallback). No parity suite to break (retired v2.0.0) | — Pending v2.1.0 |
 
 ## Evolution
 
