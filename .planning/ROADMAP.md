@@ -9,6 +9,7 @@
 - ✅ **v1.0.0 Python Port & Distribution** — Phases 13-17 (shipped 2026-06-14) — [archive](milestones/v1.0.0-ROADMAP.md)
 - ✅ **v1.1.0 Repo Separation & CI Build** — Phases 18-20 (shipped 2026-06-16) — [archive](milestones/v1.1.0-ROADMAP.md)
 - ✅ **v2.0.0 Standalone maccat — CLI Cleanup & Versioned Catalog** — Phases 21-23 (shipped 2026-06-16) — [archive](milestones/v2.0.0-ROADMAP.md)
+- 🔄 **v2.1.0 Reinstall from Catalog** — Phases 24-26 (active)
 
 ## Phases
 
@@ -91,10 +92,52 @@ Full phase details archived in [milestones/v2.0.0-ROADMAP.md](milestones/v2.0.0-
 
 </details>
 
+### v2.1.0 Reinstall from Catalog (Phases 24-26)
+
+- [ ] **Phase 24: Catalog Format Fix + Parser Foundation** — MasCollector emits App Store ID; reverse parser with round-trip contract test
+- [ ] **Phase 25: Script Emitter** — All auto-install renderers (brew/mas/extensions) + manual checklist + script structure + injection safety
+- [ ] **Phase 26: Picker + CLI Wiring + Integration** — `--from`/interactive picker + `maccat reinstall` subcommand wired into `cli.py`
+
+## Phase Details
+
+### Phase 24: Catalog Format Fix + Parser Foundation
+**Goal**: The App Store ID is preserved in the catalog and the catalog can be parsed back into typed structured items
+**Depends on**: Nothing (first phase of milestone)
+**Requirements**: MAS-01, PARSE-01
+**Success Criteria** (what must be TRUE):
+  1. A catalog generated after this phase includes the App Store numeric ID in every mas entry: `AppName (version) [id]` — no double-parenthesized version, no missing bracket
+  2. The existing mas collector tests pass with updated assertions reflecting the new format
+  3. `parse_catalog(path)` returns a `ParsedCatalog` whose items correctly reflect name, version, and id for all four `emit_item` line shapes, including graceful handling of the `(none found)` sentinel and collector degradation messages
+  4. The round-trip contract test in `tests/reinstall/test_parser_contract.py` passes for all six `emit_item` degradation variants, including adversarial fixtures with embedded parentheses in names
+**Plans**: TBD
+
+### Phase 25: Script Emitter
+**Goal**: A `ParsedCatalog` can be rendered into a complete, injection-safe, idempotent `reinstall.sh` script string
+**Depends on**: Phase 24
+**Requirements**: GEN-01, GEN-02, GEN-03, GEN-04, MAN-01
+**Success Criteria** (what must be TRUE):
+  1. A generated script passes `bash -n reinstall.sh` (syntax-valid bash) and opens with `#!/usr/bin/env bash` + `set -Eeuo pipefail` + a provenance header naming the source catalog and generation date
+  2. Every Homebrew line uses the `brew list --cask <n> &>/dev/null || brew install` idempotency guard and carries a `# cataloged: version` comment; App Store entries with an ID emit a `mas install <id>` guard line; App Store entries without an ID (pre-MAS-01 catalogs) appear only in the manual checklist
+  3. VS Code and Cursor extension lines include a `command -v` PATH guard, a `--list-extensions | grep -qi` idempotency check, and use the lowercased marketplace ID as the install key
+  4. Setapp apps, web-installed apps, browser extensions, and all AI-CLI tooling (MCP servers, plugins, skills, agents) appear exclusively in the manual checklist as `echo` statements — no fabricated install commands are emitted for these sources
+  5. Every catalog-derived value inserted into shell command position is processed through `shlex.quote()` — no bare f-string interpolation in shell context
+**Plans**: TBD
+
+### Phase 26: Picker + CLI Wiring + Integration
+**Goal**: `maccat reinstall` is a working subcommand that resolves a catalog, generates `reinstall.sh`, and prints its path
+**Depends on**: Phase 25
+**Requirements**: RST-01, RST-02
+**Success Criteria** (what must be TRUE):
+  1. `maccat reinstall --from path/to/catalog.txt` writes `reinstall.sh` to the current directory, prints its absolute path to stdout, and exits 0 — the file is mode 0644 (not executable) and was never subprocess-run
+  2. `maccat reinstall` without `--from` invokes the existing interactive computer-picker (`select_computer`) and uses the newest catalog in the selected computer's folder — the `--computer NAME` flag flows through for non-interactive selection
+  3. The existing 13-step catalog-gen path in `cli.py run()` is unchanged — `maccat catalog` (or any non-reinstall invocation) behaves identically to before this phase
+  4. Running `maccat reinstall --from <fixture>` in an integration test confirms the output file exists, contains the expected shebang and provenance header, and the `--rename` guard does not fire
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 21 → 22 → 23
+Phases execute in numeric order: 24 → 25 → 26
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -118,6 +161,9 @@ Phases execute in numeric order: 21 → 22 → 23
 | 18. Public Repo Migration | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 19. CI Build & Release Pipeline | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 20. Cut-Over & External-Catalog Verification | v1.1.0 | 2/2 | Complete | 2026-06-16 |
-| 21. CLI Cleanup | v2.0.0 | 2/2 | Complete   | 2026-06-16 |
-| 22. Versioned Catalog | v2.0.0 | 3/3 | Complete   | 2026-06-16 |
-| 23. Retire the zsh Reference | v2.0.0 | 3/3 | Complete   | 2026-06-16 |
+| 21. CLI Cleanup | v2.0.0 | 2/2 | Complete | 2026-06-16 |
+| 22. Versioned Catalog | v2.0.0 | 3/3 | Complete | 2026-06-16 |
+| 23. Retire the zsh Reference | v2.0.0 | 3/3 | Complete | 2026-06-16 |
+| 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 0/TBD | Not started | - |
+| 25. Script Emitter | v2.1.0 | 0/TBD | Not started | - |
+| 26. Picker + CLI Wiring + Integration | v2.1.0 | 0/TBD | Not started | - |

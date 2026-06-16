@@ -73,21 +73,21 @@ Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAS-01 | TBD | Pending |
-| PARSE-01 | TBD | Pending |
-| RST-01 | TBD | Pending |
-| RST-02 | TBD | Pending |
-| GEN-01 | TBD | Pending |
-| GEN-02 | TBD | Pending |
-| GEN-03 | TBD | Pending |
-| GEN-04 | TBD | Pending |
-| MAN-01 | TBD | Pending |
+| MAS-01 | Phase 24 | Pending |
+| PARSE-01 | Phase 24 | Pending |
+| RST-01 | Phase 26 | Pending |
+| RST-02 | Phase 26 | Pending |
+| GEN-01 | Phase 25 | Pending |
+| GEN-02 | Phase 25 | Pending |
+| GEN-03 | Phase 25 | Pending |
+| GEN-04 | Phase 25 | Pending |
+| MAN-01 | Phase 25 | Pending |
 
 **Coverage:**
 - v1 requirements: 9 total
-- Mapped to phases: 0 (filled by roadmap)
-- Unmapped: 9 ⚠️
+- Mapped to phases: 9
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-16*
-*Last updated: 2026-06-16 — milestone v2.1.0 requirements defined (research-informed: mas-ID format change + idempotency/safety constraints)*
+*Last updated: 2026-06-16 — traceability filled by roadmap creation (Phases 24-26)*

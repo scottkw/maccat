@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v2.1.0
 milestone_name: Reinstall from Catalog
-status: planning
-last_updated: "2026-06-16T16:51:04.157Z"
+status: roadmapped
+last_updated: "2026-06-16T00:00:00.000Z"
 last_activity: 2026-06-16
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 23 — Retire the zsh Reference
+**Current focus:** Phase 24 — Catalog Format Fix + Parser Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 24 — Catalog Format Fix + Parser Foundation
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-16 — Milestone v2.1.0 started
+Status: Roadmap defined; ready to plan Phase 24
+Last activity: 2026-06-16 — Roadmap created for v2.1.0 (Phases 24-26)
+
+```
+[===========>                              ] Phase 0/3 complete (0%)
+```
 
 ## Performance Metrics
 
@@ -41,17 +45,11 @@ Last activity: 2026-06-16 — Milestone v2.1.0 started
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 21. CLI Cleanup | 0/TBD | - | - |
-| 22. Versioned Catalog | 0/TBD | - | - |
-| 23. Retire the zsh Reference | 0/TBD | - | - |
+| 24. Catalog Format Fix + Parser Foundation | 0/TBD | - | - |
+| 25. Script Emitter | 0/TBD | - | - |
+| 26. Picker + CLI Wiring + Integration | 0/TBD | - | - |
 
 *Updated after each plan completion*
-| Phase 21-cli-cleanup P02 | 8 | 3 tasks | 2 files |
-| Phase 22 P22-02 | 7 | 3 tasks | 3 files |
-| Phase 22 P22-03 | 110s | 2 tasks | 1 files |
-| Phase 23-retire-zsh-reference P23-01 | 5min | 1 tasks | 1 files |
-| Phase 23-retire-zsh-reference P02 | 120 | 3 tasks | 43 files |
-| Phase 23-retire-zsh-reference P03 | 5m | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -60,13 +58,12 @@ Last activity: 2026-06-16 — Milestone v2.1.0 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- **Roadmap (2026-06-16):** 3 phases (coarse), Phases 21-23. Order: CLI Cleanup first (independent, no deps), then Versioned Catalog (breaks parity goldens anyway), then zsh Retirement last (backfill tests written against final versioned collector behavior).
-- **Phase 22 implementation notes:** Homebrew versions via `brew list --formula --versions` / `--cask --versions`. Setapp + web-installed via stdlib `plistlib` reading `Info.plist` CFBundleShortVersionString. Graceful degradation: name-only when version unavailable. Raw-write sections stay raw (no flush_section).
-- **Phase 21 scope:** Remove from `cli.py`: `--personal`, `--office`, `--machine` args and the mutual-exclusion group. Remove from `identity.py`: the `personal`/`office`/`machine` parameters from `resolve_computer_selection`. Remove from `cli.py` step 3 guard and step 6 call. Update docstrings and `--help`.
-- [Phase ?]: test_naming.py confirmed unchanged — personal/office are filename fixture strings, not flag references
-- [Phase ?]: Manually created _locales/en/ in test to write JSON array as messages.json — avoids _make_ext locales kwarg
-- [Phase ?]: Retire zsh reference (ZSH-01, ZSH-02)
-- [Phase ?]: Placed v1.0.0 history note above Troubleshooting section for natural placement
+- **Roadmap (2026-06-16):** 3 phases (coarse), Phases 24-26. Order: catalog format fix + parser first (MAS-01 is a hard prerequisite — mas ID must exist in catalog before emitter can use it; parser built against final line shapes), then emitter (all 5 render/safety requirements), then picker + CLI wiring last (protect the 13-step catalog-gen invariant in cli.py).
+- **Phase 24 scope:** `MasCollector` changed to extract all three `mas list` columns and call `emit_item(name, version, id_)`; update collector tests. New `reinstall/` subpackage: `__init__.py`, `parser.py` with `ParsedItem`/`ParsedSection`/`ParsedCatalog` dataclasses, right-anchored regexes, section-boundary state machine. Round-trip contract test in `tests/reinstall/test_parser_contract.py`.
+- **Phase 25 scope:** `reinstall/emitter.py` with `emit_reinstall_script()`, per-source renderers (`_brew_block`, `_editor_ext_block`, `_manual_checklist_block`), static `SECTION_SOURCE_MAP` (17 section titles), `shlex.quote()` via a `quote_for_script()` wrapper as the sole shell-interpolation path. File written at 0o644; zero subprocess calls.
+- **Phase 26 scope:** `reinstall/picker.py` (`resolve_catalog_path`), `reinstall/cli.py` (`run_reinstall`), and wiring of `reinstall` subparser + one-liner dispatch into root `cli.py` after `validate_catalog_repo` and before the `--rename` short-circuit. Integration smoke test verifying `--rename` guard does not fire on reinstall args.
+- **Key constraint:** `catalog/format.py:emit_item()` must NOT be changed except for the deliberate MAS-01 change (`MasCollector` now passes the numeric ID as the third argument). The parser inverts exactly the four line shapes `emit_item` already produces.
+- **mas version de-parens:** `mas list` column 3 already wraps the version in parens (e.g., `(14.0)`). `MasCollector` must strip those parens before passing to `emit_item()` to avoid `AppName ((14.0)) [id]`.
 
 ### Pending Todos
 
@@ -88,10 +85,10 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-06-16T15:52:22.472Z
-Stopped at: Completed 23-03-PLAN.md (ZSH-04: scrub README zsh refs)
+Last session: 2026-06-16
+Stopped at: Roadmap created for v2.1.0 (Phases 24-26)
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 24 with `/gsd:plan-phase 24`
