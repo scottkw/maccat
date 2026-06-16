@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0.0
 milestone_name: Standalone maccat — CLI Cleanup & Versioned Catalog
-status: planning
-last_updated: "2026-06-16"
+status: executing
+stopped_at: Roadmap created — 3 phases defined (21-23), all 14 requirements mapped. Ready to plan Phase 21.
+last_updated: "2026-06-16T13:58:40.280Z"
 last_activity: 2026-06-16
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
   percent: 0
 ---
 
@@ -20,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 21 — CLI Cleanup (ready to plan)
+**Current focus:** Phase 21 — CLI Cleanup
 
 ## Current Position
 
-Phase: 21 of 23 (CLI Cleanup)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-06-16 — Roadmap created for v2.0.0 (3 phases, 14 requirements mapped)
+Phase: 21 (CLI Cleanup) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-06-16
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -78,6 +79,6 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-06-16
+Last session: 2026-06-16T13:58:40.271Z
 Stopped at: Roadmap created — 3 phases defined (21-23), all 14 requirements mapped. Ready to plan Phase 21.
 Resume file: None

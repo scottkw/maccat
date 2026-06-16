@@ -9,9 +9,9 @@ Requirements for this milestone (v2.0.0). Each maps to a roadmap phase.
 
 ### CLI Cleanup
 
-- [ ] **CLI-03**: User selects a computer folder non-interactively with `--computer NAME` as the sole named-folder flag.
-- [ ] **CLI-04**: `--personal`, `--office`, and `--machine` are removed everywhere (parser, mutual-exclusion guards, resolve logic, doc-comment examples) — no dead code paths; passing a removed flag yields a standard argparse "unrecognized argument" error.
-- [ ] **CLI-05**: `--help` output references only `--computer` for folder selection (no stale flag mentions).
+- [x] **CLI-03**: User selects a computer folder non-interactively with `--computer NAME` as the sole named-folder flag.
+- [x] **CLI-04**: `--personal`, `--office`, and `--machine` are removed everywhere (parser, mutual-exclusion guards, resolve logic, doc-comment examples) — no dead code paths; passing a removed flag yields a standard argparse "unrecognized argument" error.
+- [x] **CLI-05**: `--help` output references only `--computer` for folder selection (no stale flag mentions).
 - [ ] **CLI-06**: The interactive `select_computer` menu and the `--rename` / `--no-commit` / `--archive-days` / `--catalog-dir` flags behave exactly as before (non-regression).
 
 ### Versioned Catalog
@@ -71,9 +71,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLI-03 | Phase 21 | Pending |
-| CLI-04 | Phase 21 | Pending |
-| CLI-05 | Phase 21 | Pending |
+| CLI-03 | Phase 21 | Complete |
+| CLI-04 | Phase 21 | Complete |
+| CLI-05 | Phase 21 | Complete |
 | CLI-06 | Phase 21 | Pending |
 | VER-01 | Phase 22 | Pending |
 | VER-02 | Phase 22 | Pending |

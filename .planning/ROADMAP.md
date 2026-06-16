@@ -104,7 +104,7 @@ zsh reference and its byte-parity gate.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 21-01-PLAN.md — Remove --personal/--office/--machine from identity.py and cli.py; scrub docstring examples
+- [x] 21-01-PLAN.md — Remove --personal/--office/--machine from identity.py and cli.py; scrub docstring examples
 - [ ] 21-02-PLAN.md — Update tests to new signature; add removed-flag regression coverage; full suite gate
 
 ### Phase 22: Versioned Catalog
@@ -156,6 +156,6 @@ Phases execute in numeric order: 21 → 22 → 23
 | 18. Public Repo Migration | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 19. CI Build & Release Pipeline | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 20. Cut-Over & External-Catalog Verification | v1.1.0 | 2/2 | Complete | 2026-06-16 |
-| 21. CLI Cleanup | v2.0.0 | 0/2 | Not started | - |
+| 21. CLI Cleanup | v2.0.0 | 1/2 | In Progress|  |
 | 22. Versioned Catalog | v2.0.0 | 0/TBD | Not started | - |
 | 23. Retire the zsh Reference | v2.0.0 | 0/TBD | Not started | - |
