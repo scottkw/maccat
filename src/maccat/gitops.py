@@ -99,7 +99,7 @@ def git_commit_and_push(
 
     Args:
         catalog_repo: Path to the catalog git repository.
-        computer:     Computer folder name (e.g. "personal", "office").
+        computer:     Computer folder name (e.g. "MyMac", "WorkLaptop").
         timestamp:    14-digit timestamp string (YYYYMMDDHHMMSS).
     """
     print()

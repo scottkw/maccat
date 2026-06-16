@@ -22,7 +22,7 @@ class CatalogWriter:
 
     Usage::
 
-        with CatalogWriter(Path("personal/catalog-2026.txt")) as w:
+        with CatalogWriter(Path("MyMac/catalog-2026.txt")) as w:
             w.write_section("Homebrew Packages")
             w.write_lines(flush_section(items))
 

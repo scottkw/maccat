@@ -66,6 +66,6 @@ def make_catalog_filename(machine: str, timestamp: str) -> str:
         timestamp: 14-digit YYYYMMDDHHMMSS string.
 
     Returns:
-        Catalog filename string, e.g. 'mac-software-list-[personal]-20260614120000.txt'.
+        Catalog filename string, e.g. 'mac-software-list-[MyMac]-20260614120000.txt'.
     """
     return f"mac-software-list-[{machine}]-{timestamp}.txt"

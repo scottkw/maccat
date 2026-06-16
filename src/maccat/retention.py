@@ -53,7 +53,7 @@ def retain_newest_per_host(target_dir: Path) -> None:
     Creates archive_dir with mkdir(exist_ok=True) unconditionally at the start.
 
     Args:
-        target_dir: The computer folder to sweep (e.g. catalog_repo / "personal").
+        target_dir: The computer folder to sweep (e.g. catalog_repo / "MyMac").
                     The archive/ subdirectory is target_dir / "archive".
     """
     archive_dir = target_dir / "archive"
