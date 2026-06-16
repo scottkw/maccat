@@ -49,27 +49,35 @@ class TestArgparse:
             _build_parser().parse_args(["--help"])
         assert exc.value.code == 0
 
-    def test_mutual_exclusion_personal_office(self) -> None:
-        from maccat.cli import _build_parser
-
-        with pytest.raises(SystemExit) as exc:
-            _build_parser().parse_args(["--personal", "--office"])
-        assert exc.value.code == 2
-
-    def test_machine_has_separate_dest(self) -> None:
-        """--machine must keep its own dest='machine', NOT aliased to dest='computer'."""
-        from maccat.cli import _build_parser
-
-        args = _build_parser().parse_args(["--machine", "mybox"])
-        assert args.machine == "mybox"
-        assert args.computer is None
-
     def test_computer_has_own_dest(self) -> None:
         from maccat.cli import _build_parser
 
         args = _build_parser().parse_args(["--computer", "workstation"])
         assert args.computer == "workstation"
-        assert args.machine is None
+
+    def test_personal_flag_is_unrecognized(self) -> None:
+        """--personal was removed; argparse must reject it with exit code 2."""
+        from maccat.cli import _build_parser
+
+        with pytest.raises(SystemExit) as exc:
+            _build_parser().parse_args(["--personal"])
+        assert exc.value.code == 2
+
+    def test_office_flag_is_unrecognized(self) -> None:
+        """--office was removed; argparse must reject it with exit code 2."""
+        from maccat.cli import _build_parser
+
+        with pytest.raises(SystemExit) as exc:
+            _build_parser().parse_args(["--office"])
+        assert exc.value.code == 2
+
+    def test_machine_flag_is_unrecognized(self) -> None:
+        """--machine was removed; argparse must reject it with exit code 2."""
+        from maccat.cli import _build_parser
+
+        with pytest.raises(SystemExit) as exc:
+            _build_parser().parse_args(["--machine", "box"])
+        assert exc.value.code == 2
 
     def test_no_commit_flag_parsed(self) -> None:
         from maccat.cli import _build_parser
@@ -113,19 +121,6 @@ class TestArgparse:
         args = _build_parser().parse_args(["--rename"])
         assert args.rename is True
 
-    def test_personal_and_computer_are_mutually_exclusive(self) -> None:
-        from maccat.cli import _build_parser
-
-        with pytest.raises(SystemExit) as exc:
-            _build_parser().parse_args(["--personal", "--computer", "box"])
-        assert exc.value.code == 2
-
-    def test_machine_and_office_are_mutually_exclusive(self) -> None:
-        from maccat.cli import _build_parser
-
-        with pytest.raises(SystemExit) as exc:
-            _build_parser().parse_args(["--machine", "box", "--office"])
-        assert exc.value.code == 2
 
 
 # ---------------------------------------------------------------------------
@@ -136,21 +131,6 @@ class TestArgparse:
 class TestRenameFlag:
     """Verify the --rename × selecting-flag guard fires before any other logic."""
 
-    def test_rename_with_personal_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """--rename + --personal must raise SystemExit before any catalog logic."""
-        monkeypatch.setattr(sys, "argv", ["maccat", "--rename", "--personal"])
-        from maccat.cli import run
-
-        with pytest.raises(SystemExit):
-            run()
-
-    def test_rename_with_office_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(sys, "argv", ["maccat", "--rename", "--office"])
-        from maccat.cli import run
-
-        with pytest.raises(SystemExit):
-            run()
-
     def test_rename_with_computer_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, "argv", ["maccat", "--rename", "--computer", "box"])
         from maccat.cli import run
@@ -158,12 +138,6 @@ class TestRenameFlag:
         with pytest.raises(SystemExit):
             run()
 
-    def test_rename_with_machine_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(sys, "argv", ["maccat", "--rename", "--machine", "box"])
-        from maccat.cli import run
-
-        with pytest.raises(SystemExit):
-            run()
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +148,7 @@ class TestRenameFlag:
 def _patch_run_dependencies(
     monkeypatch: pytest.MonkeyPatch,
     catalog_repo: Path,
-    computer_name: str = "personal",
+    computer_name: str = "MyMac",
 ) -> dict[str, MagicMock]:
     """Patch all external side-effects for run() end-to-end tests.
 
@@ -226,7 +200,7 @@ class TestNoCommit:
     ) -> None:
         """With --no-commit, git_commit_and_push must NOT be called."""
         mocks = _patch_run_dependencies(monkeypatch, disposable_catalog_repo)
-        monkeypatch.setattr(sys, "argv", ["maccat", "--personal", "--no-commit"])
+        monkeypatch.setattr(sys, "argv", ["maccat", "--computer", "MyMac", "--no-commit"])
 
         from maccat.cli import run
 
@@ -241,7 +215,7 @@ class TestNoCommit:
     ) -> None:
         """With --no-commit, git_pull must still be called (pull is unconditional)."""
         mocks = _patch_run_dependencies(monkeypatch, disposable_catalog_repo)
-        monkeypatch.setattr(sys, "argv", ["maccat", "--personal", "--no-commit"])
+        monkeypatch.setattr(sys, "argv", ["maccat", "--computer", "MyMac", "--no-commit"])
 
         from maccat.cli import run
 
@@ -256,16 +230,16 @@ class TestNoCommit:
     ) -> None:
         """With --no-commit, the catalog .txt file must be written to computer/."""
         _patch_run_dependencies(monkeypatch, disposable_catalog_repo)
-        monkeypatch.setattr(sys, "argv", ["maccat", "--personal", "--no-commit"])
+        monkeypatch.setattr(sys, "argv", ["maccat", "--computer", "MyMac", "--no-commit"])
 
         from maccat.cli import run
 
         run()
 
-        personal_dir = disposable_catalog_repo / "personal"
-        txt_files = list(personal_dir.glob("mac-software-list-*.txt"))
+        mymac_dir = disposable_catalog_repo / "MyMac"
+        txt_files = list(mymac_dir.glob("mac-software-list-*.txt"))
         assert len(txt_files) >= 1, (
-            f"Expected at least one catalog file in {personal_dir}, found none"
+            f"Expected at least one catalog file in {mymac_dir}, found none"
         )
 
     def test_with_commit_calls_git_commit_and_push(
@@ -275,7 +249,7 @@ class TestNoCommit:
     ) -> None:
         """Without --no-commit, git_commit_and_push must be called."""
         mocks = _patch_run_dependencies(monkeypatch, disposable_catalog_repo)
-        monkeypatch.setattr(sys, "argv", ["maccat", "--personal"])
+        monkeypatch.setattr(sys, "argv", ["maccat", "--computer", "MyMac"])
 
         from maccat.cli import run
 
@@ -303,19 +277,19 @@ class TestGenerateThenSweep:
         monkeypatch.setenv("MACCAT_CATALOG_DIR", str(disposable_catalog_repo))
         monkeypatch.setattr("maccat.gitops.git_pull", MagicMock())
         monkeypatch.setattr("maccat.gitops.git_commit_and_push", MagicMock())
-        monkeypatch.setattr("maccat.identity.select_computer", MagicMock(return_value="personal"))
+        monkeypatch.setattr("maccat.identity.select_computer", MagicMock(return_value="MyMac"))
         monkeypatch.setattr("maccat.collectors.get_registry", MagicMock(return_value=[]))
-        monkeypatch.setattr(sys, "argv", ["maccat", "--personal", "--no-commit"])
+        monkeypatch.setattr(sys, "argv", ["maccat", "--computer", "MyMac", "--no-commit"])
 
         from maccat.cli import run
 
         run()
 
-        personal_dir = disposable_catalog_repo / "personal"
-        txt_files = list(personal_dir.glob("mac-software-list-*.txt"))
+        mymac_dir = disposable_catalog_repo / "MyMac"
+        txt_files = list(mymac_dir.glob("mac-software-list-*.txt"))
         assert len(txt_files) >= 1, "Catalog file should have been written"
 
-        archive_dir = personal_dir / "archive"
+        archive_dir = mymac_dir / "archive"
         if archive_dir.exists():
             archived = list(archive_dir.glob("mac-software-list-*.txt"))
             assert len(archived) == 0, (
@@ -340,13 +314,13 @@ class TestGenerateThenSweep:
         monkeypatch.setenv("MACCAT_CATALOG_DIR", str(disposable_catalog_repo))
         monkeypatch.setattr("maccat.gitops.git_pull", fake_git_pull)
         monkeypatch.setattr("maccat.gitops.git_commit_and_push", MagicMock())
-        monkeypatch.setattr("maccat.identity.select_computer", MagicMock(return_value="personal"))
+        monkeypatch.setattr("maccat.identity.select_computer", MagicMock(return_value="MyMac"))
         monkeypatch.setattr("maccat.collectors.get_registry", MagicMock(return_value=[]))
         monkeypatch.setattr("maccat.retention.retain_newest_per_host", MagicMock())
         monkeypatch.setattr("maccat.retention.prune_old_archives", MagicMock())
-        monkeypatch.setattr(sys, "argv", ["maccat", "--personal", "--no-commit"])
+        monkeypatch.setattr(sys, "argv", ["maccat", "--computer", "MyMac", "--no-commit"])
 
-        personal_dir = disposable_catalog_repo / "personal"
+        mymac_dir = disposable_catalog_repo / "MyMac"
 
         from maccat.cli import run
 
@@ -356,7 +330,7 @@ class TestGenerateThenSweep:
         assert "git_pull" in call_order
 
         # Catalog file was written after git_pull (exists on disk now)
-        txt_files = list(personal_dir.glob("mac-software-list-*.txt"))
+        txt_files = list(mymac_dir.glob("mac-software-list-*.txt"))
         assert len(txt_files) >= 1, "Catalog file should exist after run"
 
 
