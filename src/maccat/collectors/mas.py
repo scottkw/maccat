@@ -90,6 +90,12 @@ class MasCollector(Collector):
                 ]
             )
         if result.returncode != 0:
+            # warn-and-continue: signal the silent failure on stderr (Output
+            # Conventions) instead of returning the error section silently.
+            print(
+                f"  WARNING: mas list failed (exit {result.returncode}).",
+                file=sys.stderr,
+            )
             return CollectorResult(
                 sections=[
                     Section(
