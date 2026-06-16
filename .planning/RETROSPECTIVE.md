@@ -218,6 +218,55 @@ suite, and the CI `zsh -n` gate, leaving direct collector tests as the standalon
 - Model mix: Opus orchestration; Sonnet subagents throughout.
 - Notable: one executor API-crash recovered inline; two plan-check/re-plan cycles (one real BLOCKER).
 
+## Milestone: v2.1.0 — Reinstall from Catalog
+
+**Shipped:** 2026-06-16
+**Phases:** 3 (24-26) | **Plans:** 4
+
+### What Was Built
+The catalog→restore loop: `MasCollector` preserves the App Store ID (MAS-01); `reinstall/parser.py`
+parses a catalog back into a typed `ParsedCatalog` round-trip-locked to `emit_item` (PARSE-01);
+`reinstall/emitter.py` renders an injection-safe, idempotent, `bash -n`-clean `reinstall.sh`
+(GEN-01..04, MAN-01); and `maccat reinstall [--from PATH | --computer NAME]` wires it into the CLI
+via a surgical two-point dispatch that leaves the 13-step gen path untouched (RST-01/02).
+
+### What Worked
+- Coarse 3-phase split with a hard dependency order (format/parser → emitter → CLI) kept each phase
+  small and the contracts clean; the round-trip contract test made the parser↔emitter coupling safe.
+- The code-review + auto-fix loop earned its cost: it caught a genuine `set -Eeuo pipefail` BLOCKER
+  (bare `mas install` aborting the whole script on a routine non-zero) that all 62 unit tests missed
+  because they only ran `bash -n`, never executed the script under `set -e`.
+- Grounding discuss/research in the real code surfaced two load-bearing facts early: Homebrew is one
+  merged formulae+casks section (→ universal guard), and `--computer` was top-level-only (→ WR-03).
+
+### What Was Inefficient
+- Worktree executors repeatedly forked from a base predating recent main commits and, in one case, ran
+  `pip install -e .` inside the worktree — repointing the shared venv `.pth` and breaking `import
+  maccat` repo-wide after cleanup. Cost a diagnosis cycle; now captured as a memory + an explicit
+  "do not reinstall editable in a worktree; run via PYTHONPATH=src" instruction to executors.
+- The review's first suggested CR-01 fix (`A && B && install`) was itself unsafe under `set -e`
+  (final command not exempt); only the new runtime-execution tests caught it — a reminder that
+  syntax-only test coverage gives false confidence on shell-safety claims.
+
+### Patterns Established
+- **Runtime-execution tests for generated shell scripts** — stub tools on a temp PATH, run the script
+  under `bash -Eeuo pipefail`, assert it does not abort mid-run; mutation-verify the guard.
+- **Two-point CLI dispatch** — split an argparse step to satisfy conflicting preconditions (`--from`
+  needs no repo; the picker does) while keeping the legacy path byte-untouched.
+- **`quote_for_script()` + `safe_comment_value()`** — a single shell-interpolation chokepoint, plus a
+  separate newline-strip for comment context (shlex.quote does not make comments safe).
+
+### Key Lessons
+- A "guard line" success criterion must be runtime-verified, not just present in the emitted text.
+- Shared dev-venv state (editable `.pth`) is global mutable state across worktrees — treat accordingly.
+
+### Cost Observations
+- Model mix: Opus orchestration; Sonnet subagents throughout (researcher/planner/checker/executor/
+  reviewer/fixer/verifier). Fully autonomous discuss→plan→execute per phase.
+- Notable: 3 code-review auto-fix loops (one converged after fixing a real BLOCKER + a review
+  self-correction); one venv-pollution diagnosis cycle; zero human interventions beyond grey-area
+  acceptance.
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Verification | Notable |
@@ -229,3 +278,4 @@ suite, and the CI `zsh -n` gate, leaving direct collector tests as the standalon
 | v1.0.0 | 5 | 21 | 5/5 passed | Byte-parity Python port; adversarial review caught a tautological parity gate + ID-erasing normalization; live zsh_parity suite; zsh reference untouched |
 | v1.1.0 | 3 | 6 | 3/3 passed | Extracted code to a public repo from fresh history; CI `.pyz` build + tag-Release; human checkpoint caught a private-host leak the plan missed |
 | v2.0.0 | 3 | 8 | 3/3 passed | Single `--computer` flag; versioned catalog; retired the zsh reference + parity gate; plan-checker killed a false-premise plan; review caught a Critical never-raises bug; recovered from an executor API crash |
+| v2.1.0 | 3 | 4 | 3/3 passed | `maccat reinstall` (catalog→reviewable reinstall.sh); review caught a real `set -Eeuo pipefail` BLOCKER unit tests missed + a broken `--computer` flag; runtime-execution tests + two-point dispatch established; worktree editable-`.pth` pollution diagnosed & captured |
