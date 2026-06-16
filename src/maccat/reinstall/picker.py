@@ -76,11 +76,21 @@ def resolve_catalog_path(
 
     **Picker branch** (``args.from_path is None``):
         Requires *catalog_repo* (caller must pass a validated repo path).
-        Calls ``resolve_computer_selection`` then ``select_computer`` to get
-        the chosen computer folder name.  Returns ``None`` if the user quits
-        the picker (caller handles this as a clean no-op return).
-        Then calls :func:`_find_newest_catalog` on
-        ``catalog_repo / computer`` and exits if no catalog is found.
+        Reinstall is a **read-only** catalog operation — it must never mutate
+        the catalog repo (WR-04).  Two sub-cases:
+
+        - ``--computer NAME`` supplied: the name is validated against the
+          *existing* computer folders discovered in the repo.  An unknown name
+          fails cleanly with ``ERROR: ...`` and does NOT create a folder or
+          rewrite ``machine-labels.tsv`` (the mutating ``select_computer``
+          flag path is deliberately bypassed for this read-only operation).
+        - no ``--computer``: the interactive ``select_computer`` menu is shown
+          (per the locked CONTEXT decision to reuse the existing picker).
+          Returns ``None`` if the user quits (caller handles this as a clean
+          no-op return).
+
+        In both sub-cases :func:`_find_newest_catalog` is then run on
+        ``catalog_repo / computer`` and a missing catalog exits cleanly.
 
     Args:
         args:         Parsed argparse Namespace.  Must have ``.from_path``
@@ -120,13 +130,35 @@ def resolve_catalog_path(
         sys.exit("ERROR: catalog_repo is required for picker mode.")
 
     # Deferred imports per PKG-03 (lazy import pattern)
-    from maccat.identity import resolve_computer_selection, select_computer
+    from maccat.identity import (
+        discover_computer_folders,
+        resolve_computer_selection,
+        select_computer,
+    )
 
+    computer: str | None
     computer_pre = resolve_computer_selection(computer=args.computer)
-    computer = select_computer(catalog_repo, computer_name=computer_pre)
-    if computer is None:
-        # User quit the picker — signal caller to return cleanly (no file written)
-        return None
+    if computer_pre is not None:
+        # --computer NAME path: reinstall is read-only, so resolve the name
+        # against EXISTING folders instead of select_computer's flag path
+        # (which mkdir+upserts machine-labels.tsv — surprising mutation for a
+        # read-only op, and would leave a stray empty dir for an unknown name;
+        # WR-04). An unknown name fails cleanly without touching the repo.
+        existing = discover_computer_folders(catalog_repo)
+        if computer_pre not in existing:
+            sys.exit(
+                f"ERROR: No catalog folder named {computer_pre!r} in {catalog_repo}. "
+                f"Known folders: {', '.join(existing) if existing else '(none)'}"
+            )
+        computer = computer_pre
+    else:
+        # Interactive selection — reuse the existing picker per the locked
+        # CONTEXT decision. The no-catalog-in-folder case is handled cleanly
+        # by _find_newest_catalog below.
+        computer = select_computer(catalog_repo, computer_name=None)
+        if computer is None:
+            # User quit the picker — signal caller to return cleanly (no file written)
+            return None
 
     folder = catalog_repo / computer
     catalog_path = _find_newest_catalog(folder)
