@@ -119,7 +119,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 22-01-PLAN.md — Plist version helper + Homebrew versioned output + unit tests
+- [x] 22-01-PLAN.md — Plist version helper + Homebrew versioned output + unit tests
 - [ ] 22-02-PLAN.md — Setapp + WebApps versioned output using plist helper + tests
 - [ ] 22-03-PLAN.md — Skip 3 invalidated parity cases + full suite gate
 
@@ -162,5 +162,5 @@ Phases execute in numeric order: 21 → 22 → 23
 | 19. CI Build & Release Pipeline | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 20. Cut-Over & External-Catalog Verification | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 21. CLI Cleanup | v2.0.0 | 2/2 | Complete   | 2026-06-16 |
-| 22. Versioned Catalog | v2.0.0 | 0/3 | Not started | - |
+| 22. Versioned Catalog | v2.0.0 | 1/3 | In Progress|  |
 | 23. Retire the zsh Reference | v2.0.0 | 0/TBD | Not started | - |
