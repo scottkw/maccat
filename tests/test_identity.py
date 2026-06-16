@@ -93,76 +93,34 @@ class TestValidateComputerName:
 
 
 class TestResolveComputerSelection:
-    def test_personal_resolves(self) -> None:
-        result = resolve_computer_selection(
-            computer=None, personal=True, office=False, machine=None
-        )
-        assert result == "personal"
-
-    def test_office_resolves(self) -> None:
-        result = resolve_computer_selection(
-            computer=None, personal=False, office=True, machine=None
-        )
-        assert result == "office"
-
-    def test_computer_alias_resolves(self) -> None:
-        result = resolve_computer_selection(
-            computer="Laptop", personal=False, office=False, machine=None
-        )
-        assert result == "Laptop"
-
-    def test_machine_alias_resolves(self) -> None:
-        # Silent back-compat alias — same as --computer
-        result = resolve_computer_selection(
-            computer=None, personal=False, office=False, machine="Laptop"
-        )
-        assert result == "Laptop"
-
-    def test_no_flag_returns_none_for_interactive(self) -> None:
-        result = resolve_computer_selection(
-            computer=None, personal=False, office=False, machine=None
-        )
+    def test_none_returns_none(self) -> None:
+        result = resolve_computer_selection(computer=None)
         assert result is None
 
-    def test_mutual_exclusion_errors_on_two_flags_personal_office(self) -> None:
-        with pytest.raises(SystemExit) as exc_info:
-            resolve_computer_selection(
-                computer=None, personal=True, office=True, machine=None
-            )
-        assert "mutually exclusive" in str(exc_info.value).lower()
-
-    def test_mutual_exclusion_errors_on_computer_and_machine(self) -> None:
-        # A second pair to prove count>1 detection is not pair-specific
-        with pytest.raises(SystemExit) as exc_info:
-            resolve_computer_selection(
-                computer="X", personal=False, office=False, machine="Y"
-            )
-        assert "mutually exclusive" in str(exc_info.value).lower()
+    def test_computer_resolves(self) -> None:
+        result = resolve_computer_selection(computer="Laptop")
+        assert result == "Laptop"
 
     def test_invalid_computer_name_raises(self) -> None:
         # validate_computer_name rejects slashes
         with pytest.raises(SystemExit):
-            resolve_computer_selection(
-                computer="bad/name", personal=False, office=False, machine=None
-            )
-
-    def test_invalid_machine_name_raises(self) -> None:
-        with pytest.raises(SystemExit):
-            resolve_computer_selection(
-                computer=None, personal=False, office=False, machine="bad[name"
-            )
+            resolve_computer_selection(computer="bad/name")
 
     def test_empty_string_computer_treated_as_none(self) -> None:
         # Empty string is treated as "not set" — same as None
-        result = resolve_computer_selection(
-            computer="", personal=False, office=False, machine=None
-        )
+        result = resolve_computer_selection(computer="")
         assert result is None
 
-    def test_empty_string_machine_treated_as_none(self) -> None:
-        result = resolve_computer_selection(
-            computer=None, personal=False, office=False, machine=""
-        )
+    def test_valid_name_returned_unchanged(self) -> None:
+        result = resolve_computer_selection(computer="WorkLaptop")
+        assert result == "WorkLaptop"
+
+    def test_name_with_spaces_is_valid(self) -> None:
+        result = resolve_computer_selection(computer="My Mac")
+        assert result == "My Mac"
+
+    def test_none_returns_none_for_interactive_fallback(self) -> None:
+        result = resolve_computer_selection(computer=None)
         assert result is None
 
 
