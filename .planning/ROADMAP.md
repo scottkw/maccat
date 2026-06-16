@@ -101,7 +101,11 @@ zsh reference and its byte-parity gate.
   2. Running `maccat --computer MyMac` selects the `MyMac` folder non-interactively, identical behavior to what `--computer` provided before.
   3. `maccat --help` output mentions only `--computer` for folder selection — no stale `--personal`, `--office`, or `--machine` entries appear.
   4. The interactive `select_computer` menu, `--rename`, `--no-commit`, `--archive-days`, and `--catalog-dir` flags all behave exactly as before (non-regression verified by the existing test suite passing clean).
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 21-01-PLAN.md — Remove --personal/--office/--machine from identity.py and cli.py; scrub docstring examples
+- [ ] 21-02-PLAN.md — Update tests to new signature; add removed-flag regression coverage; full suite gate
 
 ### Phase 22: Versioned Catalog
 **Goal**: Every software section in the catalog carries a version number where one is obtainable — Homebrew formulae, Homebrew casks, Setapp apps, and web-installed apps now emit `name (version)` lines; runs stay deterministic and degrade gracefully when a version is unavailable.
@@ -152,6 +156,6 @@ Phases execute in numeric order: 21 → 22 → 23
 | 18. Public Repo Migration | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 19. CI Build & Release Pipeline | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 20. Cut-Over & External-Catalog Verification | v1.1.0 | 2/2 | Complete | 2026-06-16 |
-| 21. CLI Cleanup | v2.0.0 | 0/TBD | Not started | - |
+| 21. CLI Cleanup | v2.0.0 | 0/2 | Not started | - |
 | 22. Versioned Catalog | v2.0.0 | 0/TBD | Not started | - |
 | 23. Retire the zsh Reference | v2.0.0 | 0/TBD | Not started | - |
