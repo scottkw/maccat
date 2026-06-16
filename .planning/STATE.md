@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1.0
 milestone_name: Reinstall from Catalog
-status: milestone_complete
-stopped_at: Milestone complete (Phase 26 was final phase)
-last_updated: 2026-06-16T21:54:13.523Z
-last_activity: 2026-06-16 -- Phase 26 execution started
+status: Awaiting next milestone
+stopped_at: Roadmap created for v2.1.0 (Phases 24-26)
+last_updated: "2026-06-16T21:59:54.875Z"
+last_activity: 2026-06-16 — Milestone v2.1.0 completed and archived
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
   completed_plans: 4
-  percent: 67
+  percent: 100
 ---
 
 # Project State
@@ -25,14 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-16)
 
 ## Current Position
 
-Phase: 26
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-06-16
-
-```
-[===========>                              ] Phase 0/3 complete (0%)
-```
+Phase: Milestone v2.1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-16 — Milestone v2.1.0 completed and archived
 
 ## Performance Metrics
 
@@ -95,4 +91,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Plan Phase 24 with `/gsd:plan-phase 24`
+- Start the next milestone with /gsd-new-milestone

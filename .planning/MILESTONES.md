@@ -1,5 +1,22 @@
 # Milestones
 
+## v2.1.0 Reinstall from Catalog (Shipped: 2026-06-16)
+
+**Phases completed:** 3 phases (24-26), 4 plans
+
+**Delivered:** A `maccat reinstall` subcommand that parses a chosen catalog and generates a reviewable, never-auto-executed `reinstall.sh` — deterministic sources (Homebrew, mas, VS Code/Cursor) become guarded idempotent install commands; everything else becomes a manual checklist.
+
+**Key accomplishments:**
+
+- **MAS-01 + PARSE-01 (Phase 24):** `MasCollector` now preserves the numeric App Store ID (`AppName (version) [id]`, multi-word names + de-paren'd version); new `reinstall/parser.py` (`parse_catalog` → typed `ParsedCatalog`) inverts all six `emit_item` line shapes, locked by a round-trip contract test against `catalog/format.py`.
+- **GEN-01..04 + MAN-01 (Phase 25):** `reinstall/emitter.py` renders an injection-safe (`shlex.quote` via `quote_for_script`), `bash -n`-clean, idempotent script — universal Homebrew guard, brace-group-guarded `mas install <id>` / editor `--install-extension`, `set -Eeuo pipefail` abort-resistance (runtime-execution-tested), and a manual checklist for Setapp/web/browser/AI-CLI tooling.
+- **RST-01 + RST-02 (Phase 26):** `maccat reinstall [--from PATH | --computer NAME]` wired into `cli.py` via a surgical two-point dispatch that leaves the 13-step catalog-gen path untouched; writes `reinstall.sh` to cwd at 0o644, prints its absolute path, never subprocess-runs it.
+- **Quality:** code-review + auto-fix loop on every phase caught and fixed a real `set -Eeuo pipefail` BLOCKER (bare `mas install` aborting mid-run) and a broken `reinstall --computer NAME` flag; 553 tests pass, ruff + mypy --strict clean; audit PASSED (9/9 requirements wired + E2E-verified).
+
+**Known deferred items at close:** 1 — stale quick task `260614-ckx-fix-interactive-machine-label-ux` (status: missing, predates v2.0.0, out of scope; re-acknowledged — see STATE.md Deferred Items).
+
+---
+
 ## v2.0.0 Standalone maccat — CLI Cleanup & Versioned Catalog (Shipped: 2026-06-16)
 
 **Phases completed:** 3 phases (21-23), 8 plans
@@ -16,11 +33,13 @@ without an `update-list.sh` parity anchor. 14/14 requirements; milestone audit P
   `resolve_computer_selection` from four params to a single keyword-only `computer`, simplified the
   argparse parser + `--rename` guards, and migrated the test suite (removed flags now error with
   argparse "unrecognized arguments").
+
 - **Versioned catalog (Phase 22, VER-01..06):** Homebrew formulae/casks now emit `name (version)`
   via `brew list --versions` (all installed versions preserved); Setapp and web-installed
   `/Applications` apps read their version from `Info.plist` (`CFBundleShortVersionString` →
   `CFBundleVersion`) through a new never-raising stdlib-`plistlib` helper; graceful name-only
   degradation; ordering/determinism preserved (no `flush_section` re-sort). App Store unchanged.
+
 - **Retired the zsh reference (Phase 23, ZSH-01..04):** deleted `update-list.sh`, the entire
   `tests/golden/` parity scaffold, `test_golden_parity.py`, `test_update_list_integrity.py`, and the
   CI `zsh -n` gate (kept the PYTHONHASHSEED matrix + pytest/ruff/mypy); backfilled the only two

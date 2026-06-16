@@ -60,48 +60,33 @@ in v1.0.0; the zsh reference was retired in v2.0.0.)
   and the CI `zsh -n` gate, leaving direct collector tests as standalone coverage (ZSH-01..04). Code
   review caught a Critical never-raises bug in the plist helper; recovered from a mid-plan executor
   crash. 14/14 requirements; audit PASSED. Released v2.0.0 `.pyz`.
+- **v2.1.0 Reinstall from Catalog** (2026-06-16) — added a `maccat reinstall` subcommand that parses a
+  chosen catalog and generates a reviewable, never-auto-executed `reinstall.sh`. `MasCollector` now
+  preserves the numeric App Store ID (`AppName (version) [id]`); a new `reinstall/parser.py`
+  (`parse_catalog` → typed `ParsedCatalog`) inverts all six `emit_item` line shapes, locked by a
+  round-trip contract test (MAS-01, PARSE-01). `reinstall/emitter.py` renders an injection-safe
+  (`shlex.quote`), `bash -n`-clean, idempotent script — universal Homebrew guard, brace-group-guarded
+  `mas install <id>` / editor `--install-extension`, `set -Eeuo pipefail` abort-resistance, manual
+  checklist for non-deterministic sources (GEN-01..04, MAN-01). `reinstall [--from PATH | --computer
+  NAME]` is wired in via a surgical two-point dispatch that leaves the 13-step catalog-gen path
+  untouched; writes `reinstall.sh` to cwd at 0o644 and prints its path, never executing it (RST-01,
+  RST-02). Code review caught a real `set -Eeuo pipefail` BLOCKER (bare `mas install` aborting mid-run)
+  and a broken `reinstall --computer NAME` flag, both fixed. 9/9 requirements; audit PASSED. 553 tests.
 
-## Current Milestone: v2.1.0 Reinstall from Catalog
+## Current State
 
-**Goal:** Generate a reviewable `reinstall.sh` from a chosen catalog — deterministically
-installable sources become install commands, everything else becomes a manual checklist.
-The script is never auto-executed.
-
-**Target features:**
-- **`maccat reinstall` subcommand** — `--from PATH` selects an explicit catalog; if omitted,
-  the existing computer-picker chooses a computer and uses its newest catalog.
-- **Catalog parsing** — read a catalog's plain-text sections back into structured items
-  (name / version / id per source). The catalog is the source of truth.
-- **Auto-install section** — self-contained `reinstall.sh` with `brew install` (formulae +
-  casks), `mas install <id>`, and `code`/`cursor --install-extension <id>` lines; each line
-  carries the cataloged version as a comment (`# cataloged: 2.44.0`); installs latest.
-- **Manual checklist section** — non-deterministic sources listed for the user: Setapp apps,
-  web-installed `/Applications`, Chrome/Firefox extensions, and AI-CLI MCP servers / plugins /
-  skills / agents (identity-only reconfigure reminders).
-- **Never auto-execute** — output a script the user reviews and runs; safe to re-run where practical.
-
-- **Catalog-format change (mas ID)** — `MasCollector` currently discards the numeric App Store ID
-  (`awk '{print $2,$3}'`); `mas install` needs it. This milestone changes the App Store section to
-  emit `AppName (version) [id]` so reinstall can emit `mas install <id>`. (Go-forward only: catalogs
-  generated before the change lack the ID, so reinstall degrades those mas entries to the checklist.)
-
-**Key constraints (from research):**
-- AI-CLI MCP/plugins/skills can't be auto-installed — the catalog stores them as identity-only
-  (`name [transport]`, no command/url/args/env) by the FMT-03 secret-safety design → manual checklist only.
-- `brew install <name>` installs a formula OR cask (no catalog change needed for that); only the rare
-  name that is both needs `--cask`/`--formula` disambiguation.
-- Idempotency is the central script concern: brew formula is idempotent, brew cask is NOT (guard with
-  `brew list --cask <n> || brew install --cask <n>`); `code`/`cursor --install-extension` need a
-  PATH/`--list-extensions` guard; `mas install` is ~idempotent (no `--force`). Generated script uses
-  `#!/usr/bin/env bash` + `set -Eeuo pipefail`, `shlex.quote()` on all catalog-derived values, and is
-  written non-executable (0644), never subprocess-run.
+No milestone active. v2.1.0 shipped 2026-06-16 — `maccat` now both **catalogs** a machine's full
+software + tooling state and **regenerates** a reviewable `reinstall.sh` from any catalog. The
+reinstall pipeline lives in `src/maccat/reinstall/` (parser → emitter → picker → cli). Next
+milestone's requirements will be defined fresh via `/gsd-new-milestone`.
 
 ## Next Candidate Milestones
 
-After v2.1.0 (Reinstall from Catalog, now active): catalog diffing / change reports (diff two
-catalogs over time), additional browsers/editors (Safari, Edge, Brave, Zed), PKG-04 (pipx/PyPI as
-a second distribution channel), and the deferred v2 items (CHR-02/FF-02 extension enabled-state,
-CDX-02 Codex plugins).
+After v2.1.0 (Reinstall from Catalog, shipped): catalog diffing / change reports (diff two
+catalogs over time, DIFF-01), additional browsers/editors (Safari, Edge, Brave, Zed, BRW-01),
+PKG-04 (pipx/PyPI as a second distribution channel), RST-03 (capture/restore brew taps), RST-04
+(best-effort AI-CLI tooling restore beyond a checklist), and the deferred v2 items (CHR-02/FF-02
+extension enabled-state, CDX-02 Codex plugins).
 
 ## Core Value
 
@@ -156,23 +141,30 @@ when any source isn't installed.
 - ✓ Setapp + web-installed `/Applications` apps cataloged with versions from `Info.plist` (Short→CFBundleVersion), shared never-raising `plistlib` helper (VER-03/04) — v2.0.0
 - ✓ Graceful name-only degradation when a version is unobtainable; output stays deterministic/stably-sorted (VER-05/06) — v2.0.0
 - ✓ Retired `update-list.sh`, the `zsh_parity` suite, and the CI `zsh -n` gate; suite stands on direct collector tests; README describes maccat as standalone (ZSH-01..04) — v2.0.0
+- ✓ App Store section preserves the numeric App Store ID — `AppName (version) [id]` (MAS-01) — v2.1.0
+- ✓ Parser reads a catalog's sectioned text back into typed items, round-trip-locked to `emit_item` (PARSE-01) — v2.1.0
+- ✓ Homebrew lines emitted as guarded, idempotent `brew install` with cataloged-version comment (GEN-01) — v2.1.0
+- ✓ App Store entries with an ID emit `mas install <id>`; id-less entries degrade to the manual checklist (GEN-02) — v2.1.0
+- ✓ VS Code/Cursor extensions emitted as guarded `--install-extension` lines with lowercased ids (GEN-03) — v2.1.0
+- ✓ Generated script is `#!/usr/bin/env bash` + `set -Eeuo pipefail`, provenance header, conventional ordering, `shlex.quote()`-safe (GEN-04) — v2.1.0
+- ✓ Setapp/web/browser/AI-CLI sources emitted as a manual checklist only — no fabricated installs (MAN-01) — v2.1.0
+- ✓ `maccat reinstall` generates `reinstall.sh`, prints its path, never auto-executes (0644) (RST-01) — v2.1.0
+- ✓ `--from PATH` selects an explicit catalog; else the computer-picker uses the newest catalog (`--computer` flows through) (RST-02) — v2.1.0
 
 ### Active
 
-_None — v2.0.0 shipped. No milestone is active. The next milestone's requirements will be
+_None — v2.1.0 shipped. No milestone is active. The next milestone's requirements will be
 defined fresh via `/gsd-new-milestone` (REQUIREMENTS.md is archived per-milestone)._
 
-Candidate future milestones: restore/reinstall from a catalog (generate a reviewable
-`reinstall.sh`), catalog diffing/change reports, additional browsers/editors, PKG-04 pipx/PyPI
-distribution, and v2 items CHR-02/FF-02 enabled-state + CDX-02 Codex plugins when that subsystem ships.
+Candidate future milestones: catalog diffing/change reports (DIFF-01), additional browsers/editors
+(BRW-01), PKG-04 pipx/PyPI distribution, RST-03 brew-tap capture/restore, RST-04 best-effort AI-CLI
+tooling restore, and v2 items CHR-02/FF-02 enabled-state + CDX-02 Codex plugins when that subsystem ships.
 
 ### Out of Scope
 
 - Cross-platform support (Linux/Windows) — tool is macOS/Zsh-only by design; BSD `date -v`,
   `/Applications`, browser paths are macOS-specific
-- Automated restore/reinstall from a catalog — this milestone catalogs only; restoration is
-  a possible future milestone
-- Diffing catalogs over time / change reports — valuable but separate; not in this milestone
+- Diffing catalogs over time / change reports — valuable but separate; a future milestone (DIFF-01)
 - Rewriting the script's architecture (e.g. fixing globals-as-parameters) — bolt new sources
   onto existing conventions rather than refactor
 - JSON/HTML output formats — output stays plain-text sectioned to keep one restorable snapshot
@@ -253,12 +245,12 @@ distribution, and v2 items CHR-02/FF-02 enabled-state + CDX-02 Codex plugins whe
 | Remove `update-list.sh` + the `zsh_parity` byte-parity gate; maccat becomes the standalone source of truth | The zsh reference proved the port (v1.0.0) and has served its purpose; keeping it frozen blocks every output/CLI change. Backfill coverage with direct collector tests so the suite still stands | ✓ Good — v2.0.0 (every collector already had direct tests; only 2 helper branch-gaps needed backfill) |
 | Show ALL installed Homebrew versions inside the parens, not just the highest | A restore snapshot should reflect exactly what's installed; multi-version installs (e.g. `python@3.11`) are real | ✓ Good — v2.0.0 |
 | `.app` version: prefer CFBundleShortVersionString, fall back to CFBundleVersion, else name-only | Maximizes coverage while keeping the human-readable marketing version when present | ✓ Good — v2.0.0 |
-| Reinstall produces a reviewable `reinstall.sh`, never auto-executed | Installing software is high-impact and machine-specific; the user must review before running. A script is inspectable, editable, and re-runnable | — Pending v2.1.0 |
-| Auto-install only the deterministic sources (Homebrew, mas, VS Code/Cursor exts); everything else is a manual checklist | These have reliable CLI installers keyed on data the catalog holds (name / App Store id / extension id). Setapp, web apps, browser exts have no CLI install | — Pending v2.1.0 |
-| AI-CLI MCP/plugins/skills are manual-checklist only, never auto-installed | The catalog stores them identity-only (`name [transport]`) by FMT-03 secret-safety — the command/url/args/env needed to reinstall are deliberately absent | — Pending v2.1.0 |
-| Install latest, record the cataloged version as a comment (not version-pinned) | Pinning is unreliable across brew/mas/extensions (no versioned formulae variants, no mas version pin); the cataloged version stays as a reviewable reference | — Pending v2.1.0 |
-| The catalog `.txt` is the reinstall source of truth (parse it back), not a live system scan | Reinstall is about restoring a captured snapshot to a new/wiped machine; parsing the emitted plain-text sections closes the catalog→restore loop | — Pending v2.1.0 |
-| Preserve the mas App Store ID in the catalog (`AppName (version) [id]`) so mas can be auto-installed | `mas install` needs the numeric ID, which the collector currently discards; without it mas auto-install is impossible. Go-forward only (old catalogs lack it → checklist fallback). No parity suite to break (retired v2.0.0) | — Pending v2.1.0 |
+| Reinstall produces a reviewable `reinstall.sh`, never auto-executed | Installing software is high-impact and machine-specific; the user must review before running. A script is inspectable, editable, and re-runnable | ✓ Good — v2.1.0 |
+| Auto-install only the deterministic sources (Homebrew, mas, VS Code/Cursor exts); everything else is a manual checklist | These have reliable CLI installers keyed on data the catalog holds (name / App Store id / extension id). Setapp, web apps, browser exts have no CLI install | ✓ Good — v2.1.0 |
+| AI-CLI MCP/plugins/skills are manual-checklist only, never auto-installed | The catalog stores them identity-only (`name [transport]`) by FMT-03 secret-safety — the command/url/args/env needed to reinstall are deliberately absent | ✓ Good — v2.1.0 |
+| Install latest, record the cataloged version as a comment (not version-pinned) | Pinning is unreliable across brew/mas/extensions (no versioned formulae variants, no mas version pin); the cataloged version stays as a reviewable reference | ✓ Good — v2.1.0 |
+| The catalog `.txt` is the reinstall source of truth (parse it back), not a live system scan | Reinstall is about restoring a captured snapshot to a new/wiped machine; parsing the emitted plain-text sections closes the catalog→restore loop | ✓ Good — v2.1.0 |
+| Preserve the mas App Store ID in the catalog (`AppName (version) [id]`) so mas can be auto-installed | `mas install` needs the numeric ID, which the collector currently discards; without it mas auto-install is impossible. Go-forward only (old catalogs lack it → checklist fallback). No parity suite to break (retired v2.0.0) | ✓ Good — v2.1.0 |
 
 ## Evolution
 
@@ -279,4 +271,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-16 — started milestone v2.1.0 Reinstall from Catalog: add a `maccat reinstall` subcommand that parses a chosen catalog and generates a reviewable, never-auto-executed `reinstall.sh` (auto-install Homebrew/mas/VS Code+Cursor; manual checklist for Setapp/web apps/browser exts/AI-CLI tooling; install-latest with cataloged version as a comment). Starts at Phase 24.*
+*Last updated: 2026-06-16 after v2.1.0 milestone — shipped `maccat reinstall` (parse catalog → reviewable reinstall.sh; MAS-01, PARSE-01, GEN-01..04, MAN-01, RST-01/02). No milestone active.*
