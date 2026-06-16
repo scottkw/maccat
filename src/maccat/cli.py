@@ -28,11 +28,7 @@ def _build_parser() -> argparse.ArgumentParser:
       --help           Print usage and exit 0 (PKG-05).
       --catalog-dir    Override catalog repo path (CFG-03: never written back).
       Selecting-flag group (mutually exclusive):
-        --personal     Use 'personal' folder.
-        --office       Use 'office' folder.
         --computer     Use named folder.
-        --machine      Use named folder (kept as separate dest= for the
-                       resolve_computer_selection(machine=...) call signature).
       --rename         Enter rename-machine workflow.
       --archive-days   Override archive retention period in days.
       --no-commit      Skip git commit/push.
@@ -62,33 +58,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Override catalog repo path (flag value is never written back to config)",
     )
 
-    # Mutually exclusive selecting-flag group (zsh:199-268)
+    # Mutually exclusive selecting-flag group (single member; kept for extensibility)
     group = parser.add_mutually_exclusive_group()
-    group.add_argument(
-        "--personal",
-        action="store_true",
-        default=False,
-        help="Use 'personal' computer folder",
-    )
-    group.add_argument(
-        "--office",
-        action="store_true",
-        default=False,
-        help="Use 'office' computer folder",
-    )
     group.add_argument(
         "--computer",
         metavar="NAME",
         default=None,
         dest="computer",
         help="Use named computer folder",
-    )
-    group.add_argument(
-        "--machine",
-        metavar="NAME",
-        default=None,
-        dest="machine",
-        help="Use named computer folder (separate dest for resolve_computer_selection)",
     )
 
     parser.add_argument(
@@ -185,10 +162,9 @@ def run() -> None:
         # this guard the early return below would silently discard them
         # (e.g. `maccat --rename config show` would dump config instead of
         # renaming). Fail loudly so the user's intent is never dropped.
-        if any([args.rename, args.personal, args.office, args.computer, args.machine]):
+        if any([args.rename, args.computer]):
             sys.exit(
-                "ERROR: --rename, --personal, --office, --computer, and"
-                " --machine cannot be combined with the 'config' subcommand."
+                "ERROR: --rename and --computer cannot be combined with the 'config' subcommand."
             )
         # WR-01: do NOT load_config() before branching. `config init` is the
         # command a user runs to repair a corrupt config — load_config() would
@@ -209,10 +185,9 @@ def run() -> None:
     # 3. --rename × selecting-flag guard (update-list.sh:270-277)
     #    This guard is in cli.py ONLY — identity.py:99-101 excludes it.
     # ------------------------------------------------------------------
-    if args.rename and any([args.personal, args.office, args.computer, args.machine]):
+    if args.rename and bool(args.computer):
         sys.exit(
-            "ERROR: --rename cannot be combined with --personal, --office,"
-            " --computer, or --machine."
+            "ERROR: --rename cannot be combined with --computer."
         )
 
     # ------------------------------------------------------------------
@@ -237,12 +212,7 @@ def run() -> None:
     # ------------------------------------------------------------------
     # 6. Computer selection
     # ------------------------------------------------------------------
-    computer_pre = resolve_computer_selection(
-        computer=args.computer,
-        personal=args.personal,
-        office=args.office,
-        machine=args.machine,
-    )
+    computer_pre = resolve_computer_selection(computer=args.computer)
     computer = select_computer(catalog_repo, computer_name=computer_pre)
     if computer is None:
         # User chose Quit — no catalog written, no git ops
