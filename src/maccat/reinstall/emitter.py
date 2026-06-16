@@ -93,9 +93,16 @@ def _brew_block(section: ParsedSection) -> str:
     ]
     for item in section.items:
         n = quote_for_script(item.name)
+        # Graceful degradation: a genuine `brew install` failure (network error,
+        # renamed/removed formula, formula-vs-cask ambiguity) must NOT abort the
+        # rest of the restore under `set -Eeuo pipefail`. The trailing
+        # `|| echo WARN` neutralizes the non-zero exit of the install while still
+        # surfacing the failure. (`brew list` returning non-zero for a not-yet-
+        # installed package is expected and consumed by the `||` chain.)
+        warn = quote_for_script(f"  WARN: brew install failed: {item.name}")
         guard = (
             f"brew list {n} &>/dev/null || brew list --cask {n} &>/dev/null"
-            f" || brew install {n}"
+            f" || brew install {n} || echo {warn}"
         )
         if item.version:
             guard += f"  # cataloged: {safe_comment_value(item.version)}"
@@ -116,7 +123,18 @@ def _mas_block(section: ParsedSection) -> str:
     for item in section.items:
         if item.id is not None:
             qid = quote_for_script(item.id)
-            line = f"mas install {qid}"
+            # mas list rows begin with the numeric id followed by whitespace.
+            # `mas install` returns non-zero when the app is already installed or
+            # the user is not signed in; guarding with `command -v mas` + a
+            # `mas list | grep -q` idempotency check (and consuming the non-zero
+            # exit via && short-circuit / ! negation) keeps re-runs from aborting
+            # the whole script under `set -Eeuo pipefail`. Mirrors the editor guard.
+            grep_pat = quote_for_script(f"^{item.id} ")
+            line = (
+                f"command -v mas >/dev/null && "
+                f"! mas list | grep -q {grep_pat} && "
+                f"mas install {qid}"
+            )
             if item.version:
                 line += (
                     f"  # cataloged: {safe_comment_value(item.version)}"
@@ -152,6 +170,13 @@ def _editor_ext_block(section: ParsedSection, *, editor: str) -> str:
     The marketplace id is lowercased before quoting (canonical form).
     Items without an id fall back to an echo checklist line.
     An optional '# cataloged: <version>' comment is appended when present.
+
+    Note (WR-03): the 'echo "=== <title> ==="' banner is emitted unconditionally,
+    even when the editor is absent on the target machine (every guard line then
+    short-circuits at `command -v <editor>`). An empty banner with no install
+    output therefore means the editor was not installed — this is intentional and
+    keeps the renderer's structure parallel with the brew/mas blocks rather than
+    duplicating the per-line `command -v` guard at the section level.
     """
     lines: list[str] = [f'echo "=== {section.title} ==="']
     for item in section.items:
