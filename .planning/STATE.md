@@ -2,13 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.1.0
 milestone_name: Reinstall from Catalog
-status: roadmapped
-last_updated: "2026-06-16T00:00:00.000Z"
-last_activity: 2026-06-16
+status: executing
+stopped_at: Roadmap created for v2.1.0 (Phases 24-26)
+last_updated: "2026-06-16T18:59:38.421Z"
+last_activity: 2026-06-16 -- Phase 24 execution started
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
   percent: 0
 ---
@@ -20,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 24 — Catalog Format Fix + Parser Foundation
+**Current focus:** Phase 24 — catalog-format-fix-parser-foundation
 
 ## Current Position
 
-Phase: 24 — Catalog Format Fix + Parser Foundation
-Plan: —
-Status: Roadmap defined; ready to plan Phase 24
-Last activity: 2026-06-16 — Roadmap created for v2.1.0 (Phases 24-26)
+Phase: 24 (catalog-format-fix-parser-foundation) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 24
+Last activity: 2026-06-16 -- Phase 24 execution started
 
 ```
 [===========>                              ] Phase 0/3 complete (0%)
