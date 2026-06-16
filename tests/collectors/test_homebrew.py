@@ -114,7 +114,7 @@ class TestHomebrewVersionParsing:
 
 class TestMasCollector:
     def test_mas_collect_parses_output(self) -> None:
-        """mas available — output parsed with awk column 2+3 equivalence, raw=True."""
+        """mas available — output parsed, id preserved in [id] bracket, raw=True."""
         mock_r = MagicMock()
         mock_r.returncode = 0
         mock_r.stdout = "1234567890  Safari (15.0)\n9876543210  Xcode (14.0)"
@@ -126,7 +126,7 @@ class TestMasCollector:
             result = MasCollector().collect()
 
         section = result.sections[0]
-        assert section.items == ["Safari (15.0)", "Xcode (14.0)"]
+        assert section.items == ["Safari (15.0) [1234567890]", "Xcode (14.0) [9876543210]"]
         assert section.raw is True
 
     def test_mas_absent_returns_two_line_fallback(self) -> None:
@@ -164,20 +164,11 @@ class TestMasCollector:
 
         assert result.sections[0].title == "App Store Applications"
 
-    def test_mas_two_field_line_emits_trailing_space(self) -> None:
-        """awk '{print $2, $3}' emits a row for every line, with empty $3 → trailing space.
-
-        WR-02 byte-parity fix: a 2-field line ("123  OnlyTwo") must produce "OnlyTwo "
-        (trailing space, empty $3), NOT be dropped. Verified against real BSD awk:
-        `printf '456 OnlyTwo\\n' | awk '{print $2, $3}'` → "OnlyTwo " (trailing space).
-        """
+    def test_mas_two_field_line_degrades_to_name_id(self) -> None:
+        """2-field line ('123  OnlyTwo') — no version; emits 'OnlyTwo [123]' via emit_item."""
         mas = MasCollector()
-        output = "123  OnlyTwo\n456  Safari (15.0)\n789  ShortLine"
-        result = mas._parse_mas_output(output)
-        # "OnlyTwo" — 2 fields → emit "$2 " with empty $3 (trailing space)
-        # "Safari (15.0)" — 3 fields → "Safari (15.0)"
-        # "ShortLine" — 2 fields → "ShortLine " (trailing space)
-        assert result == ["OnlyTwo ", "Safari (15.0)", "ShortLine "]
+        result = mas._parse_mas_output("123  OnlyTwo\n456  Safari (15.0)")
+        assert result == ["OnlyTwo [123]", "Safari (15.0) [456]"]
 
     def test_mas_single_field_line_skipped(self) -> None:
         """A 1-field line has no $2; awk would print a leading-space blank, but our
