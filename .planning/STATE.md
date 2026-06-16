@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1.0
 milestone_name: Reinstall from Catalog
-status: executing
-stopped_at: Roadmap created for v2.1.0 (Phases 24-26)
-last_updated: "2026-06-16T21:21:05.118Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 26 was final phase)
+last_updated: 2026-06-16T21:54:13.523Z
 last_activity: 2026-06-16 -- Phase 26 execution started
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
   percent: 67
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 26 — picker-cli-wiring-integration
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 26 (picker-cli-wiring-integration) — EXECUTING
-Plan: 1 of 1
-Status: Executing Phase 26
-Last activity: 2026-06-16 -- Phase 26 execution started
+Phase: 26
+Plan: Not started
+Status: Milestone complete
+Last activity: 2026-06-16
 
 ```
 [===========>                              ] Phase 0/3 complete (0%)
@@ -38,7 +38,7 @@ Last activity: 2026-06-16 -- Phase 26 execution started
 
 **Velocity:**
 
-- Total plans completed: 32 (prior milestones)
+- Total plans completed: 33 (prior milestones)
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -51,6 +51,7 @@ Last activity: 2026-06-16 -- Phase 26 execution started
 | 26. Picker + CLI Wiring + Integration | 0/TBD | - | - |
 | 24 | 2 | - | - |
 | 25 | 1 | - | - |
+| 26 | 1 | - | - |
 
 *Updated after each plan completion*
 

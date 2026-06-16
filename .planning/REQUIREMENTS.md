@@ -17,8 +17,8 @@ Requirements for this milestone (v2.1.0). Each maps to a roadmap phase.
 
 ### Reinstall Command
 
-- [ ] **RST-01**: `maccat reinstall` generates a `reinstall.sh` from a catalog, prints its output path, and never auto-executes it; the file is written non-executable (mode 0644).
-- [ ] **RST-02**: `--from PATH` selects an explicit catalog file; if omitted, the existing interactive computer-picker selects a computer and uses that computer's newest catalog (reuses `select_computer` + catalog-dir resolution; the parent `--computer` flag flows through).
+- [x] **RST-01**: `maccat reinstall` generates a `reinstall.sh` from a catalog, prints its output path, and never auto-executes it; the file is written non-executable (mode 0644).
+- [x] **RST-02**: `--from PATH` selects an explicit catalog file; if omitted, the existing interactive computer-picker selects a computer and uses that computer's newest catalog (reuses `select_computer` + catalog-dir resolution; the parent `--computer` flag flows through).
 
 ### Auto-Install Output
 
@@ -75,8 +75,8 @@ Updated during roadmap creation.
 |-------------|-------|--------|
 | MAS-01 | Phase 24 | Complete |
 | PARSE-01 | Phase 24 | Complete |
-| RST-01 | Phase 26 | Pending |
-| RST-02 | Phase 26 | Pending |
+| RST-01 | Phase 26 | Complete |
+| RST-02 | Phase 26 | Complete |
 | GEN-01 | Phase 25 | Complete |
 | GEN-02 | Phase 25 | Complete |
 | GEN-03 | Phase 25 | Complete |
