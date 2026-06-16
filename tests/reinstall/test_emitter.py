@@ -40,6 +40,42 @@ def assert_bash_n_clean(script: str) -> None:
         os.unlink(tmp)
 
 
+def _write_stub(bin_dir: str, name: str, body: str) -> None:
+    """Write an executable stub command into bin_dir on PATH."""
+    path = os.path.join(bin_dir, name)
+    with open(path, "w") as f:
+        f.write(body)
+    os.chmod(path, 0o755)
+
+
+def run_script_with_stubs(script: str, stubs: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """Execute the emitted script under `bash` (not `bash -n`) with stubbed tools.
+
+    `stubs` maps a command name (e.g. "mas", "brew", "code", "cursor") to the shell
+    body of a fake executable placed first on PATH. This lets a test drive the
+    runtime behavior of the generated guards — in particular, whether an install
+    command returning non-zero aborts the whole script under `set -Eeuo pipefail`.
+    Skips gracefully when bash is unavailable (matching assert_bash_n_clean).
+    """
+    if not shutil.which("bash"):
+        pytest.skip("bash not available")
+    tmpdir = tempfile.mkdtemp()
+    bin_dir = os.path.join(tmpdir, "bin")
+    os.makedirs(bin_dir)
+    for name, body in stubs.items():
+        _write_stub(bin_dir, name, body)
+    script_path = os.path.join(tmpdir, "reinstall.sh")
+    with open(script_path, "w") as f:
+        f.write(script)
+    # Prepend the stub bin dir, then a minimal real PATH so `echo`, `grep`,
+    # `command`, etc. still resolve.
+    env = dict(os.environ)
+    env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
+    return subprocess.run(
+        ["bash", script_path], capture_output=True, text=True, env=env
+    )
+
+
 def _make_item(name: str, version: str | None = None, id_: str | None = None) -> ParsedItem:
     """Build a ParsedItem without calling parse_catalog()."""
     return ParsedItem(name=name, version=version, id=id_, raw_line=name)
@@ -673,3 +709,144 @@ class TestAdversarialInjection:
         catalog = _make_catalog(section)
         script = emit_reinstall_script(catalog, source_name="test.txt", generated="2026-06-16")
         assert_bash_n_clean(script)
+
+
+class TestRuntimeExecution:
+    """Execute the emitted script under `bash` with stubbed tools (WR-01).
+
+    `bash -n` only syntax-checks; it cannot catch a guard that aborts the run
+    under `set -Eeuo pipefail` when an install command returns non-zero. These
+    tests EXECUTE the script with PATH-shimmed fake tools that mimic the routine
+    "already installed" / "install failed" non-zero exits and assert later
+    sections + the Manual Checklist still run (the script reaches exit 0).
+    """
+
+    # A sentinel echoed by the trailing Manual Checklist proves the script ran
+    # to the end without aborting mid-run.
+    _SENTINEL = "REACHED_END_SENTINEL"
+
+    # Benign editor stubs: --list-extensions reports the extension as already
+    # present so the idempotency guard skips the install. Shimming them keeps the
+    # tests deterministic regardless of whether a real `code`/`cursor` is on PATH.
+    _EDITOR_PRESENT = (
+        "#!/usr/bin/env bash\n"
+        'if [ "$1" = "--list-extensions" ]; then echo "ms-python.python"; exit 0; fi\n'
+        "exit 0\n"
+    )
+
+    def _catalog_with_all_sources(self) -> ParsedCatalog:
+        """Catalog touching brew, mas, code, cursor, plus a manual section."""
+        return _make_catalog(
+            _make_section("Homebrew Packages", [_make_item("git", "2.44.0")]),
+            _make_section(
+                "App Store Applications",
+                [_make_item("Final Cut Pro", "10.7.1", id_="424389933")],
+            ),
+            _make_section(
+                "VS Code Extensions",
+                [_make_item("Python", "2024.1.0", id_="ms-python.python")],
+            ),
+            _make_section(
+                "Cursor Extensions",
+                [_make_item("Python", "2024.1.0", id_="ms-python.python")],
+            ),
+            _make_section(
+                "Setapp Applications",
+                [_make_item(self._SENTINEL, "1.0.0")],
+            ),
+        )
+
+    def test_mas_install_nonzero_does_not_abort(self) -> None:
+        """CR-01 regression: a failing `mas install` must NOT abort the whole run.
+
+        Stubs: `mas list` returns rows that do NOT contain the cataloged id (so the
+        idempotency guard proceeds to install) and `mas install` exits non-zero
+        (the already-installed / not-signed-in case). With the guard in place the
+        non-zero exit is consumed and the Manual Checklist sentinel still prints.
+        """
+        stubs = {
+            # mas list -> rows without our id; mas install -> always fail (exit 1)
+            "mas": (
+                "#!/usr/bin/env bash\n"
+                'if [ "$1" = "list" ]; then echo "000000000  Some Other App"; exit 0; fi\n'
+                'if [ "$1" = "install" ]; then echo "mas: failed" >&2; exit 1; fi\n'
+                "exit 0\n"
+            ),
+            # brew: pretend everything already installed (list succeeds)
+            "brew": "#!/usr/bin/env bash\nexit 0\n",
+            "code": self._EDITOR_PRESENT,
+            "cursor": self._EDITOR_PRESENT,
+        }
+        script = emit_reinstall_script(
+            self._catalog_with_all_sources(), source_name="t.txt", generated="2026-06-16"
+        )
+        result = run_script_with_stubs(script, stubs)
+        assert result.returncode == 0, (
+            f"script aborted (exit {result.returncode}); stderr:\n{result.stderr}\n"
+            f"stdout:\n{result.stdout}"
+        )
+        assert self._SENTINEL in result.stdout, (
+            "Manual Checklist sentinel missing — script aborted before the end:\n"
+            f"{result.stdout}"
+        )
+
+    def test_brew_install_nonzero_does_not_abort(self) -> None:
+        """WR-02 regression: a failing `brew install` must NOT abort the whole run.
+
+        Stub `brew` so `list`/`list --cask` report not-installed (exit 1) and
+        `install` fails (exit 1). The `|| echo WARN` tail keeps the run alive and
+        the Manual Checklist sentinel still prints.
+        """
+        stubs = {
+            "brew": (
+                "#!/usr/bin/env bash\n"
+                'if [ "$1" = "install" ]; then echo "brew: failed" >&2; exit 1; fi\n'
+                "exit 1\n"  # list / list --cask -> not installed
+            ),
+            "mas": "#!/usr/bin/env bash\nexit 1\n",  # not signed in / absent behavior
+            "code": self._EDITOR_PRESENT,
+            "cursor": self._EDITOR_PRESENT,
+        }
+        script = emit_reinstall_script(
+            self._catalog_with_all_sources(), source_name="t.txt", generated="2026-06-16"
+        )
+        result = run_script_with_stubs(script, stubs)
+        assert result.returncode == 0, (
+            f"script aborted (exit {result.returncode}); stderr:\n{result.stderr}\n"
+            f"stdout:\n{result.stdout}"
+        )
+        assert "WARN: brew install failed: git" in result.stdout, (
+            f"expected brew WARN line in output:\n{result.stdout}"
+        )
+        assert self._SENTINEL in result.stdout, (
+            f"Manual Checklist sentinel missing — script aborted:\n{result.stdout}"
+        )
+
+    def test_everything_already_installed_runs_clean(self) -> None:
+        """When every guard's idempotency check matches, nothing installs and the
+        run reaches the end (exit 0) with the Manual Checklist sentinel printed.
+
+        brew list succeeds; mas list contains the id; the editors report the
+        extension already present. No install command runs, yet the script
+        completes cleanly — the common re-run case the tool is built for.
+        """
+        script = emit_reinstall_script(
+            self._catalog_with_all_sources(), source_name="t.txt", generated="2026-06-16"
+        )
+        stubs = {
+            # brew list succeeds (already installed) -> no install attempted
+            "brew": "#!/usr/bin/env bash\nexit 0\n",
+            # mas list contains the id -> idempotency guard skips install
+            "mas": (
+                "#!/usr/bin/env bash\n"
+                'if [ "$1" = "list" ]; then echo "424389933  Final Cut Pro"; exit 0; fi\n'
+                "exit 0\n"
+            ),
+            "code": self._EDITOR_PRESENT,
+            "cursor": self._EDITOR_PRESENT,
+        }
+        result = run_script_with_stubs(script, stubs)
+        assert result.returncode == 0, (
+            f"script aborted (exit {result.returncode}); stderr:\n{result.stderr}"
+        )
+        assert self._SENTINEL in result.stdout

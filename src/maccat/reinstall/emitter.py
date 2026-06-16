@@ -124,16 +124,20 @@ def _mas_block(section: ParsedSection) -> str:
         if item.id is not None:
             qid = quote_for_script(item.id)
             # mas list rows begin with the numeric id followed by whitespace.
-            # `mas install` returns non-zero when the app is already installed or
-            # the user is not signed in; guarding with `command -v mas` + a
-            # `mas list | grep -q` idempotency check (and consuming the non-zero
-            # exit via && short-circuit / ! negation) keeps re-runs from aborting
-            # the whole script under `set -Eeuo pipefail`. Mirrors the editor guard.
+            # Idempotency: `command -v mas` skips when mas is absent; the
+            # `! mas list | grep -q` check skips already-installed apps.
+            # Safety under `set -Eeuo pipefail`: when the chain DOES reach
+            # `mas install` and it fails (not signed in, transient store error),
+            # the install is the LAST command of the && list, so set -e would
+            # abort the whole run. The trailing `|| echo WARN` neutralizes that
+            # non-zero exit and surfaces the failure — graceful degradation,
+            # mirroring the brew block. (Verified by TestRuntimeExecution.)
             grep_pat = quote_for_script(f"^{item.id} ")
+            warn = quote_for_script(f"  WARN: mas install failed: {item.name}")
             line = (
                 f"command -v mas >/dev/null && "
                 f"! mas list | grep -q {grep_pat} && "
-                f"mas install {qid}"
+                f"{{ mas install {qid} || echo {warn}; }}"
             )
             if item.version:
                 line += (
@@ -186,10 +190,17 @@ def _editor_ext_block(section: ParsedSection, *, editor: str) -> str:
         low_id = item.id.lower()
         install_id = quote_for_script(low_id)
         grep_pat = quote_for_script(f"^{low_id}$")
+        # Safety under `set -Eeuo pipefail`: the install is the LAST command of
+        # the && list, so a genuine `--install-extension` failure (bad id, offline
+        # marketplace) would otherwise abort the whole run. The trailing
+        # `|| echo WARN` (inside a brace group) neutralizes that non-zero exit
+        # while still surfacing the failure. Short-circuits at `command -v`
+        # (editor absent) or the grep idempotency check do NOT trigger set -e.
+        warn = quote_for_script(f"  WARN: {editor} --install-extension failed: {low_id}")
         line = (
             f"command -v {editor} >/dev/null && "
             f"! {editor} --list-extensions | grep -qi {grep_pat} && "
-            f"{editor} --install-extension {install_id}"
+            f"{{ {editor} --install-extension {install_id} || echo {warn}; }}"
         )
         if item.version:
             line += f"  # cataloged: {safe_comment_value(item.version)}"
