@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1.0
-milestone_name: Repo Separation & CI Build
-status: Awaiting next milestone
-stopped_at: Phase 20 Plan 01 complete — MIG-05 verified. Ready for Plan 20-02 (MIG-04 strip, human checkpoint required).
-last_updated: "2026-06-16T05:06:59.227Z"
-last_activity: 2026-06-16 — Milestone v1.1.0 completed and archived
+milestone: v2.0.0
+milestone_name: Standalone maccat — CLI Cleanup & Versioned Catalog
+status: planning
+last_updated: "2026-06-16T13:35:19.597Z"
+last_activity: 2026-06-16
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 
 ## Current Position
 
-Phase: Milestone v1.1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-16 — Milestone v1.1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-16 — Milestone v2.0.0 started
 
 ## Performance Metrics
 

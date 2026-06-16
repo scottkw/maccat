@@ -51,11 +51,28 @@ for keeping a restorable, diffable history of a machine's full software + toolin
   caught a private-a private Git host-host leak the plan missed. 12/12 requirements; audit PASSED. **GSD home
   moved to the maccat repo** — future feature work happens there; this repo is now data-only.
 
-## Current Milestone
+## Current Milestone: v2.0.0 Standalone maccat — CLI Cleanup & Versioned Catalog
 
-_None — v1.1.0 shipped and this repo is now catalog-data-only. The `maccat` tool, its CI/release
-pipeline, and the GSD planning history live at **github.com/scottkw/maccat**. All future
-development and milestones happen there._
+**Goal:** Make maccat the standalone canonical tool — collapse folder selection to a single
+`--computer` flag, enrich every software section with version numbers, and retire the zsh
+reference and its byte-parity gate.
+
+**Target features:**
+- **CLI cleanup** — Remove `--personal`, `--office`, and `--machine` (and all associated code);
+  `--computer NAME` becomes the sole named-folder selector. The interactive `select_computer`
+  menu is unchanged. Update mutual-exclusion guards, `--help`, and doc-comment examples.
+- **Versioned catalog** — Add version numbers to the four sources that currently lack them:
+  Homebrew formulae (`brew list --formula --versions`), Homebrew casks (`--cask --versions`),
+  Setapp apps, and web-installed `/Applications` apps (both via `Info.plist` →
+  `CFBundleShortVersionString`). Graceful degradation when a version can't be read.
+- **Retire the zsh reference** — Delete `update-list.sh`, the `zsh_parity` golden test suite,
+  and the CI `zsh -n` integrity gate. Backfill the lost coverage with direct collector tests
+  (or frozen static-fixture goldens) so the suite still stands on its own. Scrub README/docs
+  references to the zsh script.
+
+**Why v2.0.0:** Breaking CLI surface change (removed flags) + breaking catalog-output change
+(new version columns) + removal of the reference implementation. maccat has no depended-on
+public release yet, so the major bump is clean.
 
 ## Next Candidate Milestone
 
@@ -208,6 +225,9 @@ CHR-02/FF-02 enabled-state + CDX-02 Codex plugins when that subsystem ships.
 | Move `.planning/` GSD history with the code, not the catalog repo | Future feature development (the thing GSD tracks) happens on the code; planning belongs beside what it plans | — Pending v1.1.0 |
 | Genericize all setup-specific content before publishing (README, example config, default-path examples, `personal`/`office`) | A public tool must read as general-purpose, not as one user's install | — Pending v1.1.0 |
 | CI builds + tests on every push/PR to main; publishes a Release `.pyz` only on a version tag | Continuous validation on main catches breakage early; tag-gated releases give clean, versioned download URLs without release noise | — Pending v1.1.0 |
+| Collapse the four selecting-flags (`--personal`/`--office`/`--machine`/`--computer`) to a single `--computer NAME` | `--personal`/`--office` were one user's catalog names; `--machine` was a pure back-compat alias of `--computer`. Supplying the folder name is sufficient; folder = computer is the established model | — Pending v2.0.0 |
+| Add version numbers to the four version-less software sources (Homebrew formulae/casks, Setapp, web-installed `/Applications`) | Maximize restore fidelity — a snapshot should pin versions; `mas` already emits them, so close the gap | — Pending v2.0.0 |
+| Remove `update-list.sh` + the `zsh_parity` byte-parity gate; maccat becomes the standalone source of truth | The zsh reference proved the port (v1.0.0) and has served its purpose; keeping it frozen blocks every output/CLI change. Backfill coverage with direct collector tests so the suite still stands | — Pending v2.0.0 |
 
 ## Evolution
 
@@ -227,4 +247,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-15 — started milestone v1.1.0 Repo Separation & CI Build: extract `maccat` into a new public GitHub repo from a fresh git history (code + tests + build tooling + docs + zsh reference + `.planning/`), genericize all setup-specific content, reduce this repo to catalog-data-only, and add a GitHub Action that builds the `.pyz` + runs ruff/mypy/pytest on push/PR to main and publishes a Release `.pyz` on a version tag. PyPI (PKG-04) stays deferred.*
+*Last updated: 2026-06-16 — started milestone v2.0.0 Standalone maccat — CLI Cleanup & Versioned Catalog: collapse the four selecting-flags to a single `--computer NAME` (remove `--personal`/`--office`/`--machine` and all associated code), add version numbers to the four version-less software sources (Homebrew formulae/casks, Setapp, web-installed `/Applications`), and retire `update-list.sh` + the `zsh_parity` byte-parity gate (backfilling coverage with direct collector tests). Breaking CLI + output changes → major bump.*
