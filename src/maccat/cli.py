@@ -36,6 +36,7 @@ def _build_parser() -> argparse.ArgumentParser:
     Subcommands:
       config init      Interactive first-run setup.
       config show      Print effective config with source annotation.
+      reinstall        Generate reinstall.sh from a catalog.
     """
     from maccat import __version__
 
@@ -102,6 +103,18 @@ def _build_parser() -> argparse.ArgumentParser:
     config_sub.add_parser("init", help="Interactive first-run setup")
     config_sub.add_parser("show", help="Print effective configuration")
 
+    reinstall_parser = subparsers.add_parser(
+        "reinstall",
+        help="Generate reinstall.sh from a catalog",
+    )
+    reinstall_parser.add_argument(
+        "--from",
+        metavar="PATH",
+        dest="from_path",
+        default=None,
+        help="Explicit catalog file path (skips computer picker)",
+    )
+
     return parser
 
 
@@ -113,7 +126,10 @@ def run() -> None:
       1. parse args (argparse)
       2. config subcommand dispatch (config init / config show)
       3. --rename × selecting-flag guard
-      4. load_config → resolve_catalog_repo → validate_catalog_repo
+      4a. load_config
+      4b. reinstall --from dispatch (early exit — no repo needed)
+      4c. resolve_catalog_repo → validate_catalog_repo
+      4d. reinstall picker dispatch (after repo validated)
       5. --rename short-circuit: git_pull → rename_machine → return
       6. resolve_computer_selection → select_computer (interactive fallback)
       7. resolve_archive_days
@@ -191,14 +207,41 @@ def run() -> None:
         )
 
     # ------------------------------------------------------------------
-    # 4. Resolve catalog repo (CFG-01 chain: flag > env > config > error)
-    #    PKG-03: NEVER infer from __file__ or cwd
+    # 4a. Config load (always safe — returns Config() when absent)
+    #     PKG-03: NEVER infer from __file__ or cwd
     # ------------------------------------------------------------------
     cfg = load_config()
+
+    # ------------------------------------------------------------------
+    # 4b. Reinstall --from dispatch (early exit — no repo needed)
+    #     Must run before resolve_catalog_repo, which raises SystemExit
+    #     when no repo is configured. --from mode bypasses the repo entirely.
+    # ------------------------------------------------------------------
+    if args.subcommand == "reinstall" and args.from_path is not None:
+        if args.rename:
+            sys.exit("ERROR: --rename cannot be combined with the 'reinstall' subcommand.")
+        from maccat.reinstall.cli import run_reinstall
+        run_reinstall(args)
+        return
+
+    # ------------------------------------------------------------------
+    # 4c. Resolve + validate catalog repo (required for ALL remaining paths:
+    #     picker-mode reinstall, --rename, and catalog generation)
+    # ------------------------------------------------------------------
     catalog_repo: Path = resolve_catalog_repo(args.catalog_dir, cfg)
     validate_catalog_repo(catalog_repo)
-
     auto_commit = not args.no_commit
+
+    # ------------------------------------------------------------------
+    # 4d. Reinstall picker dispatch (after repo validated — picker needs it)
+    #     Before --rename short-circuit (step 5).
+    # ------------------------------------------------------------------
+    if args.subcommand == "reinstall":
+        if args.rename:
+            sys.exit("ERROR: --rename cannot be combined with the 'reinstall' subcommand.")
+        from maccat.reinstall.cli import run_reinstall
+        run_reinstall(args, catalog_repo=catalog_repo)
+        return
 
     # ------------------------------------------------------------------
     # 5. --rename short-circuit (update-list.sh:2447-2451)
