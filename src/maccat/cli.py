@@ -114,6 +114,33 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Explicit catalog file path (skips computer picker)",
     )
+    # WR-03: mirror the top-level --computer flag onto the reinstall subparser
+    # so the documented post-subcommand placement (`maccat reinstall --computer
+    # NAME`) is accepted, not rejected with "unrecognized arguments".
+    #
+    # Both flags share dest="computer". argparse parses the top-level flag
+    # first (it precedes the subcommand token) and the subparser flag second
+    # (it follows the subcommand token), each writing into the same namespace
+    # attribute in left-to-right order. The subparser flag therefore wins when
+    # both are given. CRITICAL: the subparser flag's default MUST be
+    # argparse.SUPPRESS — a plain `default=None` would unconditionally clobber
+    # a value set by the top-level flag (`maccat --computer NAME reinstall`)
+    # back to None during subparser parsing. SUPPRESS makes the subparser leave
+    # the attribute untouched unless --computer is actually supplied after the
+    # subcommand, giving clean "subparser value wins, else top-level value
+    # survives" precedence.
+    reinstall_parser.add_argument(
+        "--computer",
+        metavar="NAME",
+        dest="computer",
+        default=argparse.SUPPRESS,
+        help=(
+            "Pre-select a computer folder for the picker "
+            "(may also be given before the subcommand: "
+            "`maccat --computer NAME reinstall`; the value after the "
+            "subcommand takes precedence if both are given)"
+        ),
+    )
 
     return parser
 
