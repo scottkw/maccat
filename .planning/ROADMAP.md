@@ -137,7 +137,9 @@ Plans:
   2. `maccat reinstall` without `--from` invokes the existing interactive computer-picker (`select_computer`) and uses the newest catalog in the selected computer's folder — the `--computer NAME` flag flows through for non-interactive selection
   3. The existing 13-step catalog-gen path in `cli.py run()` is unchanged — `maccat catalog` (or any non-reinstall invocation) behaves identically to before this phase
   4. Running `maccat reinstall --from <fixture>` in an integration test confirms the output file exists, contains the expected shebang and provenance header, and the `--rename` guard does not fire
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 26-01-PLAN.md — picker.py + reinstall/cli.py + cli.py wiring + integration tests (RST-01, RST-02)
 
 ## Progress
 
@@ -171,4 +173,4 @@ Phases execute in numeric order: 24 → 25 → 26
 | 23. Retire the zsh Reference | v2.0.0 | 3/3 | Complete | 2026-06-16 |
 | 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 2/2 | Complete    | 2026-06-16 |
 | 25. Script Emitter | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
-| 26. Picker + CLI Wiring + Integration | v2.1.0 | 0/TBD | Not started | - |
+| 26. Picker + CLI Wiring + Integration | v2.1.0 | 0/1 | Not started | - |
