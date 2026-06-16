@@ -87,7 +87,7 @@ single `--computer` flag, enrich every software section with version numbers, an
 zsh reference and its byte-parity gate.
 
 - [x] **Phase 21: CLI Cleanup** - Remove `--personal`, `--office`, and `--machine`; `--computer NAME` becomes the sole named-folder flag (completed 2026-06-16)
-- [ ] **Phase 22: Versioned Catalog** - Add versions to Homebrew formulae/casks, Setapp, and web-installed apps; preserve determinism and graceful degradation
+- [x] **Phase 22: Versioned Catalog** - Add versions to Homebrew formulae/casks, Setapp, and web-installed apps; preserve determinism and graceful degradation (completed 2026-06-16)
 - [ ] **Phase 23: Retire the zsh Reference** - Delete `update-list.sh` and the parity test suite; backfill coverage; scrub docs
 
 ## Phase Details
@@ -121,7 +121,7 @@ Plans:
 Plans:
 - [x] 22-01-PLAN.md — Plist version helper + Homebrew versioned output + unit tests
 - [x] 22-02-PLAN.md — Setapp + WebApps versioned output using plist helper + tests
-- [ ] 22-03-PLAN.md — Skip 3 invalidated parity cases + full suite gate
+- [x] 22-03-PLAN.md — Skip 3 invalidated parity cases + full suite gate
 
 ### Phase 23: Retire the zsh Reference
 **Goal**: `update-list.sh`, the `zsh_parity` test suite, and the CI `zsh -n` gate are gone; the test suite stands on its own with direct collector tests backfilling the lost coverage; README and docs describe maccat as the standalone tool.
@@ -162,5 +162,5 @@ Phases execute in numeric order: 21 → 22 → 23
 | 19. CI Build & Release Pipeline | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 20. Cut-Over & External-Catalog Verification | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 21. CLI Cleanup | v2.0.0 | 2/2 | Complete   | 2026-06-16 |
-| 22. Versioned Catalog | v2.0.0 | 2/3 | In Progress|  |
+| 22. Versioned Catalog | v2.0.0 | 3/3 | Complete   | 2026-06-16 |
 | 23. Retire the zsh Reference | v2.0.0 | 0/TBD | Not started | - |
