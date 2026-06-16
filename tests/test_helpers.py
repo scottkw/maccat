@@ -229,6 +229,32 @@ class TestChromeExtName:
         assert "{" not in result
         assert "nested" not in result
 
+    def test_msg_non_dict_messages_json_degrades_to_ext_id(
+        self, tmp_path: Path
+    ) -> None:
+        """isinstance(messages, dict) guard: valid JSON array top-level must degrade to ext_id.
+
+        A messages.json whose top-level value is a JSON array (not an object) passes
+        json.loads() without error but has no .items(). The isinstance guard must
+        intercept it and return ext_id — no AttributeError, no catalog abort.
+        """
+        from maccat.helpers.chrome_name import chrome_ext_name
+
+        ext_id = "abcdefghijklmnopqrstuvwxyz012345"
+        manifest = self._make_ext(
+            tmp_path,
+            ext_id=ext_id,
+            manifest={"name": "__MSG_extName__"},
+        )
+        # Manually create _locales/en/ with a JSON array instead of an object
+        locale_dir = manifest.parent / "_locales" / "en"
+        locale_dir.mkdir(parents=True)
+        (locale_dir / "messages.json").write_text(
+            json.dumps([1, 2, 3]), encoding="utf-8"
+        )
+        result = chrome_ext_name(manifest)
+        assert result == ext_id
+
 
 # ---------------------------------------------------------------------------
 # resolve_vsc_ext_name
@@ -365,3 +391,23 @@ class TestResolveVscExtName:
         # Must NOT leak a Python dict repr
         assert "{" not in result
         assert "message" not in result
+
+    def test_nls_non_dict_top_level_degrades_to_ext_id(self, tmp_path: Path) -> None:
+        """isinstance(nls, dict) guard: valid JSON array top-level must degrade to ext_id.
+
+        A package.nls.json whose top-level value is a JSON array (not an object)
+        passes json.loads() without error but has no .get(). The isinstance guard must
+        intercept it and return ext_id — no AttributeError, no catalog abort.
+        """
+        from maccat.helpers.vsc_name import resolve_vsc_ext_name
+
+        pkg_json = tmp_path / "package.json"
+        nls_file = tmp_path / "package.nls.json"
+
+        pkg_json.write_text(
+            json.dumps({"displayName": "%appTitle%"}), encoding="utf-8"
+        )
+        nls_file.write_text(json.dumps(["a", "b"]), encoding="utf-8")
+
+        result = resolve_vsc_ext_name(pkg_json, "ext-id")
+        assert result == "ext-id"
