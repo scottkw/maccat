@@ -136,7 +136,7 @@ Plans:
 
 Plans:
 - [x] 23-01-PLAN.md — Backfill chrome_name + vsc_name helper tests (ZSH-03 gap fill)
-- [ ] 23-02-PLAN.md — Delete update-list.sh, parity suite, tests/golden/, CI zsh -n step, conftest golden fixtures (ZSH-01 + ZSH-02)
+- [x] 23-02-PLAN.md — Delete update-list.sh, parity suite, tests/golden/, CI zsh -n step, conftest golden fixtures (ZSH-01 + ZSH-02)
 - [ ] 23-03-PLAN.md — Scrub README: remove zsh reference section, update CLI docs to --computer (ZSH-04)
 
 ## Progress
@@ -168,4 +168,4 @@ Phases execute in numeric order: 21 → 22 → 23
 | 20. Cut-Over & External-Catalog Verification | v1.1.0 | 2/2 | Complete | 2026-06-16 |
 | 21. CLI Cleanup | v2.0.0 | 2/2 | Complete   | 2026-06-16 |
 | 22. Versioned Catalog | v2.0.0 | 3/3 | Complete   | 2026-06-16 |
-| 23. Retire the zsh Reference | v2.0.0 | 1/3 | In Progress|  |
+| 23. Retire the zsh Reference | v2.0.0 | 2/3 | In Progress|  |

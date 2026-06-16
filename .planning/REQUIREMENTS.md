@@ -25,8 +25,8 @@ Requirements for this milestone (v2.0.0). Each maps to a roadmap phase.
 
 ### Retire the zsh Reference
 
-- [ ] **ZSH-01**: `update-list.sh` is removed from the repo.
-- [ ] **ZSH-02**: The `zsh_parity` test suite and the CI `zsh -n update-list.sh` integrity gate are removed.
+- [x] **ZSH-01**: `update-list.sh` is removed from the repo.
+- [x] **ZSH-02**: The `zsh_parity` test suite and the CI `zsh -n update-list.sh` integrity gate are removed.
 - [x] **ZSH-03**: Coverage lost with the parity suite is backfilled with direct collector tests; the full suite passes and ruff + `mypy --strict` stay clean.
 - [ ] **ZSH-04**: README and docs no longer reference `update-list.sh` or byte-parity; maccat is described as the standalone tool.
 
@@ -81,8 +81,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VER-04 | Phase 22 | Complete |
 | VER-05 | Phase 22 | Complete |
 | VER-06 | Phase 22 | Complete |
-| ZSH-01 | Phase 23 | Pending |
-| ZSH-02 | Phase 23 | Pending |
+| ZSH-01 | Phase 23 | Complete |
+| ZSH-02 | Phase 23 | Complete |
 | ZSH-03 | Phase 23 | Complete |
 | ZSH-04 | Phase 23 | Pending |
 

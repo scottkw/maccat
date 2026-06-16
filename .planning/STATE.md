@@ -4,13 +4,13 @@ milestone: v2.0.0
 milestone_name: Standalone maccat — CLI Cleanup & Versioned Catalog
 status: executing
 stopped_at: Completed 23-01-PLAN.md
-last_updated: "2026-06-16T15:44:40.006Z"
+last_updated: "2026-06-16T15:48:27.052Z"
 last_activity: 2026-06-16
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 67
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-16)
 ## Current Position
 
 Phase: 23 (Retire the zsh Reference) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-06-16
 
-Progress: [████████░░] 75%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [████████░░] 75%
 | Phase 22 P22-02 | 7 | 3 tasks | 3 files |
 | Phase 22 P22-03 | 110s | 2 tasks | 1 files |
 | Phase 23-retire-zsh-reference P23-01 | 5min | 1 tasks | 1 files |
+| Phase 23-retire-zsh-reference P02 | 120 | 3 tasks | 43 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,7 @@ Recent decisions affecting current work:
 - **Phase 21 scope:** Remove from `cli.py`: `--personal`, `--office`, `--machine` args and the mutual-exclusion group. Remove from `identity.py`: the `personal`/`office`/`machine` parameters from `resolve_computer_selection`. Remove from `cli.py` step 3 guard and step 6 call. Update docstrings and `--help`.
 - [Phase ?]: test_naming.py confirmed unchanged — personal/office are filename fixture strings, not flag references
 - [Phase ?]: Manually created _locales/en/ in test to write JSON array as messages.json — avoids _make_ext locales kwarg
+- [Phase ?]: Retire zsh reference (ZSH-01, ZSH-02)
 
 ### Pending Todos
 
@@ -85,6 +87,6 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-06-16T15:44:39.997Z
+Last session: 2026-06-16T15:48:27.045Z
 Stopped at: Completed 23-01-PLAN.md
 Resume file: None
