@@ -1,5 +1,48 @@
 # Milestones
 
+## v2.0.0 Standalone maccat — CLI Cleanup & Versioned Catalog (Shipped: 2026-06-16)
+
+**Phases completed:** 3 phases (21-23), 8 plans
+
+**Delivered:** Made maccat the standalone canonical tool — collapsed folder selection to a single
+`--computer` flag, added version numbers to every software catalog section, and retired the zsh
+reference implementation and its byte-parity gate. First milestone where maccat evolves freely
+without an `update-list.sh` parity anchor. 14/14 requirements; milestone audit PASSED.
+
+**Key accomplishments:**
+
+- **CLI cleanup (Phase 21, CLI-03..06):** removed `--personal`, `--office`, and `--machine` (and all
+  associated code) — `--computer NAME` is now the sole named-folder selector; collapsed
+  `resolve_computer_selection` from four params to a single keyword-only `computer`, simplified the
+  argparse parser + `--rename` guards, and migrated the test suite (removed flags now error with
+  argparse "unrecognized arguments").
+- **Versioned catalog (Phase 22, VER-01..06):** Homebrew formulae/casks now emit `name (version)`
+  via `brew list --versions` (all installed versions preserved); Setapp and web-installed
+  `/Applications` apps read their version from `Info.plist` (`CFBundleShortVersionString` →
+  `CFBundleVersion`) through a new never-raising stdlib-`plistlib` helper; graceful name-only
+  degradation; ordering/determinism preserved (no `flush_section` re-sort). App Store unchanged.
+- **Retired the zsh reference (Phase 23, ZSH-01..04):** deleted `update-list.sh`, the entire
+  `tests/golden/` parity scaffold, `test_golden_parity.py`, `test_update_list_integrity.py`, and the
+  CI `zsh -n` gate (kept the PYTHONHASHSEED matrix + pytest/ruff/mypy); backfilled the only two
+  genuinely-missing helper branch tests (non-dict `messages.json`/`package.nls.json` degradation);
+  scrubbed README of operational zsh references (kept one history note); maccat described as
+  standalone.
+
+**Notable:** Process resilience under failure — an executor died mid-plan (API socket close) during
+22-01; the orchestrator recovered from the partial commit state without losing or duplicating work.
+Adversarial gates caught real issues: the plan-checker rejected a 23-01 plan built on a false premise
+(it would have duplicated existing helper tests), and code review caught a Critical never-raises
+violation in the plist helper (array-root `Info.plist` → `AttributeError`) plus a TOCTOU on `stat()`
+— both fixed before phase close. Final state: 421 passed / 5 skipped (unrelated `test_pyz` dist
+artifact), ruff + mypy --strict clean.
+
+**Known deferred items at close:** 1 stale quick task from a prior milestone
+(`260614-ckx-fix-interactive-machine-label-ux`, status missing — predates v2.0.0, not in scope);
+~88 stale `update-list.sh:NNNN` code-comment cross-references (consciously out of ZSH-04 scope).
+See STATE.md Deferred Items.
+
+---
+
 ## v1.1.0 Repo Separation & CI Build (Shipped: 2026-06-16)
 
 **Phases completed:** 3 phases, 6 plans, 8 tasks

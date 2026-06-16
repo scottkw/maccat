@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0.0
 milestone_name: Standalone maccat — CLI Cleanup & Versioned Catalog
-status: verifying
+status: Awaiting next milestone
 stopped_at: "Completed 23-03-PLAN.md (ZSH-04: scrub README zsh refs)"
-last_updated: "2026-06-16T15:52:22.479Z"
-last_activity: 2026-06-16
+last_updated: "2026-06-16T16:05:30.799Z"
+last_activity: 2026-06-16 — Milestone v2.0.0 completed and archived
 progress:
   total_phases: 3
   completed_phases: 3
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-16)
 
 ## Current Position
 
-Phase: 23 (Retire the zsh Reference) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-06-16
-
-Progress: [██████████] 100%
+Phase: Milestone v2.0.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-16 — Milestone v2.0.0 completed and archived
 
 ## Performance Metrics
 
@@ -86,9 +84,15 @@ None currently.
 | Browser state | CHR-02 / FF-02 — extension enabled/disabled state | v2+ | 2026-06-12 |
 | Future tooling | CDX-02 — Codex plugins (arrived after v0.46.0) | v2+ | 2026-06-12 |
 | Distribution | PKG-04 — pipx/PyPI as second distribution channel | future | 2026-06-14 |
+| Stale artifact | Quick task `260614-ckx-fix-interactive-machine-label-ux` (status: missing) — predates v2.0.0, not in scope; acknowledged at v2.0.0 close | deferred | 2026-06-16 |
+| Code hygiene | ~88 stale `update-list.sh:NNNN` code-comment cross-refs (out of ZSH-04 scope) — future comment-cleanup pass | deferred | 2026-06-16 |
 
 ## Session Continuity
 
 Last session: 2026-06-16T15:52:22.472Z
 Stopped at: Completed 23-03-PLAN.md (ZSH-04: scrub README zsh refs)
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

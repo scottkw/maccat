@@ -172,6 +172,52 @@ across `PYTHONHASHSEED` 0/42/random. 434 tests; the zsh reference stayed byte-un
 - Model mix: Opus orchestration; Sonnet subagents (researcher/pattern-mapper/planner/checker/executor/reviewer/fixer/verifier/integration).
 - Notable: every phase ran review→fix→re-review (often to a 3rd iteration); the highest-value catches were on destructive/parity paths, not happy-path logic.
 
+## Milestone: v2.0.0 — Standalone maccat — CLI Cleanup & Versioned Catalog
+
+**Shipped:** 2026-06-16
+**Phases:** 3 (21-23) | **Plans:** 8
+
+### What Was Built
+Collapsed the four folder-selecting flags to a single `--computer NAME` (removed
+`--personal`/`--office`/`--machine`); added version numbers to every software section (Homebrew
+formulae/casks via `brew list --versions`; Setapp + web-installed `/Applications` via a shared
+never-raising `plistlib` helper); and retired the `update-list.sh` zsh reference, the `zsh_parity`
+suite, and the CI `zsh -n` gate, leaving direct collector tests as the standalone coverage.
+
+### What Worked
+- **The audit gates earned their keep on the meta-work, not just the code.** The plan-checker
+  rejected a 23-01 plan whose entire premise was false (it would have duplicated existing helper
+  tests) — caught before any code was written. Code review caught a Critical never-raises violation
+  in the new plist helper (array-root `Info.plist` → `AttributeError`) that the unit tests missed.
+- **Crash recovery without a worktree.** A sequential executor died mid-plan (API socket close) in
+  22-01 having committed task 1 + written task-3 tests but not the task-2 impl. Inspecting the
+  partial git/disk state and finishing the impl by hand was faster and safer than re-dispatching.
+- **Sequencing the parity retirement correctly.** Phase 22 only *skipped* the 3 invalidated parity
+  cases (no tautological golden regeneration); Phase 23 deleted the whole scaffold — keeping each
+  phase's gate honest and green.
+
+### What Was Inefficient
+- The planner twice wrote on stale assumptions about existing tests (23-01 false premise), costing a
+  plan-check + re-plan cycle. A quick `ls tests/` baseline in the planner prompt would have avoided it.
+- `milestone.complete` auto-extracted garbage accomplishments ("One-liner:") because SUMMARY files
+  lacked a clean one-liner field — required a manual MILESTONES.md rewrite.
+
+### Patterns Established
+- For deletion/retirement phases: backfill coverage in an earlier wave, delete in a later wave, so
+  coverage is never momentarily lost (Wave 1 backfill → Wave 2 delete).
+- Never regenerate parity goldens from the new implementation's own output — skip + reason, then
+  delete the scaffold in a dedicated phase.
+
+### Key Lessons
+- "Backfill lost coverage" is an *audit* task first, not a *write* task — most of the coverage often
+  already exists; find the true gap before generating tests.
+- A never-raising helper must wrap every syscall (incl. `stat()`) AND guard the parsed shape
+  (`isinstance(data, dict)`) — partial try-blocks leak exceptions on valid-but-wrong-shape input.
+
+### Cost Observations
+- Model mix: Opus orchestration; Sonnet subagents throughout.
+- Notable: one executor API-crash recovered inline; two plan-check/re-plan cycles (one real BLOCKER).
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Verification | Notable |
@@ -181,3 +227,5 @@ across `PYTHONHASHSEED` 0/42/random. 434 tests; the zsh reference stayed byte-un
 | v0.48.0 | 3 | 3 | 3/3 passed | Identity + retention controls; code review caught a dead validation regex + a corrupt-commit bug; established destructive-CLI verification discipline |
 | v0.49.0 | 3 | 5 | 3/3 passed | Folder-as-identity model; live pty UAT in a disposable clone found & fixed 4 real zsh defects all static gates had passed |
 | v1.0.0 | 5 | 21 | 5/5 passed | Byte-parity Python port; adversarial review caught a tautological parity gate + ID-erasing normalization; live zsh_parity suite; zsh reference untouched |
+| v1.1.0 | 3 | 6 | 3/3 passed | Extracted code to a public repo from fresh history; CI `.pyz` build + tag-Release; human checkpoint caught a private-host leak the plan missed |
+| v2.0.0 | 3 | 8 | 3/3 passed | Single `--computer` flag; versioned catalog; retired the zsh reference + parity gate; plan-checker killed a false-premise plan; review caught a Critical never-raises bug; recovered from an executor API crash |
