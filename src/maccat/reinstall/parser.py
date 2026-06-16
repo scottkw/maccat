@@ -55,6 +55,7 @@ ITEM_RE = re.compile(
     r"|"
     r"\s+\[(?P<id2>[^\]]+)\]"  # branch 3: id only
     r")?"
+    r"\s*"  # WR-04: tolerate trailing whitespace on hand-edited/external lines
     r"$"
 )
 

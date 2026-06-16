@@ -78,6 +78,27 @@ class TestItemLineParser:
         assert item.id == exp_id
         assert item.raw_line == raw_line
 
+    @pytest.mark.parametrize(
+        "raw_line,exp_name,exp_ver,exp_id",
+        [
+            # WR-04: trailing whitespace on hand-edited/external lines is tolerated;
+            # version/id are still recovered and raw_line is preserved verbatim.
+            ("Safari (15.0) ", "Safari", "15.0", None),
+            ("Safari (15.0) [123] ", "Safari", "15.0", "123"),
+            ("Final Cut Pro [99] ", "Final Cut Pro", None, "99"),
+            ("plain name ", "plain name", None, None),
+        ],
+    )
+    def test_trailing_whitespace_is_tolerated(
+        self, raw_line: str, exp_name: str, exp_ver: str | None, exp_id: str | None
+    ) -> None:
+        """Trailing whitespace no longer degrades a line to name-only (WR-04)."""
+        item = _parse_item_line(raw_line)
+        assert item.name == exp_name
+        assert item.version == exp_ver
+        assert item.id == exp_id
+        assert item.raw_line == raw_line  # original line preserved verbatim
+
     def test_none_found_sentinel_is_not_specially_handled_by_item_parser(self) -> None:
         """'  (none found)' is handled upstream in parse_catalog, not by _parse_item_line.
 
