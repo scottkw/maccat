@@ -38,3 +38,23 @@ jobs:
 
       - name: Check update-list.sh syntax (TEST-04)
         run: zsh -n update-list.sh
+
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build maccat.pyz (CI-02)
+        run: chmod +x scripts/build-pyz.sh && ./scripts/build-pyz.sh
+
+      - name: Upload maccat.pyz artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: maccat.pyz
+          path: dist/maccat.pyz
+          if-no-files-found: error
