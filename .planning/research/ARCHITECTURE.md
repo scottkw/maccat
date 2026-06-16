@@ -1,883 +1,638 @@
 # Architecture Research
 
-**Domain:** Python port of a macOS single-file Zsh cataloger — modular package, external catalog repo, `.pyz`/pipx distribution
-**Researched:** 2026-06-14
-**Confidence:** HIGH
+**Domain:** maccat v2.1.0 — Reinstall from Catalog
+**Researched:** 2026-06-16
+**Confidence:** HIGH (based on direct source reading of all relevant modules)
 
-## Summary
+## Integration Design
 
-Re-implementing `update-list.sh` (~2,500-line Zsh) as a modular Python package at byte-parity
-output. The central architectural constraints:
+### How `reinstall` Fits into the Existing Architecture
 
-1. **Exact output fidelity** — every section title, line format, sort order, and graceful-
-   degradation message must match the Zsh output byte-for-byte so golden-output parity tests pass.
-2. **SCRIPT_DIR must die** — the Zsh script assumes the catalog repo lives next to the script.
-   The Python package lives in a `.pyz`/pipx installation; the catalog repo is user-configured.
-3. **No globals** — the Zsh anti-pattern of globals-as-parameters must not carry over.
-4. **Collector contract** — 17 independent collectors must be individually testable; a uniform
-   interface lets the registry compose them without knowing their internals.
-5. **Distribution** — the package must run as a self-contained `.pyz` zipapp and install via `pipx`;
-   standard library only unless a dependency is universally available (subprocess, pathlib, json,
-   plistlib, datetime, shutil, os, sys).
+The existing `run()` in `cli.py` already has a short-circuit dispatch pattern: `config`
+subcommand and `--rename` both dispatch early and return before the 13-step catalog-gen
+block. The `reinstall` subcommand follows the same pattern — third short-circuit, resolved
+after catalog-repo config and before computer selection.
+
+```
+cli.py run():
+  1. Parse args
+  2. config subcommand → dispatch + return          [existing]
+  3. --rename guard
+  4. load_config + resolve_catalog_repo             ← reinstall needs this too
+  5. reinstall subcommand → dispatch + return       [NEW — insert here]
+  6. --rename short-circuit
+  7. select_computer
+  ... 13-step catalog-gen block continues unchanged
+```
+
+The reinstall dispatch must happen AFTER step 4 (catalog repo resolution) because
+`reinstall` needs the catalog repo to resolve the computer folder or validate `--from`.
+It must happen BEFORE step 6 (`select_computer`) because the interactive picker in
+`reinstall/picker.py` calls `select_computer` itself rather than letting the main flow do it.
 
 ---
 
-## Standard Architecture
-
-### System Overview
+## System Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  maclist/__main__.py                                                  │
-│  Entry point: parse args, load config, build RunContext, dispatch    │
-│  --rename → rename_mode()   |   normal run → catalog_mode()         │
-└──────────────────┬──────────────────────────────────────────────────┘
-                   │  RunContext (immutable dataclass, replaces globals)
-         ┌─────────▼─────────────────────────────────────────────┐
-         │  maclist/cli.py                                         │
-         │  Argument parsing (argparse), config loading,          │
-         │  computer-folder menu (select_computer),               │
-         │  archive-retention prompt, produces RunContext          │
-         └─────────┬─────────────────────────────────────────────┘
-                   │
-         ┌─────────▼─────────────────────────────────────────────┐
-         │  maclist/identity.py                                    │
-         │  select_computer(), validate_computer_name(),          │
-         │  upsert_machine_label() — all take catalog_repo Path   │
-         └─────────────────────────────────────────────────────────┘
-                   │
-         ┌─────────▼──────────────────────────────────────────────┐
-         │  maclist/gitops.py                                       │
-         │  git_pull(repo), git_commit_and_push(repo, ctx),       │
-         │  rename_commit(repo, old, new)                          │
-         └─────────────────────────────────────────────────────────┘
-                   │
-         ┌─────────▼──────────────────────────────────────────────┐
-         │  maclist/catalog/                                        │
-         │  ┌──────────────┐  ┌──────────────────┐               │
-         │  │ writer.py    │  │ format.py         │               │
-         │  │ CatalogWriter│  │ emit_item()       │               │
-         │  │ write_section│  │ flush_section()   │               │
-         │  │ atomic write │  │ Item dataclass    │               │
-         │  └──────────────┘  └──────────────────┘               │
-         └─────────────────────────────────────────────────────────┘
-                   │
-         ┌─────────▼──────────────────────────────────────────────┐
-         │  maclist/collectors/                                     │
-         │  __init__.py  (REGISTRY: ordered list of Collector)     │
-         │  base.py      (abstract Collector, CollectorResult)     │
-         │  homebrew.py  vscode.py    chrome.py    codex.py        │
-         │  mas.py       cursor.py    firefox.py   opencode.py     │
-         │  setapp.py    claude.py    gemini.py                    │
-         │  webapps.py                                              │
-         └─────────────────────────────────────────────────────────┘
-                   │
-         ┌─────────▼──────────────────────────────────────────────┐
-         │  maclist/helpers/                                        │
-         │  json_io.py    (json_get — plistlib/json fallback)      │
-         │  chrome_name.py (chrome_ext_name — __MSG_ resolution)  │
-         │  vsc_name.py   (resolve_vsc_ext_name — NLS)            │
-         └─────────────────────────────────────────────────────────┘
-                   │
-         ┌─────────▼──────────────────────────────────────────────┐
-         │  maclist/config.py                                       │
-         │  load_config(Path?) → Config                            │
-         │  resolve_catalog_repo(flag_val, config) → Path         │
-         │  Config dataclass (catalog_repo, default_computer, …)  │
-         └─────────────────────────────────────────────────────────┘
-                   │
-         ┌─────────▼──────────────────────────────────────────────┐
-         │  maclist/retention.py                                    │
-         │  retain_newest_per_host(target_dir: Path, …)           │
-         │  prune_old_archives(archive_dir: Path, age_days: int)  │
-         └─────────────────────────────────────────────────────────┘
-                   │
-         ┌─────────▼──────────────────────────────────────────────┐
-         │  maclist/naming.py                                       │
-         │  parse_catalog_filename(filename) → CatalogFilename    │
-         │  make_catalog_filename(machine, ts) → str              │
-         │  CatalogFilename dataclass (machine, timestamp, stem)  │
-         └─────────────────────────────────────────────────────────┘
+│                      cli.py  run()                                   │
+│   Subcommand dispatch (config / reinstall / catalog-gen)            │
+├───────────────────────────────┬─────────────────────────────────────┤
+│  EXISTING (unchanged)         │  NEW                                 │
+│  ┌──────────────────────┐     │  ┌────────────────────────────────┐  │
+│  │ config.py            │     │  │ reinstall/cli.py               │  │
+│  │ resolve_catalog_repo │     │  │ run_reinstall(args, repo)      │  │
+│  │ validate_catalog_repo│     │  └────────────┬───────────────────┘  │
+│  └──────────────────────┘     │               │                      │
+│  ┌──────────────────────┐     │  ┌────────────▼───────────────────┐  │
+│  │ identity.py          │ ◄───┤  │ reinstall/picker.py            │  │
+│  │ select_computer()    │     │  │ resolve_catalog_path()         │  │
+│  │ discover_computer_   │     │  │ (--from PATH or computer-picker│  │
+│  │   folders()          │     │  │  + newest-catalog scan)        │  │
+│  └──────────────────────┘     │  └────────────┬───────────────────┘  │
+│  ┌──────────────────────┐     │               │                      │
+│  │ naming.py            │ ◄───┤               │                      │
+│  │ parse_catalog_       │     │               │                      │
+│  │   filename()         │     │               │                      │
+│  └──────────────────────┘     │  ┌────────────▼───────────────────┐  │
+│                               │  │ reinstall/parser.py            │  │
+│  ┌──────────────────────┐     │  │ parse_catalog(path)            │  │
+│  │ catalog/format.py    │ ◄───┤  │  → ParsedCatalog               │  │
+│  │ emit_item()          │     │  │  (contract, not called)        │  │
+│  │ (contract reference) │     │  └────────────┬───────────────────┘  │
+│  └──────────────────────┘     │               │                      │
+│                               │  ┌────────────▼───────────────────┐  │
+│                               │  │ reinstall/emitter.py           │  │
+│                               │  │ emit_reinstall_script(catalog) │  │
+│                               │  │  → str (reinstall.sh content)  │  │
+│                               │  └────────────────────────────────┘  │
+└───────────────────────────────┴─────────────────────────────────────┘
 ```
 
-### Component Responsibilities
+---
 
-| Component | Responsibility | Key boundary |
-|-----------|----------------|--------------|
-| `__main__.py` | Entry point; wires config → RunContext → dispatch | No business logic; only orchestration |
-| `cli.py` | argparse, interactive menus (select_computer, archive-days prompt), TTY guards | Produces RunContext; no I/O after that |
-| `config.py` | Load `~/.config/maclist/config.toml`, resolve catalog_repo path | Pure data; no side effects |
-| `identity.py` | Computer-folder selection, validate_computer_name, upsert_machine_label | Takes catalog_repo Path; no globals |
-| `naming.py` | `mac-software-list-[label]-YYYYMMDDHHMMSS.txt` parse + generate | Pure functions; no I/O |
-| `retention.py` | retain_newest_per_host, prune_old_archives | Takes Path args; no globals |
-| `gitops.py` | git pull/commit/push via subprocess; rename commit | Takes repo Path; no globals |
-| `catalog/writer.py` | CatalogWriter context manager; atomic write (tmp + rename) | Owns the output file lifetime |
-| `catalog/format.py` | Item dataclass, emit_item, flush_section (sort + dedup) | Pure formatting, no file I/O |
-| `collectors/base.py` | Abstract Collector, CollectorResult protocol | Contract only; no logic |
-| `collectors/__init__.py` | REGISTRY: ordered list of Collector instances | Fixed section order matches Zsh |
-| `collectors/*.py` | One file per source; each implements Collector | Each independently testable |
-| `helpers/json_io.py` | json_get(file, key) — json/plistlib only, stdlib | No subprocess; pure Python |
-| `helpers/chrome_name.py` | chrome_ext_name(manifest_path) — __MSG_ resolution | Wraps json_io |
-| `helpers/vsc_name.py` | resolve_vsc_ext_name(pkg_json, ext_id) — NLS | Wraps json_io |
+## Component Responsibilities
+
+| Component | Responsibility | Status |
+|-----------|----------------|--------|
+| `cli.py` `_build_parser()` | Add `reinstall` subparser with `--from` flag | MODIFIED |
+| `cli.py` `run()` | Insert reinstall dispatch block at step 5 | MODIFIED |
+| `reinstall/__init__.py` | Package marker | NEW |
+| `reinstall/cli.py` `run_reinstall()` | Orchestrate: resolve path → parse → emit → write | NEW |
+| `reinstall/picker.py` `resolve_catalog_path()` | `--from PATH` short-circuit or interactive select_computer + newest-file scan | NEW |
+| `reinstall/parser.py` `parse_catalog()` | Section-boundary state machine + per-line item parser | NEW |
+| `reinstall/emitter.py` `emit_reinstall_script()` | Per-source renderers producing the script string | NEW |
+| `identity.py` `select_computer()` | Reused verbatim — unchanged | EXISTING (reused) |
+| `identity.py` `discover_computer_folders()` | Reused via select_computer | EXISTING (reused) |
+| `naming.py` `parse_catalog_filename()` | Reused in picker for newest-catalog scan | EXISTING (reused) |
+| `config.py` `resolve_catalog_repo()` | Reused in cli.py dispatch block | EXISTING (reused) |
+| `catalog/format.py` `emit_item()` | Contract reference only — not called at reinstall runtime | EXISTING (contract) |
 
 ---
 
 ## Recommended Project Structure
 
 ```
-mac-software-list/          ← existing repo root (catalog repo when running locally)
-├── update-list.sh          ← untouched; stays here forever
-├── machine-labels.tsv      ← also lives here (or in the user's catalog repo)
-├── personal/               ← existing catalog folders
-├── office/                 ← existing catalog folders
-│
-└── maclist/                ← NEW: Python package source tree
-    ├── __init__.py
-    ├── __main__.py         ← `python -m maclist` / zipapp entry
-    ├── cli.py              ← argparse + interactive menus + RunContext builder
-    ├── config.py           ← Config dataclass + config file loader
-    ├── identity.py         ← computer-folder selection + TSV map
-    ├── naming.py           ← filename parse/generate (pure)
-    ├── retention.py        ← retain_newest_per_host + prune_old_archives
-    ├── gitops.py           ← git pull/commit/push via subprocess
-    │
-    ├── catalog/
-    │   ├── __init__.py
-    │   ├── writer.py       ← CatalogWriter (context manager, atomic output)
-    │   └── format.py       ← Item, emit_item, flush_section, write_section
-    │
-    ├── collectors/
-    │   ├── __init__.py     ← REGISTRY (ordered list); register() decorator
-    │   ├── base.py         ← Collector ABC, CollectorResult
-    │   ├── homebrew.py
-    │   ├── mas.py
-    │   ├── setapp.py
-    │   ├── webapps.py
-    │   ├── claude.py       ← plugins + MCP + skills/agents (3 sections)
-    │   ├── codex.py        ← MCP only (no plugins in v0.46)
-    │   ├── opencode.py     ← plugins + MCP + agents
-    │   ├── gemini.py       ← extensions + MCP
-    │   ├── vscode.py
-    │   ├── cursor.py
-    │   ├── chrome.py
-    │   └── firefox.py
-    │
-    └── helpers/
-        ├── __init__.py
-        ├── json_io.py      ← json_get() using json/plistlib (no subprocess)
-        ├── chrome_name.py  ← chrome_ext_name()
-        └── vsc_name.py     ← resolve_vsc_ext_name()
-
-tests/
-├── golden/
-│   └── fixtures/           ← per-section fixture files for parity tests
-├── unit/
-│   ├── test_naming.py
-│   ├── test_format.py
-│   ├── test_retention.py
-│   └── collectors/
-│       └── test_*.py       ← one test file per collector
-└── integration/
-    └── test_parity.py      ← golden-output comparisons
-
-pyproject.toml              ← project metadata, build system (flit or setuptools)
-build-pyz.sh                ← zipapp build script
+src/maccat/
+├── cli.py                    # MODIFIED: add reinstall subcommand + dispatch
+├── reinstall/
+│   ├── __init__.py           # empty package marker
+│   ├── cli.py                # run_reinstall(args, catalog_repo) — thin orchestrator
+│   ├── picker.py             # resolve_catalog_path(): --from or select+newest
+│   ├── parser.py             # parse_catalog(path) → ParsedCatalog
+│   └── emitter.py            # emit_reinstall_script(ParsedCatalog) → str
+└── [all existing modules unchanged]
 ```
 
 ### Structure Rationale
 
-- **`maclist/` at repo root alongside `update-list.sh`:** both implementations coexist in the same
-  repo without confusion; the Python package does not overwrite any Zsh outputs.
-- **`catalog/` sub-package:** keeps format and I/O concerns separated; `format.py` has no file I/O
-  (pure Item/line logic) which makes it trivially testable with zero mocking.
-- **`collectors/` as a sub-package with a registry:** the fixed section order lives in one
-  authoritative place (`REGISTRY` in `__init__.py`); adding a new source is one file + one registry
-  entry, nothing else to wire.
-- **`helpers/` not inside `collectors/`:** json_io, chrome_name, and vsc_name are shared across
-  multiple collectors; placing them in a sibling package avoids circular imports.
-- **`tests/golden/`:** fixture files checked into the repo; parity tests diff Python output against
-  captured Zsh section bodies.
+- **`reinstall/` subpackage:** Isolates all new code. The existing catalog-gen pipeline
+  is untouched except for two wiring points in `cli.py`. Future milestones (catalog
+  diffing, etc.) follow the same subpackage pattern.
+- **`reinstall/cli.py` vs inlining:** Root `cli.py` has a NON-NEGOTIABLE 13-step order
+  comment. Embedding reinstall logic inside `run()` beyond a one-liner dispatch would
+  corrupt that invariant. The dispatch is modeled on the existing `config` subcommand
+  pattern: one `if args.subcommand == "reinstall": ... return`.
+- **`picker.py` separate from `reinstall/cli.py`:** `resolve_catalog_path()` is
+  independently testable (no argparse, no TTY side effects on the `--from` path).
 
 ---
 
-## Architectural Patterns
+## (1) Subcommand Integration in `cli.py`
 
-### Pattern 1: RunContext — immutable parameter bundle (replaces Zsh globals)
-
-**What:** A frozen dataclass passed top-down from `__main__` through every function call. No module-
-level mutable state.
-
-**When to use:** Everywhere. Every function that previously read a global (`TARGET_LOCATION`,
-`SCRIPT_DIR`, `ARCHIVE_AGE_DAYS`, etc.) now takes a `RunContext` or one of its fields.
-
-**Trade-offs:** Slightly more verbose function signatures; eliminates entire class of test
-difficulties (no global-reset boilerplate).
+### Parser Changes
 
 ```python
-# maclist/cli.py
-from dataclasses import dataclass, field
-from pathlib import Path
-
-@dataclass(frozen=True)
-class RunContext:
-    catalog_repo: Path          # replaces SCRIPT_DIR
-    computer:     str           # replaces TARGET_LOCATION / CURRENT_MACHINE
-    archive_days: int           # replaces ARCHIVE_AGE_DAYS
-    auto_commit:  bool          # replaces AUTO_COMMIT
-    timestamp:    str           # YYYYMMDDHHMMSS, set once at startup
-    output_file:  Path          # derived: catalog_repo / computer / filename
-```
-
-The `output_file` is derived, not stored separately; `naming.make_catalog_filename(computer,
-timestamp)` produces the filename, and `catalog_repo / computer / filename` is the full path.
-
-### Pattern 2: Collector ABC — uniform pluggable interface
-
-**What:** An abstract base class with a `collect()` method that returns a `CollectorResult`. Each
-source is one concrete subclass. The registry is an ordered list of instances.
-
-**When to use:** For all 17 sources. The contract is designed so the orchestrator calls collectors
-without knowing anything about their internals.
-
-**Trade-offs:** Slightly more structure than bare functions; pays off immediately in testability
-(mock a collector, swap one, test ordering independently of data).
-
-```python
-# maclist/collectors/base.py
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Sequence
-
-@dataclass
-class Section:
-    title:  str
-    items:  list[str]   # pre-formatted lines (emit_item output, NOT yet sorted)
-    note:   str = ""    # graceful-degradation message when items is empty
-
-@dataclass
-class CollectorResult:
-    sections: list[Section]     # one collector may yield multiple sections
-    warnings: list[str] = field(default_factory=list)
-
-class Collector:
-    """Abstract. Subclasses implement collect()."""
-    def collect(self) -> CollectorResult:
-        raise NotImplementedError
-
-    def available(self) -> bool:
-        """Override to gate on tool presence or directory existence."""
-        return True
-
-    def degraded_result(self, title: str, note: str) -> CollectorResult:
-        """Return the standard '(none found)' result for a missing source."""
-        return CollectorResult(sections=[Section(title=title, items=[], note=note)])
-```
-
-Each collector's `collect()` builds `Section` objects whose `items` list will be sorted and
-deduplicated by `flush_section` in `catalog/format.py` before writing. The `note` field holds
-the graceful-degradation text (e.g. `"Homebrew is not installed."`).
-
-### Pattern 3: CatalogWriter — context manager for atomic output
-
-**What:** A context manager that writes the catalog to a temp file in the same directory, then
-renames it to the final path on `__exit__`. Guarantees the output file is never partial.
-
-**When to use:** Whenever writing the catalog file. Never write directly to the final path.
-
-**Trade-offs:** Two file ops instead of one; negligible cost, eliminates corrupted-on-crash files.
-
-```python
-# maclist/catalog/writer.py
-from pathlib import Path
-import tempfile, os
-
-class CatalogWriter:
-    def __init__(self, output_path: Path):
-        self._path = output_path
-        self._tmp  = None
-        self._fh   = None
-
-    def __enter__(self):
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=self._path.parent, suffix=".tmp")
-        self._tmp = Path(tmp)
-        self._fh  = os.fdopen(fd, "w", encoding="utf-8")
-        return self
-
-    def write_section(self, title: str) -> None:
-        self._fh.write(f"\n{title}\n")
-        self._fh.write("------------------------------------\n")
-
-    def write_lines(self, lines: list[str]) -> None:
-        for line in lines:
-            self._fh.write(line + "\n")
-
-    def __exit__(self, *_):
-        self._fh.close()
-        self._tmp.rename(self._path)   # atomic on POSIX
-```
-
-### Pattern 4: json_get — stdlib-only JSON/plist extraction (replaces jq + plutil chain)
-
-**What:** The Python port can use `json` and `plistlib` from the standard library directly, with
-no subprocess calls. This is strictly better than the Zsh jq → plutil fallback chain.
-
-**When to use:** Everywhere a JSON file must be read. The Zsh `json_get` is a Zsh-specific
-workaround for the absence of a built-in JSON library; in Python there is no workaround needed.
-
-**Trade-offs:** None. Python's `json.load()` handles the same files `jq` handles.
-
-```python
-# maclist/helpers/json_io.py
-import json
-from pathlib import Path
-from typing import Any
-
-def json_get(file: Path, key: str, default: str = "") -> str:
-    """
-    Extract a scalar value from a JSON file by dotted key path.
-    Returns default on any error (missing file, parse error, missing key).
-    Never raises. Mirrors the Zsh json_get contract exactly.
-    """
-    if not file.is_file():
-        return default
-    try:
-        data = json.loads(file.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return default
-    parts = key.split(".")
-    cur: Any = data
-    for part in parts:
-        if not isinstance(cur, dict):
-            return default
-        cur = cur.get(part, default)
-        if cur == default:
-            return default
-    return str(cur) if cur is not None else default
-```
-
-For plist files (e.g. if plutil-formatted JSON appears), `plistlib.loads()` handles them. The
-`json_io` helper is the single gateway; callers never import `json` directly.
-
-### Pattern 5: emit_item + flush_section — exact FMT-01 format with LC_ALL=C sort
-
-**What:** `emit_item(name, version, id)` builds one formatted line per the FMT-01 rules; lines
-are accumulated in a list and written via `flush_section()` which sorts with `locale.strxfrm`
-under `LC_ALL=C` semantics and deduplicates.
-
-**When to use:** In every collector for every item. Never format lines manually.
-
-**Matching LC_ALL=C sort -f -u in Python:**
-The Zsh `LC_ALL=C sort -f -u` is byte-value ordering after Unicode case-folding. Python's
-`sorted()` with `key=str.casefold` is NOT byte-identical to LC_ALL=C on non-ASCII input. The
-safest match is to call `subprocess.run(["sort", "-f", "-u"], ...)` with `LC_ALL=C` in the
-environment. This is the one subprocess call that must remain for correct parity.
-
-```python
-# maclist/catalog/format.py
-import subprocess, os
-from dataclasses import dataclass
-
-@dataclass
-class Item:
-    name:    str
-    version: str
-    id:      str
-
-def emit_item(name: str, version: str, id_: str) -> str | None:
-    """
-    Builds one catalog line per FMT-01 rules. Returns None for all-empty input.
-    """
-    if not name and id_:
-        name, id_ = id_, ""   # id-as-name: suppress bracket duplication
-    if name and version and id_:
-        return f"{name} ({version}) [{id_}]"
-    elif name and version:
-        return f"{name} ({version})"
-    elif name and id_:
-        return f"{name} [{id_}]"
-    elif name:
-        return name
-    return None   # all empty → nothing
-
-def flush_section(lines: list[str]) -> list[str]:
-    """
-    Sort lines with LC_ALL=C sort -f -u (byte-stable, case-insensitive, deduplicated).
-    Returns ["  (none found)"] when lines is empty.
-    Preserves exact Zsh FMT-04 output.
-    """
-    if not lines:
-        return ["  (none found)"]
-    env = {**os.environ, "LC_ALL": "C"}
-    result = subprocess.run(
-        ["sort", "-f", "-u"],
-        input="\n".join(lines) + "\n",
-        capture_output=True, text=True, env=env,
-    )
-    return result.stdout.rstrip("\n").split("\n")
-```
-
----
-
-## Catalog-Repo Path Threading (SCRIPT_DIR replacement)
-
-### The problem
-
-The Zsh script uses `SCRIPT_DIR="${0:A:h}"` as its working root for everything: catalog output,
-`machine-labels.tsv`, `archive/` subdirectories, and git operations. This works because the script
-lives in the catalog repo. The Python package lives in a `.pyz`/pipx installation — it has no
-meaningful `__file__` path relative to any catalog.
-
-### The solution: Config-resolved `catalog_repo` Path
-
-1. **Config file** (`~/.config/maclist/config.toml`) holds `catalog_repo = "/path/to/repo"`.
-2. **`--catalog-repo` flag** overrides it at runtime.
-3. `config.py` resolves the final path:
-
-```python
-# maclist/config.py
-import tomllib   # Python 3.11+ stdlib; or tomli backport for 3.10
-from pathlib import Path
-from dataclasses import dataclass
-
-@dataclass
-class Config:
-    catalog_repo: Path | None = None
-
-DEFAULT_CONFIG_PATH = Path.home() / ".config" / "maclist" / "config.toml"
-
-def load_config(config_path: Path | None = None) -> Config:
-    path = config_path or DEFAULT_CONFIG_PATH
-    if not path.is_file():
-        return Config()
-    with path.open("rb") as f:
-        raw = tomllib.load(f)
-    repo_str = raw.get("catalog_repo")
-    return Config(catalog_repo=Path(repo_str).expanduser() if repo_str else None)
-
-def resolve_catalog_repo(flag_val: str | None, config: Config) -> Path:
-    """
-    Flag overrides config; config overrides cwd fallback.
-    Raises SystemExit with actionable message when nothing is configured.
-    """
-    if flag_val:
-        return Path(flag_val).expanduser().resolve()
-    if config.catalog_repo:
-        return config.catalog_repo.expanduser().resolve()
-    # Last resort: current working directory (useful for local dev in the repo itself)
-    cwd = Path.cwd()
-    if (cwd / "machine-labels.tsv").exists() or (cwd / "update-list.sh").exists():
-        return cwd
-    raise SystemExit(
-        "ERROR: catalog_repo not configured. "
-        "Run with --catalog-repo /path/to/repo or set catalog_repo in "
-        "~/.config/maclist/config.toml"
-    )
-```
-
-4. `catalog_repo` is stored in `RunContext` and passed as a `Path` argument to every function
-   that needs it — `identity.py`, `retention.py`, `gitops.py`, `CatalogWriter`. No module-level
-   state stores it.
-
-### Functions that formerly used SCRIPT_DIR
-
-| Zsh function | Python equivalent | Receives catalog_repo via |
-|---|---|---|
-| `select_computer` | `identity.select_computer(catalog_repo, ...)` | argument |
-| `upsert_machine_label` | `identity.upsert_machine_label(catalog_repo, computer)` | argument |
-| `retain_newest_per_host` | `retention.retain_newest_per_host(catalog_repo / computer)` | argument |
-| `prune_old_archives` | `retention.prune_old_archives(catalog_repo / computer / "archive", days)` | argument |
-| `git_pull` | `gitops.git_pull(catalog_repo)` | argument |
-| `git_commit_and_push` | `gitops.git_commit_and_push(catalog_repo, ctx)` | argument |
-| `rename_machine` | `identity.rename_machine(catalog_repo, ...)` | argument |
-| Main output file | `CatalogWriter(catalog_repo / computer / filename)` | argument |
-
----
-
-## Faithful Reproduction of Subtle Bits
-
-### 1. jq → plutil → grep collapses to json + plistlib
-
-The Zsh chain exists because Zsh has no JSON library. Python does. Every `json_get` call becomes
-`json.loads(file.read_text())`. The `plutil` fallback was needed for `.plist` files; `plistlib`
-handles those. The `grep` fallback was a last resort for when both tools were absent — not needed
-in Python. The entire Zsh backend chain reduces to:
-
-```python
-def _load_json_or_plist(file: Path) -> dict:
-    text = file.read_text(encoding="utf-8")
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        import plistlib
-        return plistlib.loads(text.encode())   # handles XML and binary plist
-```
-
-This is strictly more reliable than the Zsh chain because `plutil` on macOS 12+ silently changed
-some behaviors for edge-case JSON; `json.loads` is always canonical.
-
-### 2. BSD date -v cutoff math → datetime
-
-```python
-# maclist/retention.py
-from datetime import datetime, timedelta
-
-def cutoff_date(archive_days: int) -> str:
-    """Returns YYYYMMDD string matching `date -v-{N}d +%Y%m%d`."""
-    return (datetime.now() - timedelta(days=archive_days)).strftime("%Y%m%d")
-```
-
-This is a straightforward replacement. `datetime.now()` is local time, same as `date -v` uses.
-
-### 3. Atomic TSV writes (tmp + rename)
-
-The Zsh `upsert_machine_label` already uses tmp+rename for the TSV. Python matches it:
-
-```python
-# maclist/identity.py
-import tempfile, os
-from pathlib import Path
-
-def _atomic_write_tsv(path: Path, lines: list[str]) -> None:
-    """Write lines to path atomically via tmp + rename."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(lines) + "\n")
-    Path(tmp).rename(path)
-```
-
-Key: `newline="\n"` prevents Windows-style `\r\n` even on a hypothetical cross-platform build.
-
-### 4. Filename parsing — 14-digit timestamp + [label]
-
-```python
-# maclist/naming.py
-import re
-from dataclasses import dataclass
-
-_FILENAME_RE = re.compile(
-    r"^mac-software-list-\[(?P<machine>[^\[\]]+)\]-(?P<ts>\d{14})\.txt$"
+# _build_parser() addition — parallel to "config" subparser
+reinstall_parser = subparsers.add_parser(
+    "reinstall",
+    help="Generate reinstall.sh from a catalog",
 )
-
-@dataclass(frozen=True)
-class CatalogFilename:
-    machine:   str
-    timestamp: str   # YYYYMMDDHHMMSS
-    filename:  str
-
-def parse_catalog_filename(filename: str) -> CatalogFilename | None:
-    """Returns None (not raises) for non-matching filenames — same as Zsh warn-and-continue."""
-    m = _FILENAME_RE.match(filename)
-    if not m:
-        return None
-    return CatalogFilename(
-        machine=m.group("machine"),
-        timestamp=m.group("ts"),
-        filename=filename,
-    )
-
-def make_catalog_filename(machine: str, timestamp: str) -> str:
-    return f"mac-software-list-[{machine}]-{timestamp}.txt"
+reinstall_parser.add_argument(
+    "--from",
+    dest="from_path",
+    metavar="PATH",
+    default=None,
+    help="Path to catalog .txt file (omit to use the computer-picker)",
+)
 ```
 
-The regex matches exactly what the Zsh filename convention produces. `machine` matches
-`[^\[\]]+` — no brackets allowed inside (enforced by `validate_computer_name`).
+Note: `from` is a Python keyword. Using `dest="from_path"` and accessing `args.from_path`
+throughout is the correct argparse pattern — it handles the keyword conflict cleanly.
 
-### 5. Graceful degradation — exact messages
+### Dispatch Changes in `run()`
 
-The Zsh script has two message registers: `NOTE:` for "tool simply not installed" and `WARNING:`
-for "expected but failed". The Python port reproduces both verbatim:
-
-```
-NOTE: Google Chrome not installed.
-NOTE: VS Code not installed or no extensions found.
-WARNING: code CLI returned empty list. Falling back to extensions.json.
-WARNING: Could not parse timestamp from: <filename> — skipping
-```
-
-The exact strings are tested in the parity suite. Any string mismatch between Zsh and Python
-output is a test failure.
-
-### 6. Source-guard for testability
-
-The Zsh script has `[[ "$ZSH_EVAL_CONTEXT" =~ :file ]] && return 0` to make it sourceable for
-isolated tests. Python modules are already importable without executing anything — `__main__.py`
-guards its top-level code:
+Insert between step 4 (validate_catalog_repo) and step 5 (--rename short-circuit):
 
 ```python
-# maclist/__main__.py
-if __name__ == "__main__":
-    from maclist.cli import main
-    main()
+# After validate_catalog_repo(catalog_repo):
+if args.subcommand == "reinstall":
+    from maccat.reinstall.cli import run_reinstall
+    run_reinstall(args, catalog_repo)
+    return
 ```
 
-Individual modules have no top-level side effects, so any function can be imported and called in
-isolation.
+The `--rename` guard (step 3) must not fire on the `reinstall` subcommand. The guard
+checks `args.rename and bool(args.computer)`. Both are `False` by default for the
+`reinstall` subcommand, so no additional guard is needed — but document this in the code.
+
+### Computer selection reuse
+
+`reinstall/picker.py` calls `select_computer()` directly with the same signature used in
+the catalog-gen path:
+
+```python
+# catalog-gen path (existing):
+computer = select_computer(catalog_repo, computer_name=computer_pre)
+
+# reinstall path (new, same call signature):
+computer = select_computer(catalog_repo, computer_name=args.computer)
+```
+
+The `--computer NAME` flag from the parent parser flows through to `args.computer` for
+the reinstall subcommand, giving non-interactive selection for free.
 
 ---
 
-## Data Flow
+## (2) Reverse Parser Architecture (`reinstall/parser.py`)
 
-### Normal Catalog Run
+### The format.py Contract
 
-```
-argv
-  │
-  ▼
-cli.parse_args() + load_config()
-  │  validates --computer, --archive-days, --catalog-repo
-  ▼
-identity.select_computer(catalog_repo)
-  │  TTY menu or --computer flag; calls upsert_machine_label
-  ▼
-RunContext(catalog_repo, computer, archive_days, auto_commit, timestamp, output_file)
-  │
-  ▼
-gitops.git_pull(catalog_repo)           [warn-and-continue on failure]
-  │
-  ▼
-CatalogWriter(output_file).__enter__()  [opens tmp file]
-  │
-  ├─ for collector in REGISTRY:
-  │     result = collector.collect()
-  │     for section in result.sections:
-  │         writer.write_section(section.title)
-  │         writer.write_lines(flush_section(section.items))
-  │
-  ▼
-CatalogWriter.__exit__()                [tmp → final path, atomic]
-  │
-  ▼
-retention.retain_newest_per_host(catalog_repo / computer)
-  │
-  ▼
-retention.prune_old_archives(catalog_repo / computer / "archive", archive_days)
-  │
-  ▼
-gitops.git_commit_and_push(catalog_repo, ctx)  [warn-and-continue on failure]
-```
+`emit_item()` in `catalog/format.py` produces exactly four line shapes. The parser must
+invert them. This is the primary coupling between existing and new code.
 
-### Rename Run
+**The four shapes (from `format.py` source, lines 35-43):**
+
+| emit_item inputs | Output shape | Regex to invert |
+|-----------------|--------------|-----------------|
+| name + version + id | `name (version) [id]` | `^(.+) \((.+)\) \[(.+)\]$` |
+| name + version | `name (version)` | `^(.+) \((.+)\)$` |
+| name + id | `name [id]` | `^(.+) \[(.+)\]$` |
+| name only | `name` | (no parens/brackets — bare string) |
+| id only (promoted) | `id` | same as name-only; brackets are suppressed |
+
+**Application order matters:** The full `(version) [id]` regex must be tried before the
+`(version)` regex, and `(version)` before `[id]`, because a line like
+`name (1.0) [ext.id]` would partially match the shorter patterns. Apply longest-match
+first.
+
+**The id-promoted case:** When `emit_item` receives `name=""` and `id_="something"`, it
+swaps them, emitting `something` with no brackets. The parser cannot distinguish this from
+a bare-name item. This is intentional: the emitter uses `item.id_` (if non-empty) or
+`item.name` as the install key per-section. For sections where the id is the install
+identifier (VS Code, Cursor), the raw `[id]` bracket is present and parsed. For promoted
+ids (rare degraded case) the emitter falls back to the name field.
+
+**Sentinel lines to skip (return None from `_parse_item_line`):**
+- `"  (none found)"` — exact string from `flush_section()` when a section is empty.
+- Lines matching known degradation messages (e.g. `"Homebrew is not installed."`,
+  `"mas CLI is not installed..."`, `"code CLI is not installed."`) — these are not
+  installable items. The safest approach: any item line that doesn't match any of the four
+  shapes AND starts with an uppercase letter followed by words (heuristic) is treated as a
+  degradation message and logged to stderr but not added to parsed items.
+
+### Section Boundary Detection
+
+`CatalogWriter.write_section()` (`catalog/writer.py` lines 67-68) writes:
 
 ```
-argv --rename
-  │
-  ▼
-gitops.git_pull(catalog_repo)
-  │
-  ▼
-identity.rename_machine(catalog_repo, auto_commit)
-  │  TTY menu → old/new names → mv folder → rewrite filenames → update TSV → commit
-  ▼
-exit 0
+\n{title}\n
+------------------------------------\n
 ```
 
-### Collector Execution
+The 36-dash separator is the reliable boundary marker. The title is the non-empty line
+immediately before it. The parser identifies a section by scanning ahead one line.
 
+**Algorithm:**
+
+```python
+def parse_catalog(path: Path) -> ParsedCatalog:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    sections: list[ParsedSection] = []
+    current_title: str | None = None
+    current_items: list[ParsedItem] = []
+    i = 0
+    while i < len(lines):
+        # Section boundary: current line is a candidate title,
+        # next line is exactly 36 dashes.
+        if (i + 1 < len(lines)
+                and lines[i + 1] == "-" * 36
+                and lines[i].strip()):
+            if current_title is not None:
+                sections.append(ParsedSection(current_title, current_items))
+            current_title = lines[i]
+            current_items = []
+            i += 2  # consume title + dashes
+            continue
+        # Item accumulation within a section
+        if current_title is not None and lines[i].strip():
+            item = _parse_item_line(lines[i])
+            if item is not None:
+                current_items.append(item)
+        i += 1
+    if current_title is not None:
+        sections.append(ParsedSection(current_title, current_items))
+    return ParsedCatalog(path=path, sections=sections)
 ```
-collector.available() → False
-    │
-    └─ return CollectorResult(sections=[Section(title, items=[], note="<tool> not installed.")])
 
-collector.available() → True
-    │
-    ▼
-collector.collect()
-    │  subprocess call OR file parse
-    ▼
-list of Item(name, version, id_)
-    │
-    ▼
-[emit_item(item.name, item.version, item.id_) for item in items]
-    │ → list of formatted strings
-    ▼
-CollectorResult(sections=[Section(title, items=formatted_lines)])
-    │
-    ▼  (in CatalogWriter loop)
-flush_section(section.items) → sorted + deduped lines
-    │
-    ▼
-writer.write_lines(lines)
+### Data Structures
+
+```python
+@dataclass
+class ParsedItem:
+    name: str        # text before ( or [, or the full line for bare names
+    version: str     # text inside ( ); empty string when absent
+    id_: str         # text inside [ ]; empty string when absent
+    raw_line: str    # original line, for debugging
+
+@dataclass
+class ParsedSection:
+    title: str
+    items: list[ParsedItem]
+
+@dataclass
+class ParsedCatalog:
+    path: Path
+    sections: list[ParsedSection]
+
+    def section(self, title: str) -> ParsedSection | None:
+        """O(1) lookup by title via internal dict."""
+        ...
+```
+
+### Anti-Drift Contract
+
+`reinstall/parser.py` must document the four line shapes in its module docstring with an
+explicit citation to `catalog/format.py:emit_item()`. The regex constants must be named:
+
+```python
+# reinstall/parser.py — contract with catalog/format.py:emit_item()
+# Any change to emit_item() output shapes MUST be reflected here.
+_ITEM_RE_FULL    = re.compile(r"^(.+) \((.+)\) \[(.+)\]$")   # name (ver) [id]
+_ITEM_RE_VERSION = re.compile(r"^(.+) \((.+)\)$")             # name (ver)
+_ITEM_RE_ID      = re.compile(r"^(.+) \[(.+)\]$")             # name [id]
+_SENTINEL        = "  (none found)"
+```
+
+A round-trip test must be added to the test suite:
+`tests/reinstall/test_parser_contract.py` — call `emit_item()` for all six degradation
+variants, run output through `_parse_item_line()`, assert fields match inputs. This test
+is the mechanical anti-drift guard.
+
+---
+
+## (3) Script Emitter Architecture (`reinstall/emitter.py`)
+
+### Section-to-Source Mapping
+
+A static dict in `emitter.py` maps section title → source key. This is NOT derived from
+the collector registry at runtime (see Anti-Patterns). Unknown titles (from a future
+collector) fall through to `"manual"`.
+
+```python
+# SECTION_SOURCE_MAP: section title -> ("auto"|"manual", install_key_field)
+# install_key_field: "name" | "id_" — which ParsedItem field holds the install key
+SECTION_SOURCE_MAP: dict[str, tuple[str, str]] = {
+    "Homebrew Packages":           ("auto",   "name"),
+    "App Store Applications":      ("manual", "name"),  # no id in catalog — see note
+    "Setapp Applications":         ("manual", "name"),
+    "Web-installed Applications":  ("manual", "name"),
+    "Claude Code Plugins":         ("manual", "name"),
+    "Claude Code MCP Servers":     ("manual", "name"),
+    "Claude Code Skills & Agents": ("manual", "name"),
+    "Codex MCP Servers":           ("manual", "name"),
+    "OpenCode Plugins":            ("manual", "name"),
+    "OpenCode MCP Servers":        ("manual", "name"),
+    "OpenCode Agents":             ("manual", "name"),
+    "Gemini CLI Extensions":       ("manual", "name"),
+    "Gemini CLI MCP Servers":      ("manual", "name"),
+    "VS Code Extensions":          ("auto",   "id_"),
+    "Cursor Extensions":           ("auto",   "id_"),
+    "Google Chrome Extensions":    ("manual", "name"),
+    "Firefox Extensions":          ("manual", "name"),
+}
+```
+
+### Per-Source Renderers
+
+**Homebrew renderer:**
+
+```bash
+brew install git    # cataloged: 2.44.0
+brew install python@3.11    # cataloged: 3.11.9
+```
+
+Each item: `ParsedItem.name` is the install key (formulae and casks both work with `brew
+install`). Version comment from `ParsedItem.version`. No cask/formula distinction needed
+— `brew install` handles both.
+
+**VS Code / Cursor renderer (shared, parametrized by CLI name):**
+
+```bash
+code --install-extension ms-python.python    # Python (2025.x)
+cursor --install-extension anysphere.pyright    # Pyright (1.x)
+```
+
+Each item: `ParsedItem.id_` is the extension marketplace ID (the install key).
+`ParsedItem.name` and `ParsedItem.version` appear in the comment.
+
+**App Store renderer — MANUAL CHECKLIST ONLY:**
+
+`MasCollector` emits `AppName (version)` — it discards the numeric App Store ID in the
+awk pipe (`{print $2, $3}`, skipping column 1 which is the ID). The catalog has no
+installable identifier for MAS apps. Emitting `mas install <name>` is wrong; `mas
+install` requires the numeric ID. These items must appear in the manual checklist with a
+comment explaining the limitation.
+
+**Manual checklist renderer:**
+
+```bash
+# Setapp Applications
+#   [ ] CleanMyMac X (5.0.1)
+#   [ ] Bartender (5.x)
+
+# App Store Applications
+# NOTE: App Store IDs are not stored in the catalog. Install manually from the App Store.
+#   [ ] Xcode (16.x)
+
+# Claude Code MCP Servers (reconfigure via ~/.claude.json)
+#   [ ] my-mcp-server [stdio]
+```
+
+Format: `#   [ ] {name} ({version})` when version is present; `#   [ ] {name}` when not.
+AI-CLI entries include the transport in brackets where available: `#   [ ] {name} [stdio]`.
+
+### Script Output Structure
+
+```bash
+#!/bin/bash
+# reinstall.sh — generated by maccat reinstall
+# Catalog: mac-software-list-[MacBook]-20260616120000.txt
+# Generated: 2026-06-16
+#
+# REVIEW BEFORE RUNNING.
+# This script installs LATEST versions; the cataloged version is shown
+# as a comment. Pinning to specific versions is not supported.
+#
+# Safe to re-run: brew and code/cursor extension installs are idempotent.
+
+set -euo pipefail
+
+# =============================================================================
+# AUTO-INSTALL
+# =============================================================================
+
+echo "==> Installing Homebrew packages..."
+brew install git    # cataloged: 2.44.0
+brew install python@3.11    # cataloged: 3.11.9
+
+echo "==> Installing VS Code extensions..."
+code --install-extension ms-python.python    # Python (2025.x)
+
+echo "==> Installing Cursor extensions..."
+cursor --install-extension anysphere.pyright    # Pyright (1.x)
+
+# =============================================================================
+# MANUAL CHECKLIST
+# =============================================================================
+# Review and reinstall the following items manually.
+# Items in this section cannot be auto-installed.
+
+# Setapp Applications
+#   [ ] CleanMyMac X (5.0.1)
+
+# App Store Applications
+# NOTE: App Store IDs are not stored in the catalog.
+# Install manually from the App Store or via: mas install <id>
+#   [ ] Xcode (16.x)
+
+# Claude Code MCP Servers (reconfigure via 'claude' settings or ~/.claude.json)
+#   [ ] my-mcp-server [stdio]
+
+# Claude Code Skills & Agents
+#   [ ] my-skill
+
+# Google Chrome Extensions (reinstall from chrome.google.com/webstore)
+#   [ ] uBlock Origin (1.x)
+```
+
+### `emit_reinstall_script()` top-level shape
+
+```python
+def emit_reinstall_script(catalog: ParsedCatalog, generated_date: str) -> str:
+    parts: list[str] = []
+    parts.append(_header_block(catalog, generated_date))
+
+    # Auto-install block
+    auto_parts: list[str] = []
+    brew = catalog.section("Homebrew Packages")
+    if brew and brew.items:
+        auto_parts.append(_brew_block(brew))
+    vscode = catalog.section("VS Code Extensions")
+    if vscode and vscode.items:
+        auto_parts.append(_editor_ext_block("code", vscode))
+    cursor = catalog.section("Cursor Extensions")
+    if cursor and cursor.items:
+        auto_parts.append(_editor_ext_block("cursor", cursor))
+    if auto_parts:
+        parts.append(_AUTO_HEADER)
+        parts.extend(auto_parts)
+
+    # Manual checklist block
+    manual_titles = [
+        "App Store Applications",
+        "Setapp Applications",
+        "Web-installed Applications",
+        "Claude Code Plugins",
+        "Claude Code MCP Servers",
+        "Claude Code Skills & Agents",
+        "Codex MCP Servers",
+        "OpenCode Plugins",
+        "OpenCode MCP Servers",
+        "OpenCode Agents",
+        "Gemini CLI Extensions",
+        "Gemini CLI MCP Servers",
+        "Google Chrome Extensions",
+        "Firefox Extensions",
+    ]
+    parts.append(_manual_checklist_block(catalog, manual_titles))
+
+    return "\n".join(parts) + "\n"
 ```
 
 ---
 
-## Package Layout: Coexistence + Build
+## (4) New Modules, Modified Files, and Build Order
 
-### Coexistence with update-list.sh
+### New vs Modified
 
-Both live in the same repo root. The Python package is a new `maclist/` directory alongside the
-existing Zsh outputs. `update-list.sh` is never modified. The Python package writes catalogs to
-the same `<catalog_repo>/<computer>/` paths, so both tools produce files that git can commit and
-compare.
+| File | Status | What Changes |
+|------|--------|-------------|
+| `src/maccat/cli.py` | MODIFIED | `_build_parser()`: add reinstall subparser + `--from` flag; `run()`: insert reinstall dispatch block after `validate_catalog_repo` |
+| `src/maccat/reinstall/__init__.py` | NEW | Empty package marker |
+| `src/maccat/reinstall/cli.py` | NEW | `run_reinstall(args, catalog_repo)` thin orchestrator |
+| `src/maccat/reinstall/picker.py` | NEW | `resolve_catalog_path(catalog_repo, from_path, computer_name)` |
+| `src/maccat/reinstall/parser.py` | NEW | `parse_catalog(path)`, `ParsedCatalog`, `ParsedSection`, `ParsedItem`, regex constants |
+| `src/maccat/reinstall/emitter.py` | NEW | `emit_reinstall_script(catalog)`, per-source renderers, `SECTION_SOURCE_MAP` |
+| `src/maccat/catalog/format.py` | UNCHANGED | Parser depends on its output contract — do NOT change `emit_item()` in this milestone |
+| `src/maccat/identity.py` | UNCHANGED | `select_computer()` reused as-is |
+| `src/maccat/naming.py` | UNCHANGED | `parse_catalog_filename()` reused in picker |
+| `src/maccat/config.py` | UNCHANGED | `resolve_catalog_repo()` reused in dispatch |
 
-When the Python tool is run against the same catalog repo, the retention and archive logic operate
-on the same files regardless of which tool created them — the filename convention is identical.
+### Build Order
 
-### pyproject.toml (minimal, stdlib-only)
+Dependencies determine sequencing. Each step is independently testable.
 
-```toml
-[build-system]
-requires = ["flit_core>=3.2"]
-build-backend = "flit_core.buildapi"
+**Step 1: `reinstall/parser.py` + `reinstall/__init__.py`**
 
-[project]
-name = "maclist"
-version = "1.0.0"
-description = "Mac software catalog generator"
-requires-python = ">=3.11"
-# No runtime dependencies — stdlib only
+Dependencies: stdlib (`re`, `dataclasses`, `pathlib`) + `catalog/format.py` (contract
+reference only — `format.py` is read but not called). Fully testable with synthetic
+catalog text strings.
 
-[project.scripts]
-maclist = "maclist.__main__:main"
-```
+Tests to write first:
+- Round-trip contract: `emit_item(n, v, i)` → line → `_parse_item_line()` → assert
+  fields match. All six `emit_item` degradation variants must round-trip.
+- Section-boundary detection on fixture catalog text.
+- Sentinel-line skipping (`  (none found)`, degradation messages).
 
-`tomllib` is stdlib in Python 3.11+. If 3.10 support is needed, add `tomli` as the only
-dependency and guard: `try: import tomllib except ImportError: import tomli as tomllib`.
+**Step 2: `reinstall/picker.py`**
 
-### .pyz Zipapp Build
+Dependencies: `naming.py` (`parse_catalog_filename`) and `identity.py`
+(`select_computer`). Both are stable. The `--from PATH` path is testable without any
+mocking; the interactive path mocks `select_computer`.
 
-```bash
-# build-pyz.sh
-python -m zipapp maclist \
-  --output maclist.pyz \
-  --python "/usr/bin/env python3" \
-  --main "maclist.__main__:main"
-```
+**Step 3: `reinstall/emitter.py`**
 
-The `.pyz` is a self-contained archive of the `maclist/` directory. It runs with any Python 3.11+
-on the user's machine. No installation required beyond having python3.
+Dependencies: `reinstall/parser.py` (`ParsedCatalog`). Feed a `ParsedCatalog` built from
+known fixture data; assert each script section contains the expected lines. The App Store
+manual-only behavior must be tested explicitly.
 
-For pipx:
+**Step 4: `reinstall/cli.py`**
 
-```bash
-pipx install git+https://github.com/<user>/mac-software-list.git#subdirectory=maclist
-# or once published to PyPI:
-pipx install maclist
-```
+Dependencies: picker + parser + emitter. Thin orchestrator; integration test with a real
+catalog fixture file on disk.
 
-### Build Order (dependency-respecting phases)
+**Step 5: `cli.py` wiring**
 
-| Phase | Modules | Depends on | Rationale |
-|-------|---------|------------|-----------|
-| **Phase 1: Foundation** | `naming.py`, `catalog/format.py`, `catalog/writer.py`, `helpers/json_io.py` | nothing | Pure functions/classes; no external state; unit tests can run immediately |
-| **Phase 2: Helpers** | `helpers/chrome_name.py`, `helpers/vsc_name.py` | `json_io` | Wrap json_io; needed by collectors |
-| **Phase 3: Config + Identity** | `config.py`, `identity.py`, `retention.py` | `naming.py` | catalog_repo threading; TSV map; retention logic; all take Path args |
-| **Phase 4: Collectors** | `collectors/base.py`, then each `collectors/*.py` | `format.py`, `json_io`, `chrome_name`, `vsc_name` | Independent per source; can be built in parallel after Phase 2 |
-| **Phase 5: Git + CLI** | `gitops.py`, `cli.py`, `__main__.py` | everything above | Wires the pipeline; interactive menus; RunContext construction |
-| **Phase 6: Distribution** | `pyproject.toml`, `build-pyz.sh` | complete package | Package metadata; zipapp build |
-| **Phase 7: Parity Tests** | `tests/integration/test_parity.py` | all collectors + Zsh | Golden-output comparison; requires both tools runnable in test env |
-
-Within Phase 4, each collector file is independent — vscode.py can be built and tested before
-chrome.py. The registry in `collectors/__init__.py` is assembled last in Phase 4.
+Add subparser + dispatch. Integration smoke test: `maccat reinstall --from <fixture>`.
+Verify `--rename` guard does not fire on the reinstall subcommand.
 
 ---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Carrying Zsh globals forward as Python module-level state
+### Anti-Pattern 1: Reinferring Section-to-Source Mapping from the Live Collector Registry
 
-**What people do:** Put `TARGET_LOCATION`, `OUTPUT_FILE`, etc. as module-level variables in
-`maclist/__init__.py` and mutate them in each function (faithfully reproducing the Zsh approach).
-**Why it's wrong:** Makes every function untestable without side effects; breaks if two tests run
-concurrently; obscures data flow.
-**Do this instead:** `RunContext` frozen dataclass, passed as an argument. Construct it once in
-`__main__.py` after arg parsing.
+**What people do:** Call `get_registry()` at reinstall time to discover section titles,
+then cross-reference against parsed sections.
 
-### Anti-Pattern 2: Reimplementing json_get with subprocess jq
+**Why it's wrong:** Reinstall is a read-from-catalog operation. The catalog may have been
+generated by an older version of maccat with different or fewer section titles. A static
+`SECTION_SOURCE_MAP` in `emitter.py` is explicit, versionable, and testable. Unknown
+section titles (from a future collector) degrade gracefully to the manual checklist.
 
-**What people do:** Call `subprocess.run(["jq", "-r", ...])` to preserve the exact Zsh backend.
-**Why it's wrong:** Defeats the purpose of using Python; adds a hard dependency on jq; slower.
-**Do this instead:** `json.loads()` in `helpers/json_io.py`. Python's stdlib JSON parser is faster
-and more reliable than routing through jq.
-
-### Anti-Pattern 3: Using Python's `locale` module to reproduce LC_ALL=C sort
-
-**What people do:** `sorted(lines, key=locale.strxfrm)` after calling `locale.setlocale(LC_ALL, "C")`.
-**Why it's wrong:** `locale.setlocale` is process-global and thread-unsafe; behavior differs across
-Python versions and macOS updates.
-**Do this instead:** `subprocess.run(["sort", "-f", "-u"], env={**os.environ, "LC_ALL": "C"})` —
-same binary the Zsh script calls; byte-identical output guaranteed.
-
-### Anti-Pattern 4: Writing the catalog file directly (no atomic tmp+rename)
-
-**What people do:** `output_path.open("w")` and write directly.
-**Why it's wrong:** A crash mid-write leaves a partial catalog file at the final path; git will
-stage a corrupt snapshot.
-**Do this instead:** `CatalogWriter` context manager always writes to a `.tmp` sibling and renames
-on close.
-
-### Anti-Pattern 5: Making collectors write to a file instead of returning data
-
-**What people do:** Pass `output_file` into each collector and have it append directly, mirroring
-the Zsh `>> "$OUTPUT_FILE"` pattern.
-**Why it's wrong:** Makes collectors impossible to unit-test without filesystem setup; prevents
-the flush_section sort from running after the collector finishes.
-**Do this instead:** Collectors return `CollectorResult`; the orchestrator calls `flush_section`
-and writes via `CatalogWriter`. This is the key architectural inversion from Zsh → Python.
-
-### Anti-Pattern 6: One Python module for all collectors
-
-**What people do:** Put all 17 `collect_*` functions in a single `collectors.py` file to mirror
-the single Zsh file.
-**Why it's wrong:** Makes the file ~1500 lines; a change to `chrome.py` logic re-runs all collector
-tests; individual sections can't be developed/tested in isolation.
-**Do this instead:** One file per source in `collectors/`; the registry assembles them in order.
+**Do this instead:** Hard-code the 17 known section titles in `SECTION_SOURCE_MAP`.
 
 ---
 
-## Integration Points
+### Anti-Pattern 2: Emitting `mas install` Lines for App Store Apps
 
-### External Tool Boundaries
+**What people do:** Emit `mas install <name>` or try to reconstruct the numeric ID from
+the app name.
 
-| Tool | How Python calls it | Notes |
-|------|-------------------|-------|
-| `brew` | `subprocess.run(["brew", "list", "--formula"])` | stdout captured; stderr suppressed |
-| `mas` | `subprocess.run(["mas", "list"])` | awk equivalent in Python (split/format) |
-| `claude` | `subprocess.run(["claude", "plugin", "list", "--json"])` | JSON parsed by json module |
-| `code`/`cursor` | `subprocess.run(["code", "--list-extensions", "--show-versions"])` | fall back to extensions.json |
-| `sort` | `subprocess.run(["sort", "-f", "-u"], env=LC_ALL=C)` | parity-critical; do not replace |
-| `git` | `subprocess.run(["git", ...], cwd=catalog_repo)` | cwd kwarg replaces `cd "$SCRIPT_DIR"` |
+**Why it's wrong:** `MasCollector._parse_mas_output()` runs `awk '{print $2, $3}'` which
+skips column 1 (the numeric App Store ID). The catalog has only `AppName (version)`. `mas
+install` requires the numeric ID. `mas search <name>` would require a live network call
+and can return multiple results, breaking the "catalog is source of truth" principle.
 
-### File System Boundaries
+**Do this instead:** Treat App Store apps as manual-checklist items in v2.1.0 with a
+comment: `# NOTE: App Store IDs are not stored in the catalog.`
 
-| Path | Owner | Notes |
-|------|-------|-------|
-| `~/.config/maclist/config.toml` | config.py | Tool config; not in catalog repo |
-| `<catalog_repo>/machine-labels.tsv` | identity.py | Shared with Zsh tool; same format |
-| `<catalog_repo>/<computer>/*.txt` | CatalogWriter | Output; shared with Zsh tool |
-| `<catalog_repo>/<computer>/archive/*.txt` | retention.py | Shared with Zsh tool |
-| `~/.claude/`, `~/.codex/`, etc. | collectors | Read-only; never written |
-| `~/Library/Application Support/Google/Chrome/` | chrome.py | Read-only |
+---
 
-### Internal Module Boundaries
+### Anti-Pattern 3: Distinguishing Homebrew Formulae vs Casks for Install Commands
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| cli → identity | function call, returns computer str | identity never imports cli |
-| cli → config | function call, returns Config | config has no imports from maclist |
-| collectors → helpers | function call, returns str | helpers have no imports from collectors |
-| collectors → format | function call, returns str | format has no imports from collectors |
-| __main__ → catalog/writer | context manager | writer never imports __main__ |
-| gitops → RunContext | receives as argument | gitops does not import cli |
+**What people do:** Emit `brew install --cask <name>` vs `brew install <name>` by
+attempting to infer type from the item name or a supplementary lookup.
 
-All dependencies flow downward (toward the leaf modules). No circular imports.
+**Why it's wrong:** The Homebrew section in the catalog merges formulae and casks with no
+type marker. `brew install <name>` works for both in modern Homebrew. Any heuristic for
+cask detection (e.g., presence of `.app` in the name) would be fragile and wrong.
+
+**Do this instead:** Emit `brew install <name>` for all Homebrew items. A future
+milestone can add a `[cask]` id marker to the catalog section if the distinction matters.
+
+---
+
+### Anti-Pattern 4: Inlining Reinstall Logic into Root `cli.py`
+
+**What people do:** Add the parse/emit pipeline directly inside `run()` as another branch
+of the catalog-gen flow.
+
+**Why it's wrong:** `run()` has a NON-NEGOTIABLE 13-step order comment. Embedding
+reinstall logic there muddles the invariants, makes both flows harder to test in
+isolation, and violates the existing `config`/`--rename` short-circuit pattern.
+
+**Do this instead:** Dispatch to `reinstall/cli.py:run_reinstall()` as a one-liner
+short-circuit: `if args.subcommand == "reinstall": run_reinstall(args, catalog_repo); return`.
+
+---
+
+## Key Coupling: Parser ↔ `catalog/format.py`
+
+`reinstall/parser.py` and `catalog/format.py` share an implicit contract via the four
+line shapes. Python's import system cannot enforce this coupling. Two mechanical safeguards:
+
+1. **Docstring citation:** `reinstall/parser.py` module docstring must list all four
+   shapes with explicit reference: `# Contract with catalog/format.py:emit_item()`.
+2. **Round-trip test:** `tests/reinstall/test_parser_contract.py` calls `emit_item()` for
+   all six degradation variants and asserts `_parse_item_line()` inverts them. Any future
+   change to `emit_item()` that breaks this test is a breaking change requiring a parser
+   update.
 
 ---
 
 ## Sources
 
-- `/Users/ken/dev/mac-software-list/update-list.sh` — full read of all functions; behavioral
-  source of truth for format, degradation rules, sort, retention math, filename convention
-- `/Users/ken/dev/mac-software-list/.planning/PROJECT.md` — confirmed decisions (modular Python,
-  config-file catalog-repo, `.pyz`/pipx, golden parity tests, `update-list.sh` untouched)
-- `.planning/codebase/ARCHITECTURE.md` — existing system overview and globals-as-params analysis
-- Python 3.11 stdlib docs — `tomllib`, `json`, `plistlib`, `zipapp`, `dataclasses`, `pathlib`
-- Prior `.planning/research/` files (STACK, FEATURES, PITFALLS, SUMMARY) — collector inventory,
-  FMT-01/FMT-04 rules, LC_ALL=C sort requirement, secret-exclusion policy
+- Direct source reading (all confidence HIGH):
+  - `src/maccat/catalog/format.py` — emit_item() degradation rules, all four line shapes
+  - `src/maccat/catalog/writer.py` — write_section() boundary format (36 dashes, leading newline)
+  - `src/maccat/cli.py` — existing subcommand dispatch pattern, 13-step orchestration order
+  - `src/maccat/identity.py` — select_computer() signature, resolve_computer_selection()
+  - `src/maccat/collectors/base.py` — Section, CollectorResult data types
+  - `src/maccat/collectors/__init__.py` — all 17 section titles and their canonical order
+  - `src/maccat/collectors/homebrew.py` — brew list --versions output format
+  - `src/maccat/collectors/mas.py` — awk {print $2, $3}: MAS ID discarded, no id in catalog
+  - `src/maccat/collectors/vscode.py` — emit_item(name, version, marketplace_id) confirmed
+  - `src/maccat/collectors/claude.py` — FMT-03 secret-safety: MCP entries are name+transport only
+  - `src/maccat/collectors/setapp.py` — raw-write, name-only or name+version
+  - `src/maccat/naming.py` — parse_catalog_filename() for newest-catalog scan
+  - `src/maccat/config.py` — resolve_catalog_repo() signature
+  - `.planning/PROJECT.md` — v2.1.0 milestone spec, key decisions (FMT-03, never-auto-execute,
+    manual-checklist-only for AI-CLI, install-latest-with-version-comment)
 
 ---
 
-*Architecture research for: v1.0.0 Python port of mac-software-list*
-*Researched: 2026-06-14*
+*Architecture research for: maccat v2.1.0 Reinstall from Catalog*
+*Researched: 2026-06-16*

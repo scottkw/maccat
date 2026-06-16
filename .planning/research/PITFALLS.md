@@ -1,731 +1,451 @@
 # Pitfalls Research
 
-**Domain:** Porting a battle-tested macOS Zsh cataloger (~2,500 LoC) to a modular Python package at byte-identical output parity, then distributing via `.pyz` zipapp and pipx
-**Researched:** 2026-06-14
-**Confidence:** HIGH — all failure modes derived from the actual zsh source code (cross-referenced line-by-line), the four prior milestones' defect records (v0.46.0–v0.49.0), and the documented UAT findings from live pty-driven testing
+**Domain:** Generating a reinstall script by parsing a plain-text maccat catalog snapshot
+**Researched:** 2026-06-16
+**Confidence:** HIGH — all findings are derived from reading the actual collector source
+(`mas.py`, `homebrew.py`, `vscode.py`, `cursor.py`, `format.py`, `setapp.py`, `webapps.py`)
+and the confirmed test fixtures in `test_homebrew.py`.
 
-> Scope note: these pitfalls are specific to the Python port and distribution phase (v1.0.0).
-> Generic Python style (PEP 8, type hints) and generic packaging best practices are not re-litigated
-> here. Every pitfall is either (a) specific to achieving byte-identical parity with the zsh reference,
-> (b) a re-introduction risk for a destructive-op bug already fixed in prior milestones, or (c) a
-> macOS/zipapp/pipx distribution trap specific to this toolchain. Pitfalls are ordered by severity and
-> the phase most likely to encounter them.
+> Scope note: these pitfalls are specific to the v2.1.0 `maccat reinstall` feature —
+> parsing the emitted plain-text catalog back into structured install commands. They do NOT
+> re-litigate v1.0.0 porting pitfalls (sort parity, atomic writes, etc.) already documented
+> in the prior version of this file. Every pitfall here is a direct consequence of the
+> catalog's text format, specific collector output shapes, or shell-generation safety.
+
+---
+
+## HARD CONSTRAINTS (Must Read Before Scoping)
+
+Two findings from the source code fundamentally reshape the feature scope. They are not
+"pitfalls to avoid" — they are facts that determine what is technically possible.
+
+### HARD CONSTRAINT A: The mas App Store ID is NOT in the catalog
+
+**Finding:** `MasCollector._parse_mas_output` (mas.py line 27–45) is an explicit Python
+equivalent of `awk '{print $2, $3}'`. Column 1 of `mas list` output is the numeric App Store
+ID. The collector **discards it**. The catalog's "App Store Applications" section contains
+entries like `Safari (15.0)` — name and version only. No ID.
+
+**Confirmed by test fixture** (`test_homebrew.py` lines 120–129): input
+`"1234567890  Safari (15.0)\n"` produces output `["Safari (15.0)"]`. The ID `1234567890` is gone.
+
+**Consequence for reinstall:**
+`mas install` requires the numeric App Store ID. You cannot call
+`mas install "Safari"` — mas has no name-based lookup. Without the ID, mas apps cannot be
+auto-installed. They must move to the manual checklist.
+
+**What changes in the plan:**
+The current v2.1.0 milestone spec (`PROJECT.md` line 78) lists `mas install <id>` as an
+auto-install target. This is impossible given the current catalog format. The reinstall
+feature must either:
+1. Move mas apps to the manual checklist entirely (no auto-install), OR
+2. Treat this as a prerequisite fix: add a catalog format change that preserves the ID in a
+   new `AppName (version) [ID]` format (using `emit_item`'s full three-field path), and
+   build the reinstall parser against the new format.
+
+**Option 2 requires a catalog format migration** and must be a scoped prerequisite in Phase 1
+of v2.1.0, not an afterthought. If the team assumes the ID is available and discovers it
+isn't mid-phase, the auto-install section for mas must be ripped out.
+
+---
+
+### HARD CONSTRAINT B: The formula / cask distinction is NOT in the catalog
+
+**Finding:** `HomebrewCollector.collect` (homebrew.py lines 65–72) runs
+`brew list --formula --versions` and `brew list --cask --versions`, then concatenates both
+result lists into a single `items` list with no type marker. The catalog's "Homebrew Packages"
+section is a flat list: `git (2.44.0)`, `docker (4.30.0)`, `python@3.11 (3.11.1 3.11.2)`.
+There is nothing in the line that distinguishes `git` (formula) from `docker` (cask).
+
+**Consequence for reinstall:**
+`brew install git` installs a formula. `brew install --cask docker` installs a cask.
+Using the wrong flag either silently installs nothing (if the name exists only in the other
+type) or — worse — installs the wrong artifact. `brew install docker` without `--cask` will
+error or install the Docker Engine formula rather than Docker Desktop.
+
+**What changes in the plan:**
+A reinstall script that emits `brew install <name>` for everything from the Homebrew section
+will be wrong for every cask. Two options:
+1. **Re-query brew at reinstall-script-generation time**: run `brew info --json=v2 <name>` or
+   check `brew list --cask` to determine type. This requires brew to be installed on the
+   machine generating the script, adds subprocess calls, and changes the "catalog is the
+   source of truth" principle.
+2. **Preserve the type in the catalog**: change `HomebrewCollector` to emit a type marker
+   — for example a separate section "Homebrew Casks" and "Homebrew Formulae" — and build the
+   reinstall parser against the new format. This is a catalog format change that must be a
+   scoped prerequisite.
+3. **Emit both variants and let the user review**: generate both `brew install <name>` and
+   `# brew install --cask <name>` with a comment "uncomment the correct line." This is user-
+   hostile and defeats the purpose of a reviewable script.
+
+Option 2 (split sections) is the cleanest path. It is a catalog format prerequisite for v2.1.0.
+Like HARD CONSTRAINT A, this must be addressed in Phase 1 of v2.1.0, not discovered mid-phase.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Sort-order divergence between Python and `LC_ALL=C sort -f -u`
+### Pitfall 1: Parsing ambiguity — app names containing `(...)` or `[...]`
 
 **What goes wrong:**
-The zsh reference produces every catalog section by piping collected lines through
-`LC_ALL=C sort -f -u`. Python's `sorted()` uses the process locale by default. On a macOS machine
-with `LANG=en_US.UTF-8` (the default), `sorted()` with no key produces Unicode-aware collation that
-differs from C/byte-order collation for any name containing an uppercase letter, a digit prefix, a
-non-ASCII character, or a punctuation character. The result is a catalog that looks plausible but
-will not diff-empty against the zsh reference on any mixed-case list — which is every section.
+`emit_item` produces lines in these forms:
+- `name (version) [id]`
+- `name (version)`
+- `name [id]`
+- `name`
+- `id` (id-promoted, no brackets)
 
-Specific divergences:
-- C locale byte-order: `A < a < B < b` (uppercase sorts before lowercase at each letter). Unicode
-  collation: `A < a` and `B < b` are grouped by letter, so `a` and `A` sort together.
-- `sort -f` (fold case): effectively makes the sort case-insensitive by comparing
-  case-folded copies, but using byte order as the tiebreaker. Python `key=str.lower` is NOT
-  equivalent — it uses Unicode case-folding and Unicode ordering for the tiebreaker, producing a
-  different result for items whose lowercased forms are identical.
-- `sort -u` on the C locale removes byte-identical duplicates. Python's `dict.fromkeys()` or
-  `set()` removes Python-equal duplicates, which for strings with different Unicode normalization
-  forms (NFD vs NFC) may differ from byte identity.
+A naive parser that splits on the last `(` to find version, or the last `[` to find id, will
+mis-parse any name that itself contains parentheses or brackets. Real examples from macOS:
+- `Final Cut Pro (10.7.1)` — name is `Final Cut Pro`, but if the name were
+  `1Password (7)` (it's not, but a hypothetical), the version `7` would be buried in the name.
+- `Microsoft Office 2021 (Home & Student)` — a name containing parens would make the first
+  `(` the wrong split point.
+- VS Code extension display names: `Prettier - Code formatter (1.0.0) [esbenp.prettier-vscode]`
+  — straightforward, but a name like `C/C++ (MS)` would produce `C/C++ (MS) (1.2.3) [ext.id]`
+  where the first `(...)` is part of the name.
 
-**Why it happens:**
-The naive translation is `sorted(set(lines), key=str.lower)`. This looks right and produces
-identical output for simple ASCII-only lists, causing false confidence. Divergence only appears with
-mixed-case items (e.g., `1Password`, `Bitwarden`, `zsh`), extension names with non-ASCII characters
-(common in browser extensions), or names where two different Unicode representations exist.
-
-**How to avoid:**
-Use the `locale` module with an explicit C-locale comparator, or — more robustly — shell out to
-`sort -f -u` with `LC_ALL=C` for the sort step. The cleanest approach that keeps Python in control:
-
-```python
-import locale, subprocess
-
-def flush_section(lines: list[str]) -> list[str]:
-    if not lines:
-        return ["  (none found)"]
-    result = subprocess.run(
-        ["sort", "-f", "-u"],
-        input="\n".join(lines) + "\n",
-        capture_output=True, text=True,
-        env={**os.environ, "LC_ALL": "C"},
-    )
-    return result.stdout.rstrip("\n").splitlines()
-```
-
-Alternatively implement C-locale byte-order collation directly in Python:
-`sorted(set(lines), key=lambda s: s.casefold().encode("utf-8"))` approximates `-f` with C locale
-for pure-ASCII names, but still diverges for non-ASCII. The shell-out is safer and guarantees
-byte-identical output with zero maintenance risk.
-
-**Warning signs:**
-- Parity tests pass on ASCII-only fixture data but fail on real catalogs with mixed-case names.
-- `1Password` and `Bitwarden` sort differently in Python output vs. the zsh reference.
-- Any browser extension with a non-ASCII name (accented characters, CJK) breaks sort parity.
-- `git diff` between a zsh-generated catalog and the Python equivalent shows reordered lines only
-  (content identical, order wrong).
-
-**Phase to address:**
-Phase establishing the `flush_section` helper (the first output-producing phase). Never let sort
-drift accumulate across multiple collectors — fix it at the shared layer before any collector is
-written.
-
----
-
-### Pitfall 2: `version sort` (`sort -V`) semantics not replicated for Chrome extension versions
-
-**What goes wrong:**
-The Chrome collector in the zsh reference selects the highest-installed version directory with
-`ls -1 "$ext_dir" | grep -E '^[0-9]' | sort -V | tail -1`. `sort -V` is GNU/BSD version sort:
-it compares dotted-numeric segments numerically, so `14.0` > `9.0` > `2.10`. Python's `sorted()`
-with no key treats version strings as lexicographic strings, so `9.0 > 14.0 > 2.10` —  the
-wrong version directory is selected, and the manifest read targets the wrong directory.
+The Setapp and WebApps collectors emit `AppName.app (version)` — `.app` bundles with spaces in
+their names plus a version. `Affinity Designer 2.app (2.4.0)` is unambiguous. But
+`Smart Photo Widget (Dark).app (3.1.0)` has two `(...)` groups.
 
 **Why it happens:**
-Lexicographic comparison "looks right" for version strings that all have the same number of digits
-per segment. It only breaks when segment widths vary (e.g. `9.0` vs `14.0`). Developer tests with
-extensions that have only one version directory installed never encounter this path.
+The `emit_item` format was designed for human readability and diff-ability, not for machine
+parsing. Round-trip parsing was not a requirement when the format was defined.
 
 **How to avoid:**
-Use `packaging.version.Version` from the `packaging` library (always present in any Python
-environment that has pip, and explicit in requirements), or implement a simple numeric split:
+Parse with a right-anchored regex that consumes the optional `[id]` suffix first, then the
+optional `(version)` suffix, leaving whatever remains as the name. The id and version are
+always the rightmost brackets/parens on a line:
+
 ```python
 import re
-def version_key(s: str) -> tuple:
-    return tuple(int(x) for x in re.split(r'[._-]', s) if x.isdigit())
-```
-Or shell out to `sort -V` exactly as the zsh reference does — one subprocess call per extension
-is wasteful, but correctness first.
 
-**Warning signs:**
-- Chrome parity tests fail specifically on extensions that have multiple version directories
-  installed simultaneously (common: Chrome keeps old + new during update).
-- The Python output picks a lower-numbered version dir for an extension where multiple coexist.
-
-**Phase to address:**
-Chrome collector phase. Add a dedicated test fixture with a synthetic extension directory
-containing two version subdirectories where lexicographic and version sort disagree (e.g.
-`9.0.0_0` and `14.0.0_0`).
-
----
-
-### Pitfall 3: Trailing whitespace and final-newline differences break byte-identical parity
-
-**What goes wrong:**
-The zsh `flush_section` function uses `printf "%s\n" "${_section_lines[@]}" | LC_ALL=C sort -f -u`.
-This emits exactly one `\n` per line and no trailing newline after the last line of the section
-(the next `write_section` call starts a new line with its `echo "\n$title"`). Python's
-`print()` adds `\n`, `str.join("\n", ...)` does not add a trailing newline, and
-`subprocess.stdout` from `sort` includes a trailing newline. If the Python layer adds or removes
-a trailing newline differently from the reference, every section's byte boundary shifts and all
-downstream sections will fail parity even if their content is identical.
-
-Separately, the zsh `write_section` function uses `echo "\n$1"` which emits a literal `\n`
-followed by the title followed by `\n` (the echo newline). In Python, `print("\n" + title)` is
-equivalent, but `f"\n{title}\n"` written with `file.write()` will differ if `print()` was
-already adding a trailing newline. Any asymmetry silently shifts all section offsets by one byte.
-
-**Why it happens:**
-Python file I/O, `print()`, `subprocess.stdout`, and `str.join()` each have subtly different
-trailing-newline behavior. A developer writing "line by line" naturally uses `print()` which always
-appends `\n`, but the reference may emit differently at section boundaries.
-
-**How to avoid:**
-- Establish a single output writer abstraction early that exactly replicates the zsh section
-  format. Write golden byte-comparison tests against the reference output before implementing
-  any collector.
-- Open the output file in binary mode (`"wb"`) and encode explicitly, or use `"w"` with
-  `newline=""` and always write `\n` explicitly — never rely on platform line endings.
-- After implementing `write_section` and `flush_section` equivalents with zero collectors, run
-  the empty-catalog parity test first: the header section alone should be byte-identical.
-
-**Warning signs:**
-- Parity tests fail with identical content but `b'\n'` vs `b'\n\n'` at section boundaries.
-- `xxd` diff shows a single extra `0a` byte offset that shifts every subsequent section.
-- Tests pass in isolation but fail in integration (individual sections OK, composition wrong).
-
-**Phase to address:**
-Output format foundation phase (first phase). This is the load-bearing prerequisite for all
-parity tests. Fix before writing any collector.
-
----
-
-### Pitfall 4: `dict` / `set` iteration order introduced as a source of non-determinism
-
-**What goes wrong:**
-Python 3.7+ dicts preserve insertion order, but sets do not. Any collector that builds a `set` of
-items and then iterates it will produce non-deterministic output order. The `_section_lines` pattern
-in the zsh reference uses an array (ordered insertion) and only deduplicates at the sort step.
-If the Python equivalent uses a `set` for deduplication before the sort, the sort will still
-produce deterministic output — but if the set is used directly (forgot to sort), the output
-varies run-to-run and across Python interpreter restarts (hash randomization).
-
-More subtle: the `dict.keys()` iteration over a JSON object's keys is insertion-order in Python
-(json module preserves JSON object key order), but the zsh reference's `jq to_entries[]` emits
-keys in JSON document order, which may differ from alphabetical. If the Python collector
-uses a different JSON parsing call that returns keys in a different order, the pre-sort input
-differs — this does not affect output correctness if `flush_section` sorts, but it means the
-sort is the only determinism guarantee and any skip of `flush_section` will be silently wrong.
-
-**Why it happens:**
-Developers coming from Python 2 or unfamiliar with CPython hash randomization (`PYTHONHASHSEED`)
-assume `set` iteration is stable. It isn't across process restarts.
-
-**How to avoid:**
-- Never iterate a `set` directly into output. Always sort first.
-- Use a `list` (not `set`) for `_section_lines` equivalent; let `flush_section` deduplicate
-  via `sort -u` / sorted+unique.
-- Run tests with `PYTHONHASHSEED=random` (the default) and with an explicit seed to confirm
-  output is identical regardless.
-
-**Warning signs:**
-- Test output differs between two runs of the same test with no code changes.
-- Any `for item in some_set:` pattern in a collector that feeds output.
-
-**Phase to address:**
-Output format foundation phase; enforce in code review for every collector.
-
----
-
-### Pitfall 5: The `/usr/bin/python3` Xcode-CLT stub blocks on a GUI dialog
-
-**What goes wrong:**
-On a clean macOS machine that has never run Xcode or installed Command Line Tools, `/usr/bin/python3`
-is a stub that launches a GUI dialog: "The 'python3' command requires the command line developer
-tools." The process does not exit — it blocks waiting for the user to click a button. A `.pyz`
-zipapp with a shebang of `#!/usr/bin/python3` will hang silently on such a machine. A pipx install
-instruction that says "requires Python 3" with no further guidance will leave the user staring at
-a hung terminal.
-
-This was already documented in the v0.46.0 milestone: the zsh `json_get` function explicitly
-removed `python3` from its fallback chain for exactly this reason ("on a clean macOS it is an
-xcrun stub that opens a GUI dialog and blocks the script"). The Python port is now taking on
-Python 3 as its runtime — it must not create the same hang for its users.
-
-**Why it happens:**
-Apple ships the stub to intercept `python3` invocations and prompt for CLT installation. The stub
-is at `/usr/bin/python3` and satisfies `command -v python3`, so any check that stops at "python3
-exists" will falsely conclude Python is available.
-
-**How to avoid — for the `.pyz` zipapp:**
-Use `#!/usr/bin/env python3` rather than a hardcoded `/usr/bin/python3` shebang. This resolves via
-`PATH`, finding a real Homebrew/pyenv/system Python if one is installed. If the CLT stub is the
-only Python on PATH, the stub triggers — but the failure is immediate (the GUI dialog) rather than
-a mysterious hang that looks like the tool is doing work. Additionally, add a startup check in the
-`__main__.py` entry point that confirms `sys.version_info >= (3, 9)` and emits a clear error
-message with CLT install instructions before doing any real work:
-
-```python
-import sys
-if sys.version_info < (3, 9):
-    print("ERROR: mac-catalog requires Python 3.9+. Install via: xcode-select --install")
-    sys.exit(1)
-```
-
-**How to avoid — for pipx distribution:**
-The README and `pyproject.toml` must declare `python_requires = ">=3.9"`. The pipx install
-instruction should include: "Requires Python 3.9+. If you don't have it: `xcode-select --install`
-or `brew install python`." Do not assume Homebrew is present either — it is optional.
-
-**How to avoid — for CI / test environments:**
-Never rely on `/usr/bin/python3` in CI scripts that run on a fresh macOS runner. Explicitly
-install Python via `actions/setup-python` or Homebrew.
-
-**Warning signs:**
-- Shebang is `#!/usr/bin/python3` (hardcoded, not `env`).
-- The tool hangs with no output on a machine without CLT/Homebrew Python.
-- A macOS GitHub Actions runner without `actions/setup-python` invokes the CLT stub.
-- The README says "requires Python 3" without installation instructions.
-
-**Phase to address:**
-Distribution/packaging phase. The `__main__.py` entry point and the shebang are set there; add
-the version guard and the startup message at the same time.
-
----
-
-### Pitfall 6: Archiving the just-written catalog (main-block ordering regression)
-
-**What goes wrong:**
-The v0.47.0 milestone documented and fixed a latent main-block ordering bug: the old
-`archive_old_catalogs` was called *before* `generate_catalog`, so the just-written catalog could
-be immediately swept into the archive on its first run. The fix was to generate first, then sweep.
-The Python port's `main()` function must replicate this exact ordering:
-
-```
-select_computer → resolve_archive_retention → git_pull →
-generate_catalog (writes OUTPUT_FILE) →
-retain_newest_per_host →         # now the new file exists, won't be archived
-prune_old_archives →
-git_commit_and_push
-```
-
-If the Python developer naively calls `retain_newest_per_host` before `generate_catalog` — a
-natural mistake when reading the function list top-to-bottom — the new catalog does not exist yet
-and the previous catalog for this host will be swept to archive. The user gets a run that writes
-a new file and immediately archives it.
-
-**Why it happens:**
-The ordering dependency is invisible from the function signatures. `retain_newest_per_host(target_dir)`
-and `generate_catalog()` are independent-looking functions. Only the comment in the v0.47.0
-MILESTONES.md and the main block's ordering encode this dependency.
-
-**How to avoid:**
-The Python `main()` must explicitly follow the documented ordering. Write a test that runs `main()`
-twice against the same fixture directory and asserts that after the second run, exactly one catalog
-exists in the main folder (not zero, which would indicate the new file was swept) and it is the
-second run's file.
-
-**Warning signs:**
-- After running the Python tool, the target folder is empty and `archive/` contains both the new
-  and the previous catalog.
-- The `generate_catalog` call appears after `retain_newest_per_host` in `main()`.
-
-**Phase to address:**
-Main orchestration / integration phase. Add the ordering test before any other integration tests.
-
----
-
-### Pitfall 7: Deleting files with unparseable timestamps (prune-on-parse-failure regression)
-
-**What goes wrong:**
-The zsh `prune_old_archives` function explicitly skips any file whose timestamp cannot be parsed:
-```zsh
-if [[ -z "$timestamp" ]]; then
-    echo "  WARNING: Could not parse timestamp from: $filename — skipping"
-    continue
-fi
-```
-Likewise `retain_newest_per_host` skips unparseable filenames with a warning. The Python port
-must replicate this: any file whose name does not match the expected pattern
-`mac-software-list-[label]-YYYYMMDDHHMMSS.txt` must be skipped with a warning, never deleted.
-
-A Python implementation that uses a regex and calls `file.unlink()` on the `except` branch — or
-that uses `datetime.strptime()` and treats `ValueError` as "file is old" — will delete files it
-cannot interpret.
-
-**Why it happens:**
-Defensive-by-default instinct: "if I can't parse the date, the file is probably garbage." But
-these files could be hand-placed, from a future version of the tool with a different format, or
-from another machine's run. The zsh reference was explicit that unparseable = skip, not delete.
-
-**How to avoid:**
-```python
-import re, datetime
-
-CATALOG_PATTERN = re.compile(
-    r'^mac-software-list-\[.+\]-(\d{14})\.txt$'
+_LINE_RE = re.compile(
+    r'^(?P<name>.+?)'             # name: everything up to...
+    r'(?:\s+\((?P<version>[^)]+)\))?'  # optional (version)
+    r'(?:\s+\[(?P<id>[^\]]+)\])?'      # optional [id]
+    r'\s*$'
 )
-
-def parse_catalog_ts(filename: str) -> datetime.datetime | None:
-    m = CATALOG_PATTERN.match(filename)
-    if not m:
-        return None
-    try:
-        return datetime.datetime.strptime(m.group(1), "%Y%m%d%H%M%S")
-    except ValueError:
-        return None
 ```
 
-In both `retain_newest_per_host` and `prune_old_archives`, if `parse_catalog_ts(filename)` returns
-`None`, print a warning and `continue` — never delete.
+But this still mis-parses `Smart Photo Widget (Dark).app (3.1.0)` — the regex greedily matches
+`Smart Photo Widget` as the name, `Dark` as the version, and `.app (3.1.0)` as trailing noise.
+
+The correct approach is right-anchored greedy matching — parse from the right:
+1. If line ends with `]`, extract `[...]` as id suffix.
+2. If remainder ends with `)`, extract `(...)` as version suffix.
+3. Whatever remains is the name.
+
+This is robust because `emit_item` always appends id last, then version second-to-last.
 
 **Warning signs:**
-- `prune_old_archives` or `retain_newest_per_host` calls `file.unlink()` inside an `except` block.
-- No test exercises the case where a non-catalog file (e.g. `.gitkeep`, `README.md`) exists in
-  the archive directory.
-- The function deletes files that match `*.txt` rather than the full catalog pattern.
+- Parser splits on the first `(` or `[` in the line.
+- Parser uses `line.split("(")` or `str.partition("(")`.
+- Test fixtures do not include names with embedded parentheses or brackets.
 
 **Phase to address:**
-Retention / prune phase. This is a safety-critical function — write the tests before the
-implementation, not after.
+Phase 1 (catalog parser foundation). Write the parser with a fixture set that includes:
+`Smart Photo Widget (Dark).app (3.1.0)`, an extension with `(beta)` in its display name,
+a formula named `gnu-tar`, and a degraded name-only entry.
 
 ---
 
-### Pitfall 8: Tied-newest files: both must be kept
+### Pitfall 2: Degraded items — name-only and id-promoted entries break version-comment generation
 
 **What goes wrong:**
-The zsh `retain_newest_per_host` keeps ALL files whose timestamp equals the maximum for their host
-(`if [[ "$ts" == "${newest_ts[$host]}" ]]; then continue`). This is data-loss-averse: if two
-machines happen to generate catalogs at the same second (unlikely but possible), neither is
-archived. A Python implementation that keeps only one file per host (e.g. using `max()` and then
-immediately archiving all non-max files) will delete the tied file.
+`emit_item` has three degradation modes that produce no version:
+1. **Name-only**: `emit_item("git", "", "")` → `"git"` — version unavailable (VER-05).
+2. **Name + id, no version**: `emit_item("My Ext", "", "pub.ext")` → `"My Ext [pub.ext]"`.
+3. **Id-promoted (no name)**: `emit_item("", "", "pub.ext")` → `"pub.ext"` — the id string
+   appears without brackets.
+
+The reinstall script spec says each install command should carry a `# cataloged: <version>`
+comment. For degraded entries, there is no version to comment. If the parser emits
+`# cataloged: ` (empty), the script looks broken. If the parser silently omits the comment,
+the user loses the "what version was installed" information entirely — which is fine, but
+must be an explicit design decision.
+
+More dangerous: the id-promoted form (`"pub.ext"` with no brackets) is syntactically
+indistinguishable from a name-only entry `"pub.ext"`. If the parser sees `pub.ext` in the
+VS Code Extensions section and treats it as a display name rather than an extension id, the
+generated `code --install-extension pub.ext` will be correct by accident (extension ids look
+like `publisher.name`). But if the display name happens to look like `publisher.name` (rare
+but possible), a name-only entry would generate a plausibly-correct-but-wrong install command.
 
 **Why it happens:**
-`max()` returns a single value; the natural translation "keep the max, archive the rest" silently
-discards tied-newest files.
+Degradation was designed for catalog fidelity (always write something rather than nothing),
+not for reinstall machine-readability. The round-trip assumption breaks here.
 
 **How to avoid:**
-Two-pass algorithm matching the zsh reference:
-1. Pass 1: compute `max_ts_per_host: dict[str, datetime]`
-2. Pass 2: for each file, if `ts == max_ts_per_host[host]`, keep; else archive.
-
-The two-pass approach explicitly handles the tie case without special-casing it.
+- For the version comment: when version is absent (name-only or name+id entries), emit
+  `# cataloged version unknown` rather than `# cataloged: ` or nothing. This is explicit.
+- For id-promoted entries in VS Code / Cursor sections: the extension id format
+  (`publisher.extensionname`) is reliably dot-separated with no spaces. If the parsed
+  "name" in an extension section has no spaces and contains exactly one dot, treat it as
+  an id even without brackets. Document this heuristic with a comment.
+- For Homebrew name-only entries: `brew install name` without a version comment is correct
+  behavior — Homebrew always installs latest. Emit without a version comment.
 
 **Warning signs:**
-- The retention function uses `max()` and immediately archives all non-max files in one pass.
-- No test covers the tied-timestamp case.
+- The version-comment line is `# cataloged: ` (trailing colon, no value).
+- Test fixtures include only fully-decorated `name (version) [id]` lines.
+- No test covers what happens when the parser encounters a name-only line.
 
 **Phase to address:**
-Retention / prune phase. Add a test fixture with two same-host files with identical timestamps.
+Phase 1 (catalog parser). Define the degradation-handling contract explicitly in the parser's
+return type before building any section emitter.
 
 ---
 
-### Pitfall 9: Operating on the wrong repository (app repo vs catalog repo)
+### Pitfall 3: Shell injection from catalog-derived names in the generated script
 
 **What goes wrong:**
-The v1.0.0 milestone introduces a critical architectural change: the Python tool's source code
-lives in one repository (the app repo) but the catalog files live in a separate, user-configured
-catalog repo. The zsh reference always operated from `SCRIPT_DIR` — the directory containing
-the script itself — which was always the catalog repo because the script was committed there.
+The reinstall script (`reinstall.sh`) is generated by writing shell commands. If catalog
+item names or versions are interpolated without quoting, a name containing a shell metacharacter
+will corrupt the script. Real-world examples that appear in macOS catalogs:
+- App name: `AT&T Office@Hand` — `&` is a shell background operator; `@` is safe in `bash`
+  but has edge cases.
+- Homebrew formula: `gnu-sed` — safe, but `cmake-docs (3.28)` needs quoting in some contexts.
+- Extension ID: `ms-vscode.cpptools` — safe, but extension display names can contain `'`, `"`,
+  `` ` ``, `$`, `\`, `(`, `)`.
+- Version string: `3.11.1 3.11.2` (multi-version brew entry) — spaces in the version string
+  would break an unquoted `brew install name --version 3.11.1 3.11.2`.
 
-A Python port that continues to use `Path(__file__).parent` or `os.getcwd()` as the catalog root
-will operate on the wrong directory. If the user installs via pipx, `__file__` points into the
-pipx venv, not the catalog repo. If the user runs the `.pyz` from an arbitrary location, `cwd`
-is wherever they launched it from.
+The generated script runs `brew install <name>`, `mas install <id>`, and
+`code --install-extension <id>`. If any catalog value is interpolated directly:
 
-**Why it happens:**
-The zsh `SCRIPT_DIR="${0:A:h}"` pattern is so natural in shell that it becomes invisible. In
-Python, "where is my source?" and "where should I write?" are entirely separate questions, but
-developers porting shell scripts often forget to make this split explicit.
-
-**How to avoid:**
-Resolve the catalog repo path via a config file (as required by the v1.0.0 spec):
-1. Check `--catalog-repo` / `--repo` flag (highest priority).
-2. Check `~/.config/mac-catalog/config.toml` (or equivalent) for `catalog_repo = "/path/to/repo"`.
-3. If neither is set, fail fast with a clear error: "No catalog repo configured. Run
-   `mac-catalog init` or pass `--catalog-repo /path/to/repo`."
-
-Never fall back to `cwd()` or `__file__`-relative paths. The catalog repo is always explicit.
-
-All git operations (`git_pull`, `git_commit_and_push`, `retain_newest_per_host`, `prune_old_archives`)
-must receive the catalog repo path as an explicit parameter, not read a global.
-
-**Warning signs:**
-- Any use of `Path(__file__).parent` outside the config-loading module.
-- Git operations that run from `os.getcwd()`.
-- `machine-labels.tsv` being written to the Python package directory.
-- The tool writes a catalog file alongside its own source code.
-
-**Phase to address:**
-Config-resolution phase (should be the first phase). No other phase should proceed until the
-catalog-repo path resolution is correct and tested.
-
----
-
-### Pitfall 10: Atomic write omission for `machine-labels.tsv`
-
-**What goes wrong:**
-The zsh `upsert_machine_label` uses a `.tmp` file + `mv` pattern:
-```zsh
-: > "$tmp_file"   # truncate without invoking NULLCMD
-# ... write to tmp_file ...
-mv "$tmp_file" "$map_file"
-```
-This ensures that a crash or interrupt mid-write leaves either the old complete file or the new
-complete file, never a partially-written corrupt file. A Python implementation that opens
-`machine-labels.tsv` directly and writes line-by-line will corrupt the file if the process is
-interrupted.
-
-The same applies to any other file the Python tool writes: the output catalog itself should be
-written to a temp file and atomically renamed. A partial catalog is worse than no catalog because
-it looks complete but is truncated.
-
-**Why it happens:**
-Python's `open(path, "w")` is concise and feels safe. The interruption risk is low. But the zsh
-tool went to explicit effort to use atomic writes — the Python port should not regress this.
-
-**How to avoid:**
-Use Python's `tempfile.NamedTemporaryFile` + `os.replace()` for all writes to persistent files:
 ```python
-import tempfile, os
-
-def atomic_write(path: Path, content: str) -> None:
-    dir_ = path.parent
-    with tempfile.NamedTemporaryFile("w", dir=dir_, delete=False, suffix=".tmp") as f:
-        f.write(content)
-        tmp = f.name
-    os.replace(tmp, path)
+f"brew install {name}"          # WRONG — name may contain spaces, &, etc.
+f"code --install-extension {id_}"  # WRONG — publisher.name is safe, but display name is not
 ```
-`os.replace()` is atomic on POSIX (single filesystem). Use it for `machine-labels.tsv`,
-the catalog output file, and any config file the tool writes.
-
-**Warning signs:**
-- `open(map_file, "w")` with incremental writes and no temp file.
-- No test verifies that a simulated mid-write interrupt leaves a valid file.
-
-**Phase to address:**
-Output writing phase / `machine-labels.tsv` upsert phase. Establish `atomic_write` as a shared
-utility before the first write.
-
----
-
-### Pitfall 11: `--rename` refuse-clobber regression (merging two computer folders)
-
-**What goes wrong:**
-The zsh `rename_machine` function has a HARD refuse-clobber guard:
-```zsh
-if [[ -e "$new_dir" ]]; then
-    echo "ERROR: A computer named '${new_name}' already exists. Refusing to merge. Nothing renamed."
-    exit 1
-fi
-```
-This prevents renaming "office" to "personal" when "personal" already exists, which would merge two
-computers' catalogs into one folder — an irreversible data corruption. A Python port that uses
-`shutil.move()` or `Path.rename()` without checking for destination existence first will silently
-merge the folders on some OS configurations (or raise `FileExistsError` with a confusing message
-on others).
 
 **Why it happens:**
-`shutil.move()` docs say it "may" raise on conflicts; behavior varies by OS and filesystem. The
-zsh reference made the check explicit and unconditional.
+The tool generates shell scripts, not executes commands directly. Developers think "I just
+need to write a string," not "I need to quote shell arguments." The catalog contains user-
+controlled data (app names from macOS, extension names from marketplace publishers).
 
 **How to avoid:**
-Check `new_dir.exists()` explicitly before any `shutil.move()` or `Path.rename()` call.
-Raise a user-visible error (not an exception traceback): "ERROR: Computer '{name}' already exists.
-Refusing to merge. Nothing renamed." and exit with code 1.
+Always `shlex.quote()` every catalog-derived value that goes into a shell command in the
+generated script:
 
-**Warning signs:**
-- `shutil.move(old_dir, new_dir)` without a prior `if new_dir.exists(): ...` check.
-- No test covers the rename-to-existing-name case.
-
-**Phase to address:**
-Rename command phase.
-
----
-
-### Pitfall 12: `git add` leading-dash injection in computer folder names
-
-**What goes wrong:**
-The v0.49.0 UAT found that `git add` without `--` mis-parses leading-dash pathspecs as options.
-The zsh fix was:
-```zsh
-git add -A -- "${old_name}/" 2>/dev/null || true
-git add -A -- "${new_name}/" 2>/dev/null || true
-```
-A Python port that uses `subprocess.run(["git", "add", "-A", f"{folder}/"])` without `--` will
-fail silently (or raise) when the computer folder name begins with `-`. The computer name validator
-permits a leading dash (the validator only rejects `/`, `[`, `]`, TAB, newline), so this is a
-real user-triggerable failure.
-
-**Why it happens:**
-The Python developer knows `subprocess` with a list avoids shell injection, but `--` is still
-needed to tell git to stop parsing options. "It works in testing because no test folder starts
-with `-`."
-
-**How to avoid:**
-Always use `["git", "add", "-A", "--", f"{folder}/"]` in all git subprocess calls that accept
-user-provided pathspecs. Apply the same `--` guard to all `git add`, `git rm`, `git diff`, and
-`git log` calls that take pathspec arguments derived from user input.
-
-**Warning signs:**
-- Any `subprocess.run(["git", "add", ...])` that does not include `"--"` before a user-derived
-  path.
-- No test uses a computer folder name beginning with `-`.
-
-**Phase to address:**
-Git operations phase. Add a test with a folder named `-test-folder`.
-
----
-
-### Pitfall 13: zipapp `__file__`-relative access and data file embedding
-
-**What goes wrong:**
-A `.pyz` zipapp runs from inside a zip archive. `__file__` is set to a path *inside* the zip
-(e.g. `/path/to/mac-catalog.pyz/mac_catalog/__init__.py`). Any code that tries to read a file
-relative to `__file__` using `Path(__file__).parent / "data/something"` will fail because the
-parent is inside a zip, not a real directory, and `open()` cannot read from inside a zip via
-a plain path.
-
-This affects:
-- Any bundled data file (e.g. the Chrome component extension denylist, if it is a file rather
-  than an in-code constant).
-- Any test fixture that tries to `import` from the installed package and then reads sibling files.
-- `importlib.resources` is the correct API for reading package data from inside a zip, but it has
-  a different API shape from `open(Path(__file__).parent / "data/file")`.
-
-Additionally, zipapp cannot include C extensions (`.so` / `.dylib` files). If any dependency
-pulls in a C extension at install time (e.g. a version of `packaging` that has a C fast-path),
-the `.pyz` build will either fail to include it or silently skip it, causing `ImportError` at
-runtime.
-
-**Why it happens:**
-`Path(__file__).parent` works fine in a regular install or virtualenv, so developers use it without
-thinking about the zip case. The breakage is invisible until the `.pyz` is actually run.
-
-**How to avoid:**
-- Keep all data inline as Python constants (e.g. the Chrome component denylist as a `frozenset`
-  in a module). This project's data is small enough that no external data files are needed.
-- Use `importlib.resources.files(__package__).joinpath("data/file").read_text()` for any
-  unavoidable data files — this is zip-safe.
-- In the `.pyz` build script, explicitly check that no `.so` / `.dylib` files were included:
-  `python -m zipfile -l mac-catalog.pyz | grep -E '\.(so|dylib)$'` should return empty.
-- Test the `.pyz` artifact itself (not the development install) as part of the distribution phase.
-
-**Warning signs:**
-- `Path(__file__).parent / "..."` used to locate bundled data.
-- The build step produces a `.pyz` without verifying it on a clean venv.
-- `ImportError` for a package that is definitely in requirements when running the `.pyz`.
-
-**Phase to address:**
-Distribution/packaging phase. Validate the `.pyz` artifact specifically, not just the package.
-
----
-
-### Pitfall 14: Non-TTY hang in interactive menus (cron / pipe regression)
-
-**What goes wrong:**
-The zsh `select_computer` has a TTY guard:
-```zsh
-if [[ ! -t 0 ]]; then
-    echo "ERROR: No computer selected and stdin is not a TTY. Pass --computer \"Name\"."
-    exit 1
-fi
-```
-Python's `input()` will raise `EOFError` on closed stdin, but it will *block* on open-but-non-TTY
-stdin (e.g. a pipe with no data, `echo | mac-catalog`). In a cron job where stdin is `/dev/null`,
-`input()` immediately raises `EOFError` — but if stdin is a pipe or a pseudo-terminal with a
-connected process that hasn't sent EOF, `input()` blocks indefinitely.
-
-The v0.49.0 UAT found a `NULLCMD` stdin-hang in the zsh tool's `upsert_machine_label` when a bare
-`> file` redirect was used instead of `: > file`. The Python port will face the equivalent: any
-`input()` or `sys.stdin.read()` call in a non-menu path (e.g. a fallback in a helper) can hang.
-
-**Why it happens:**
-`input()` is the natural Python analog of `read -r`. Its blocking behavior on non-TTY non-EOF
-stdin is correct per spec but wrong for a tool meant to run non-interactively when given `--computer`.
-
-**How to avoid:**
-Gate all `input()` calls with an explicit TTY check:
 ```python
-import sys
+import shlex
 
-def is_tty() -> bool:
-    return sys.stdin.isatty()
+def brew_install_line(name: str, version_comment: str) -> str:
+    return f"brew install {shlex.quote(name)}  {version_comment}"
 
-def prompt(msg: str) -> str:
-    if not is_tty():
-        raise RuntimeError(f"Interactive prompt required but stdin is not a TTY. Use --computer flag.")
-    return input(msg)
+def mas_install_line(id_: str, name: str, version_comment: str) -> str:
+    # mas install takes a numeric id — no quoting needed for digits, but be safe
+    return f"mas install {shlex.quote(id_)}  # {shlex.quote(name)} {version_comment}"
+
+def code_install_line(ext_id: str, version_comment: str) -> str:
+    return f"code --install-extension {shlex.quote(ext_id)}  {version_comment}"
 ```
-Call `prompt()` everywhere instead of `input()` directly. The TTY check runs before any blocking
-call. For EOF (`Ctrl-D`), catch `EOFError` at the call site and treat it as a clean quit.
+
+Exception: the version comment is not executed — it is a `# comment`. It still needs escaping
+for the comment line to be valid shell (no newlines in the comment value). Strip or replace
+any `\n` or `\r` in catalog values before using them in comments.
 
 **Warning signs:**
-- Direct `input()` calls anywhere in the non-flag code paths.
-- No test verifies that running with `sys.stdin = io.StringIO("")` (empty non-TTY stdin) fails
-  fast rather than hanging.
-- `resolve_archive_retention` equivalent does not check `is_tty()` before prompting.
+- Any `f"brew install {name}"` or `f"code --install-extension {id_}"` without `shlex.quote()`.
+- Test fixtures do not include a name with `&`, `'`, `"`, `$`, or a space.
+- The generated script is tested only with clean ASCII names.
 
 **Phase to address:**
-Interactive menu / CLI phase. Add the `is_tty()` utility before any interactive prompt is written,
-and test it with a patched `sys.stdin`.
+Phase 2 (script emitter). Establish a `quote_for_script(value: str) -> str` wrapper around
+`shlex.quote` as the sole path for interpolating catalog values into shell commands. Never
+allow direct f-string interpolation of catalog data into generated shell.
 
 ---
 
-### Pitfall 15: EOF / Ctrl-D input loop regression
+### Pitfall 4: VS Code / Cursor extension id casing and `code`/`cursor` not on PATH
 
-**What goes wrong:**
-The v0.49.0 UAT found an EOF infinite-loop at the rename prompt: the zsh script had `read -r
-choice` without `|| ...` to catch EOF, which caused the loop to spin on an empty string forever
-when stdin was closed. The fix was `if ! read -r choice; then choice="$quit_idx"; fi`.
+**What goes wrong — casing:**
+The VS Code CLI and extensions.json store extension ids in lowercase
+(confirmed in `vscode.py` line 63: `ext_meta[id_.lower()]`). The marketplace treats ids as
+case-insensitive. But `code --install-extension` on some VS Code versions is case-sensitive
+in its local-cache lookup: installing `ms-python.python` after `MS-Python.Python` has already
+been installed may fail silently or install a duplicate entry.
 
-Python's `input()` raises `EOFError` on Ctrl-D. If the EOF exception is not caught at the prompt
-loop level, it will propagate up and produce a traceback instead of a clean quit. If it is caught
-and the loop continues, it creates the same infinite-loop as the zsh bug.
+The catalog emits ids in whatever case the CLI reports (Path A) or extensions.json stores
+(Path B). Both normalize to lowercase in the metadata lookup, but the id in the emitted
+`emit_item` line comes from `id_` (Path A) which is the raw CLI output — which is lowercase
+by convention but not guaranteed. If a publisher ever registers an id with uppercase,
+`code --install-extension` with the wrong case may behave unexpectedly.
+
+**What goes wrong — PATH:**
+The VS Code `code` CLI and Cursor `cursor` CLI are not on PATH by default on macOS. They are
+installed via the VS Code/Cursor "Install 'code' command in PATH" menu action (`Shell Command:
+Install 'code' command in PATH`). If a user omitted this step, `code --install-extension` will
+fail with `command not found`.
+
+The generated `reinstall.sh` will silently skip all extension installs on a machine where the
+CLI is not on PATH. `command -v code || echo "ERROR: ..."` is the minimum safeguard.
 
 **Why it happens:**
-`except EOFError: continue` looks like graceful handling but recreates the infinite loop.
-`except EOFError: raise` shows a traceback. The correct behavior — `except EOFError: return QUIT`
-— is the non-obvious third option.
+On macOS, `/usr/local/bin/code` is a symlink placed by the VS Code shell command installer.
+It is not present by default. The reinstall script assumes a fully-configured target machine.
+
+**How to avoid — casing:**
+Normalize extension ids to lowercase before emitting `code --install-extension <id>`. The
+marketplace lookup is case-insensitive; lowercase is canonical. Do this in the script emitter,
+not the parser, so the catalog format is not changed.
+
+**How to avoid — PATH:**
+Add a guard at the top of the auto-install section of the generated script:
+
+```bash
+# Check for required CLIs
+command -v brew >/dev/null 2>&1 || { echo "ERROR: brew not found. Install Homebrew first."; exit 1; }
+command -v mas  >/dev/null 2>&1 || { echo "ERROR: mas not found. Run: brew install mas"; exit 1; }
+command -v code >/dev/null 2>&1 || echo "WARNING: 'code' not on PATH. VS Code extensions will be skipped."
+command -v cursor >/dev/null 2>&1 || echo "WARNING: 'cursor' not on PATH. Cursor extensions will be skipped."
+```
+
+Use `echo "WARNING:"` (not `exit 1`) for the editor CLIs — a missing editor CLI is expected
+on a machine where that editor is not installed.
+
+**Warning signs:**
+- Generated script has no `command -v` guards.
+- Extension ids in the generated script are not consistently lowercase.
+- No test verifies what the script emits when the catalog contains an id-promoted entry
+  (where the "name" field IS the extension id).
+
+**Phase to address:**
+Phase 2 (script emitter). Add PATH guards as the first generated block. Normalize extension
+ids to lowercase in the emitter. Add a test that generates a script from a catalog with a
+mixed-case extension id and verify the output is lowercase.
+
+---
+
+### Pitfall 5: Homebrew multi-version entries cannot be passed to `brew install`
+
+**What goes wrong:**
+`HomebrewCollector` emits multi-version entries for packages with multiple installed versions:
+`python@3.11 (3.11.1 3.11.2)`. The version string inside the parens is **space-separated
+multiple versions**, not a single version. `brew install python@3.11 --version "3.11.1 3.11.2"`
+is not valid. `brew install python@3.11` (latest only) is the correct command — the catalog's
+multi-version string is metadata, not an installable version spec.
+
+A parser that extracts the full parenthesized string as the version and passes it to brew will
+generate a broken command. The correct behavior is: strip the version string from the brew
+install command (always install latest), and use the full version string in the comment only.
+
+**Why it happens:**
+The multi-version format (`3.11.1 3.11.2` inside parens) is correct for catalog fidelity
+(shows what was installed) but is invalid syntax for `brew install --version`. Developers who
+write the parser before thinking about the emitter will see a version string and pass it through.
 
 **How to avoid:**
+The generated script should NEVER include a version pin for Homebrew packages. The spec
+(`PROJECT.md` line 247) already says "install latest, record the cataloged version as a
+comment." Enforce this in the emitter:
+
 ```python
-while True:
-    try:
-        choice = prompt("Enter your choice: ")
-    except EOFError:
-        return QuitSelection()   # clean exit, no traceback, no loop
-    # validate choice...
+def brew_install_line(name: str, cataloged_version: str) -> str:
+    comment = f"  # cataloged: {cataloged_version}" if cataloged_version else ""
+    return f"brew install {shlex.quote(name)}{comment}"
 ```
-Test this with a patched `sys.stdin` that immediately closes (raises `EOFError` on first read).
+
+The `cataloged_version` is the full string (e.g. `3.11.1 3.11.2`) for the comment — that's
+fine. Only the `name` is passed to `brew install`.
 
 **Warning signs:**
-- `except EOFError: continue` in any input loop.
-- No test exercises the EOF path for the computer selection menu and the rename menu.
+- Generated script contains `brew install python@3.11 --version "3.11.1 3.11.2"`.
+- Parser passes the version string as an argument rather than a comment.
+- Test fixtures only include single-version brew entries.
 
 **Phase to address:**
-Interactive menu phase. Test all three interactive menus (computer select, create-new, rename) with
-EOF-on-first-read.
+Phase 1 (catalog parser) — ensure the parser returns `version` as metadata-only. Phase 2
+(script emitter) — enforce that no version argument is passed to `brew install`.
 
 ---
 
-### Pitfall 16: `--version` drift between `pyproject.toml` and runtime
+### Pitfall 6: Never auto-executing — the script must not be sourced or piped to `sh`
 
 **What goes wrong:**
-The `.pyz` artifact's version as reported by `mac-catalog --version` can drift from the version in
-`pyproject.toml` if the version is hardcoded as a string in `__main__.py` or in a `__version__`
-variable that is not synchronized with the build metadata. A user who installs `mac-catalog==1.0.0`
-but gets `mac-catalog --version` → `0.9.0-dev` has a confusing support experience.
+The spec is explicit: "never auto-executed." But there are two common mistakes:
+1. **Accidental execution during generation**: the Python code that writes `reinstall.sh`
+   uses `subprocess.run(["bash", ...])` or `os.system(...)` at any point during the write.
+2. **The script itself has a `set -e` that makes partial execution look like success**: if
+   the user runs `bash reinstall.sh` and a `brew install` fails mid-run (e.g. network error),
+   `set -e` exits immediately, leaving many packages uninstalled. The user may assume the
+   script succeeded because it ran without visible error.
 
-**Why it happens:**
-`pyproject.toml` version and `__version__` in code are two separate sources of truth. They drift
-when one is updated without the other, or when the `.pyz` is built from a working tree with local
-modifications.
+Additionally: the script must be safe to re-run. `brew install` is idempotent (skips already-
+installed packages). `mas install` is idempotent. `code --install-extension` with a duplicate
+may print a warning but succeeds. The script header should document this: "Safe to re-run."
 
 **How to avoid:**
-Use `importlib.metadata` to read the version at runtime from the installed package metadata:
-```python
-from importlib.metadata import version, PackageNotFoundError
-try:
-    __version__ = version("mac-catalog")
-except PackageNotFoundError:
-    __version__ = "0.0.0-dev"
-```
-This works in both a regular install and a `.pyz` (which includes `PKG-INFO` / `METADATA`).
-Never hardcode the version string in source code.
+- The Python writer must ONLY open a file and write strings. Zero subprocess calls to execute
+  any install command. Validate this in code review.
+- Add `set -e` intentionally but with `|| true` on individual install lines that may harmlessly
+  fail (e.g. an extension already installed). Or omit `set -e` and document that errors are
+  non-fatal (each `brew install` either succeeds or emits a warning). The second approach is
+  friendlier for a first-run script on a fresh machine.
+- Add a prominent comment at the top of the generated script:
+  ```bash
+  #!/usr/bin/env bash
+  # Generated by maccat reinstall — REVIEW BEFORE RUNNING.
+  # Run: bash reinstall.sh
+  # Safe to re-run: already-installed packages are skipped.
+  # Generated from: <catalog path> on <date>
+  ```
+- Permissions: write the script as a regular file (mode `0o644`), not executable (`0o755`).
+  Requiring `bash reinstall.sh` rather than `./reinstall.sh` adds one step of intentionality.
 
 **Warning signs:**
-- `__version__ = "1.0.0"` literal in `__main__.py` or `__init__.py`.
-- `mac-catalog --version` output differs from `pip show mac-catalog` output.
+- Any `subprocess.run`, `os.system`, or `os.execv` call inside the reinstall script writer.
+- The generated file is written with `chmod +x` or `0o755` permissions.
+- No prominent "REVIEW BEFORE RUNNING" header in the generated script.
 
 **Phase to address:**
-Distribution/packaging phase.
+Phase 2 (script emitter). Establish a rule at the start of the phase: the emitter is a
+pure string builder; it calls no subprocesses.
 
 ---
 
-### Pitfall 17: Committing the `.pyz` binary to git
+### Pitfall 7: Version comment incorrectly omitted for id-promoted (name-only) items
 
 **What goes wrong:**
-A `.pyz` zipapp is a binary artifact. Committing it to the source repo means git stores a full
-copy of the binary on every change (git does not delta-compress binaries well). More importantly,
-it creates an "install by cloning the repo" pattern that conflicts with the pipx distribution
-channel, and it means the binary in git may not match the current source state.
+When `emit_item` is called with an empty name and only an id, it produces an id-promoted
+line: `"pub.ext"` (no brackets). The parser has no way to distinguish `"pub.ext"` (an
+id-promoted extension entry) from `"pub.ext"` (an app whose name happens to look like
+a publisher.extension string). More critically: there is no version in the line.
+
+If the reinstall emitter generates `code --install-extension pub.ext` with no version comment
+and no indication that the name was degraded, the user has no idea what version was cataloged.
+That is acceptable — but the script should note it explicitly, not silently omit the comment:
+
+```bash
+code --install-extension pub.ext  # cataloged version unavailable (degraded entry)
+```
+
+vs. silently:
+```bash
+code --install-extension pub.ext
+```
+
+The silent form is not wrong, but in a "review before running" script, every line should be
+as informative as possible.
 
 **Why it happens:**
-"Just commit the artifact" is a low-friction way to distribute to the first few users without
-setting up a proper release pipeline.
+The emitter checks "is version non-empty?" and emits the comment if yes, skips if no.
+The "why" it's empty (degradation vs. id-promoted vs. genuine missing) is lost at parse time.
 
 **How to avoid:**
-- Add `*.pyz` to `.gitignore`.
-- Build the `.pyz` as part of a `make dist` / `build.sh` script that is checked in, not the
-  artifact itself.
-- Distribute via GitHub Releases (attach the `.pyz` as a release asset) or via PyPI + pipx.
-- The CI pipeline builds the `.pyz` and attaches it to a tagged release — never commits it.
+The parser should return a structured result with a `degraded: bool` flag (or an enum
+`EntryKind.FULL | DEGRADED_NO_VERSION | DEGRADED_ID_PROMOTED`). The emitter uses this flag
+to choose between `# cataloged: X.Y.Z` and `# cataloged version unavailable (degraded entry)`.
 
 **Warning signs:**
-- `git status` shows a `.pyz` file as tracked.
-- The README says "clone this repo and run the `.pyz`."
+- The parser return type is `tuple[str, str, str]` (name, version, id) with no degradation flag.
+- No test verifies the comment emitted for a name-only catalog line.
 
 **Phase to address:**
-Distribution/packaging phase.
+Phase 1 (catalog parser). Design the parser return type to carry degradation metadata
+before implementing any section-specific parsing.
 
 ---
 
@@ -733,128 +453,104 @@ Distribution/packaging phase.
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| `sorted(set(lines), key=str.lower)` instead of `LC_ALL=C sort -f -u` | No subprocess call | Parity failures on mixed-case and non-ASCII names; silently wrong | **Never** — shell out or use C-locale collation |
-| `Path(__file__).parent` for config/data reads | Works in dev install | Breaks inside a `.pyz` zipapp | Only in `__main__` entry point (not inside zip) |
-| Hardcoded `/usr/bin/python3` shebang | Unambiguous path | Hangs on clean macOS that hits CLT stub | **Never** — use `#!/usr/bin/env python3` |
-| Skip atomic writes for catalog output | Simpler code | Partial file on interrupt looks complete but is truncated | **Never** — always write to temp + rename |
-| Read catalog repo from `cwd()` | Zero config needed | Wrong directory when installed via pipx | **Never** — always require explicit config |
-| `input()` without TTY guard | Natural Python idiom | Hangs in cron/pipe; blocks non-interactive runs | **Never** — always check `isatty()` first |
-| Commit the `.pyz` binary to git | Easy first distribution | Binary bloat; version drift; conflicts with release pipeline | Only as a one-time emergency; remove immediately |
-| Inline the Chrome denylist as a hardcoded set | Simple | Easy to miss updates | Acceptable — the 10-ID denylist is stable |
+| Assume mas ID is available | Simpler reinstall plan | Broken at runtime — ID is not in the catalog | **Never** — fix the catalog format first or use manual checklist |
+| Treat all Homebrew entries as formulae | No re-query needed | `brew install docker` installs wrong artifact | **Never** — fix catalog format or re-query brew at generation time |
+| Parse lines by splitting on first `(` | Simple split logic | Mis-parses any app name with embedded parens | **Never** — use right-anchored regex |
+| Skip `shlex.quote()` for "safe" names | Cleaner-looking generated script | Shell injection on names with `&`, `'`, `$` | **Never** — always quote |
+| `set -e` at top of generated script | Abort on first error | Partially-installed machine looks complete | Acceptable if each risky line adds `|| true` |
+| Skip PATH guards for `code`/`cursor` | Less boilerplate in script | Silent skips when CLI not installed | **Never** — always guard, warn not error |
+| `brew install name@version` | Pins to cataloged version | Brew has no general version-pin flag; `--version` is not supported for most formulae | **Never** — install latest, version is comment only |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| `git add` with user-provided folder names | `["git", "add", "-A", folder]` — dash-prefixed names parsed as options | Always include `"--"` before any user-derived pathspec |
-| `git` subprocess in pipx-installed tool | `os.chdir(catalog_repo)` then git commands | Pass `-C catalog_repo` to git, or use `cwd=` in `subprocess.run()` — never mutate global cwd |
-| `machine-labels.tsv` write | `open(path, "w")` | Atomic: write to `.tmp`, then `os.replace()` |
-| `sort -V` for Chrome version selection | Python `sorted()` | Use `packaging.version.Version` or shell out to `sort -V` |
-| `LC_ALL=C sort -f -u` | `sorted(set(lines), key=str.lower)` | Shell out with `env={"LC_ALL": "C"}` or use a C-locale-aware comparator |
-| `prune_old_archives` timestamp parse | Delete on `ValueError` | Log warning and `continue` — never delete files with unparseable names |
-| Rename destination check | `shutil.move()` without existence check | Always `if new_dir.exists(): error` before any move |
-| Non-TTY interactive prompts | Direct `input()` | Gate with `sys.stdin.isatty()` check; fail fast with clear message |
-
-## Performance Traps
-
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Spawning one subprocess per sort call | Hundreds of `sort` processes for large extension lists | Collect all lines for a section, then one `sort` subprocess per `flush_section` call | Large extension installs (100+ VS Code extensions) |
-| `subprocess.run(["jq", ...])` for every JSON field | Slow Chrome/Firefox collection | Batch jq calls (one call per file, not one per field) or use Python's `json` module | Large Chrome extension count |
-| `git add` one file at a time in commit | Many git subprocess calls | Stage the whole folder with `git add -A -- folder/` | Large archive sweeps |
+| `mas install` | Pass app name instead of numeric ID | Must have numeric ID; catalog does not have it — use manual checklist or fix catalog format |
+| `brew install` | Pass `--cask` for formulae or omit `--cask` for casks | Must know the type; catalog does not distinguish — fix catalog format with separate sections |
+| `brew install` multi-version | Pass `"3.11.1 3.11.2"` as version arg | Strip version from install command; keep as comment only |
+| `code --install-extension` | Use display name instead of extension id | Use `[id]` field from catalog; fall back to id-promoted bare value for degraded entries |
+| `code --install-extension` | Mixed-case extension id | Normalize to lowercase before emitting |
+| Shell command generation | Direct string interpolation of catalog values | Always `shlex.quote()` every catalog-derived value inserted into shell command |
+| `mas install` | Assume `mas` is installed and signed in | Guard with `command -v mas`; note that App Store sign-in is a manual prerequisite |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| MCP secret re-introduction | Credentials committed to git history | Port the FMT-03 guards exactly: name + transport only; never env/headers/args/url |
-| Config file containing catalog repo path is world-readable | Other users on the machine can learn the repo path | Config file permissions should be `0o600`; document this |
-| Shell injection via `subprocess` with `shell=True` | User-controlled computer names could inject shell commands | Always use `subprocess.run([...list...], shell=False)` — the default |
-| `os.system()` with any user-controlled string | Same as above | Never use `os.system()` in this codebase |
+| Unquoted catalog values in generated script | Shell metacharacter injection (`&`, `` ` ``, `$`, `'`, `"`) corrupts script or executes unexpected commands when script is run | `shlex.quote()` on every catalog-derived value in shell position |
+| Auto-executing the generated script | High-impact installs without user review | Pure string-writer only; no subprocess calls in the emitter; write as non-executable `0o644` |
+| Newlines in catalog values used in comments | Breaks multi-line comment syntax; may inadvertently inject shell commands | Strip/replace `\n`, `\r`, `\t` from any catalog value used in a comment |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Sort parity:** `LC_ALL=C sort -f -u` semantics verified with a mixed-case fixture including
-      at least one non-ASCII extension name — Python output matches zsh output byte-for-byte.
-- [ ] **Final-newline parity:** Section boundaries (between `write_section` calls) verified at byte
-      level, not just line-content level — use `xxd` or `bytes` comparison in tests.
-- [ ] **TTY guard:** Running with `echo "" | mac-catalog` (non-TTY stdin, no `--computer` flag) exits
-      with a clear error message, does not hang.
-- [ ] **EOF handling:** Ctrl-D at the computer selection menu and the rename menu produces a clean
-      "No catalog written." exit, not a traceback and not an infinite loop.
-- [ ] **Catalog repo path:** Running from an arbitrary working directory (not the catalog repo) with
-      no config produces a clear "no repo configured" error, not a silently wrong write.
-- [ ] **Atomic writes:** `machine-labels.tsv` written via temp+rename; partial write on interrupt
-      leaves the old complete file intact.
-- [ ] **Ordering (main block):** After two runs, main folder has exactly one catalog (the newer),
-      archive has the older — not zero in main and both in archive.
-- [ ] **Unparseable-filename safety:** A non-catalog `.txt` file in the archive is not deleted by
-      `prune_old_archives`.
-- [ ] **Zipapp data access:** `.pyz` artifact runs correctly from any working directory with no
-      `__file__`-relative path errors.
-- [ ] **CLT-stub guard:** `--version` flag (which requires no config) prints version and exits on a
-      machine where `/usr/bin/python3` is the stub — the startup check fires before any stub hang.
-- [ ] **`git add --` guard:** A computer folder named `-test` stages correctly; git does not
-      interpret the dash as an option.
-- [ ] **Refuse-clobber rename:** Renaming "office" to "personal" when "personal" exists fails with
-      a clear error and leaves both folders intact.
-- [ ] **Tied-newest retention:** Two same-host catalogs with identical timestamps are both kept in
-      the main folder after `retain_newest_per_host`.
-- [ ] **MCP secrets (re-check):** The Python collectors replicate the FMT-03 guards; grep the
-      generated catalog for `token`, `Bearer`, `sk-`, `ghp_`, `key=`, `Authorization` → zero hits.
+- [ ] **mas ID**: verified against `mas.py` source that the catalog does NOT contain the
+      App Store numeric ID — mas auto-install is impossible without a catalog format change.
+- [ ] **Formula/cask distinction**: verified against `homebrew.py` source that formulae and
+      casks land in one "Homebrew Packages" section with no type marker — correct install flag
+      requires a catalog format change or a re-query.
+- [ ] **Right-anchored parser**: parser tested against `Smart Photo Widget (Dark).app (3.1.0)`
+      and an extension with `(beta)` in its display name — correct name/version split.
+- [ ] **Degraded entries**: parser handles name-only, name+id, and id-promoted lines; emitter
+      generates `# cataloged version unavailable` (not empty comment) for degraded entries.
+- [ ] **Shell quoting**: every catalog-derived value in generated shell commands passes through
+      `shlex.quote()`; verified with a fixture containing `AT&T Office@Hand`.
+- [ ] **Multi-version brew**: `python@3.11 (3.11.1 3.11.2)` generates `brew install python@3.11`
+      (no version arg) with `# cataloged: 3.11.1 3.11.2` comment.
+- [ ] **PATH guards**: generated script has `command -v brew`, `command -v mas`, `command -v code`,
+      `command -v cursor` guards at the top of the auto-install section.
+- [ ] **Non-executable permissions**: `reinstall.sh` written as `0o644`, not `0o755`.
+- [ ] **No subprocess calls in emitter**: code review confirms the reinstall writer calls
+      `open()` and writes strings — zero `subprocess.run` or `os.system` calls.
+- [ ] **Re-run safety**: script contains "Safe to re-run" header comment; tested by running
+      against a machine where all packages are already installed (no errors, no re-installs).
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Sort divergence found after parity tests pass | MEDIUM | Replace Python sort with LC_ALL=C subprocess; regenerate golden fixtures; re-run parity suite |
-| CLT-stub hang shipped in `.pyz` | LOW | Change shebang to `#!/usr/bin/env python3`; add startup version check; rebuild `.pyz` |
-| Archiving just-written catalog | LOW | Reorder `main()` calls; add ordering test; re-run |
-| Prune deleted unparseable files | HIGH (data loss) | Cannot recover deleted files; add the skip guard immediately; audit git history for lost catalogs |
-| Catalog repo written to wrong directory | MEDIUM | Add `--catalog-repo` to config; move misplaced files manually; add the config-resolution test |
-| `.pyz` committed to git | LOW | Add `*.pyz` to `.gitignore`; `git rm --cached *.pyz`; move to release artifacts |
-| Atomic write regression (partial file) | LOW | Replace `open(path, "w")` with `atomic_write()`; partial files are detectable (truncation) |
-| Refuse-clobber regression (merged folders) | HIGH (data loss) | Cannot easily un-merge two folders; add guard immediately; restore from git history |
+| mas ID missing (discovered mid-phase) | MEDIUM | Move mas section to manual checklist; update spec; no catalog format change needed if manual checklist is acceptable |
+| Formula/cask mislabeled (discovered mid-phase) | MEDIUM | Move all Homebrew to manual checklist OR add re-query; update spec; catalog format change deferred |
+| Shell injection in generated script | HIGH (security) | Add `shlex.quote()` globally; regenerate any scripts already emitted; add fuzz test |
+| Parser mis-splits names with embedded parens | LOW | Fix regex to right-anchored; regenerate; test with adversarial names |
+| Generated script auto-executes | HIGH (data risk) | Remove any subprocess call immediately; write tests that assert emitter produces only strings |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Sort-order divergence (LC_ALL=C) | Output format foundation (first phase) | Byte-identical parity test with mixed-case + non-ASCII fixture |
-| `sort -V` for Chrome versions | Chrome collector phase | Test with two-version-dir fixture where lex != version sort |
-| Trailing-newline / section boundary | Output format foundation (first phase) | Binary byte comparison of empty catalog against zsh reference |
-| `dict`/`set` non-determinism | Output format foundation; enforce in review | `PYTHONHASHSEED=random` parity test passes consistently |
-| `/usr/bin/python3` CLT stub | Distribution/packaging phase | Startup version-check test; shebang uses `env` |
-| Main-block ordering regression | Main orchestration / integration phase | Two-run test: main folder has exactly one (newer) catalog |
-| Unparseable-timestamp delete | Retention / prune phase | Non-catalog file in archive survives prune run |
-| Tied-newest retention | Retention / prune phase | Two same-host same-timestamp files both kept |
-| Wrong catalog repo (app vs catalog repo) | Config-resolution phase (first phase) | Running from `/tmp` with config pointing to real repo writes there, not `/tmp` |
-| Atomic write omission | Output writing phase | Simulated interrupt test; old file survives |
-| Refuse-clobber rename regression | Rename command phase | Rename-to-existing-name test returns error code 1, both folders intact |
-| `git add` leading-dash injection | Git operations phase | Test with folder named `-test`; verify `git add -- -test/` stages correctly |
-| zipapp `__file__` / data files | Distribution/packaging phase | Run `.pyz` from `/tmp`; no path errors; `zipfile -l` shows no `.so` |
-| Non-TTY hang | Interactive menu / CLI phase | `echo "" | mac-catalog` exits fast with clear error |
-| EOF infinite loop | Interactive menu / CLI phase | EOF-on-first-read test for all three interactive menus |
-| `--version` drift | Distribution/packaging phase | `mac-catalog --version` matches `pyproject.toml` version |
-| Committing `.pyz` binary | Distribution/packaging phase | `.gitignore` includes `*.pyz`; CI attaches to release asset |
+| mas ID missing — hard constraint | Phase 1 (scope definition) | Read `mas.py` before writing any spec; confirm ID is absent in test fixture |
+| Formula/cask distinction missing — hard constraint | Phase 1 (scope definition) | Read `homebrew.py` before writing any spec; confirm both land in one section |
+| Parsing ambiguity (embedded parens/brackets) | Phase 1 (catalog parser) | Parser test with `Smart Photo Widget (Dark).app (3.1.0)` and `(beta)` extension name |
+| Degraded entry handling | Phase 1 (catalog parser) | Parser test with name-only, name+id, id-promoted catalog lines |
+| Shell injection | Phase 2 (script emitter) | Fuzz test with metacharacter names; `shlex.quote()` in all emitter paths |
+| Extension id casing | Phase 2 (script emitter) | Test with mixed-case extension id in catalog; output is lowercase |
+| PATH guards missing | Phase 2 (script emitter) | Generated script inspected for `command -v` guards before first install line |
+| Multi-version brew version arg | Phase 1 (parser) + Phase 2 (emitter) | Test with `python@3.11 (3.11.1 3.11.2)` catalog line; generated line has no `--version` |
+| Never auto-execute | Phase 2 (script emitter) | Code review: zero subprocess/exec calls in writer; file permissions are `0o644` |
+| Version comment for degraded entries | Phase 2 (script emitter) | Test with name-only line; generated comment says `version unavailable`, not empty |
 
 ## Sources
 
-- `update-list.sh` — the authoritative zsh reference, read line-by-line for this analysis:
-  `upsert_machine_label` (atomic write, NULLCMD guard), `retain_newest_per_host` (tied-newest,
-  unparseable-skip), `prune_old_archives` (skip-on-parse-fail), `rename_machine` (refuse-clobber,
-  `git add --` guard), `select_computer` (TTY guard, EOF-as-quit), `resolve_archive_retention`
-  (non-TTY default), `flush_section` (`LC_ALL=C sort -f -u`), `json_get` (python3-stub warning).
-- `.planning/MILESTONES.md` — v0.47.0: latent main-block ordering bug; v0.49.0: four live UAT
-  defects (bare-local echo, NULLCMD hang, git-add dash-injection, EOF infinite loop).
-- `.planning/PROJECT.md` — Context section: python3 CLT-stub warning, testing hazard, v0.49.0
-  UAT defect list; Key Decisions: Python port rationale, zipapp/pipx distribution target,
-  catalog-repo separation, parity tests as safety gate.
-- Python zipapp documentation (https://docs.python.org/3/library/zipapp.html) — `__file__` inside
-  zip, no C extensions, shebang format.
-- macOS developer documentation — `/usr/bin/python3` CLT stub behavior (Apple Developer Forums,
-  confirmed in v0.46.0 MILESTONES.md footnote).
+- `src/maccat/collectors/mas.py` — `_parse_mas_output` (lines 27–45): explicit awk-column-skip
+  confirms App Store ID is discarded. `tests/collectors/test_homebrew.py` (lines 120–129):
+  fixture confirms `"1234567890  Safari (15.0)"` produces `["Safari (15.0)"]`.
+- `src/maccat/collectors/homebrew.py` — `collect()` (lines 65–72): formula + cask lists
+  concatenated without type marker. `_parse_brew_versions_line` (lines 36–51): multi-version
+  space-joined in parens.
+- `src/maccat/catalog/format.py` — `emit_item` (lines 16–43): full degradation rule set;
+  id-as-name promotion (line 31–32) produces brackets-suppressed output that is syntactically
+  indistinguishable from a name-only entry.
+- `src/maccat/collectors/vscode.py` — `_collect_editor_extensions` (lines 21–117):
+  extension ids normalized to lowercase (`id_.lower()`) for metadata lookup; CLI PATH
+  dependency (`shutil.which(cli_name)`); two collection paths (CLI preferred, JSON fallback).
+- `src/maccat/collectors/setapp.py` — `SetappCollector` (lines 28–54): emits `AppName.app (version)`
+  or bare `AppName.app`; no id field; cannot be auto-installed.
+- `src/maccat/collectors/webapps.py` — `WebAppsCollector` (lines 31–54): same pattern as
+  Setapp; no id field; cannot be auto-installed.
+- `.planning/PROJECT.md` — v2.1.0 milestone spec (lines 64–85): auto-install targets;
+  Key Decisions (lines 244–248): install-latest, catalog as source of truth, never auto-execute.
+- Python `shlex` documentation — `shlex.quote()` for generating safe shell arguments.
 
 ---
-*Pitfalls research for: Python port of a macOS Zsh cataloger (v1.0.0 — byte-parity rewrite + zipapp/pipx distribution)*
-*Researched: 2026-06-14*
+*Pitfalls research for: v2.1.0 maccat reinstall — parsing a plain-text catalog and generating a reinstall script*
+*Researched: 2026-06-16*

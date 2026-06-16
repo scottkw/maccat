@@ -1,52 +1,40 @@
 # Project Research Summary
 
-**Project:** Mac Software List Generator — v1.0.0 Python Port & Distribution
-**Domain:** Distributable macOS CLI tool — Python rewrite of a battle-tested Zsh cataloger
-**Researched:** 2026-06-14
+**Project:** maccat v2.1.0 — Reinstall from Catalog
+**Domain:** macOS software cataloger CLI — `maccat reinstall` subcommand
+**Researched:** 2026-06-16
 **Confidence:** HIGH
 
 ## Executive Summary
 
-The v1.0.0 milestone rewrites a ~2,500-line Zsh cataloger as a modular Python package while keeping the Zsh reference untouched. The central challenge is not building something new — it is replicating byte-identical output from an existing, well-exercised reference implementation, then packaging the result so it runs against an arbitrary user-configured catalog repo. Every architectural and technology decision flows from three hard constraints: zero third-party runtime dependencies (enabling a stdlib `zipapp` artifact), Python 3.11 as the version floor (unlocking `tomllib` and `syrupy`), and byte-parity with the Zsh output as the safety gate that validates the port.
+The `maccat reinstall` feature closes the catalog loop by generating a `reinstall.sh` bash
+script from an existing plain-text catalog snapshot. The implementation is fully stdlib-only
+(Python `re`, `pathlib`, `dataclasses`, `shlex`) with zero new dependencies. The feature
+decomposes cleanly into three new modules — a section-boundary parser, a script emitter, and
+a thin CLI orchestrator — wired into the existing `cli.py` subcommand dispatch as a one-liner
+short-circuit after catalog repo resolution. All four deterministic sources (Homebrew, mas,
+VS Code extensions, Cursor extensions) are auto-installable; all other sources land in a
+runtime-echoed manual checklist.
 
-The recommended approach is a clean `src/`-layout Python package (`mac_software_list/`) with a `RunContext` frozen dataclass replacing Zsh globals, a `Collector` ABC with one file per source, and a shared `flush_section` that shells out to `LC_ALL=C sort -f -u` for byte-identical sort order. Config lives at `${XDG_CONFIG_HOME:-$HOME/.config}/mac-catalog/config.toml` (XDG convention, not `~/Library/Application Support`); the catalog repo path is always explicit — never inferred from `__file__` or `cwd()`. Distribution ships two artifacts: a stdlib `python -m zipapp` `.pyz` (single-file, no install step) and a PyPI wheel for `pipx install`. Golden-output parity tests (file-based fixtures, normalized volatile fields) are the acceptance gate for the entire port.
+Two scoped decisions shape the implementation and must not be re-litigated. First, the mas
+App Store ID is NOT currently in the catalog (the collector discards column 1 of `mas list`
+output), so v2.1.0 will add a catalog format change: `MasCollector` will emit `AppName
+(version) [id]` using `emit_item`'s full three-field path, enabling `mas install <id>` in
+the generated script. Older catalogs that predate this change will degrade those entries to
+the manual checklist. Second, the formula/cask distinction is NOT a scope blocker: `brew
+install <name>` installs a formula or a cask in modern Homebrew (verified Homebrew 6.0.2),
+so the emitter uses plain `brew install` for all Homebrew items with a `brew list --cask
+<name> &>/dev/null || brew install --cask <name>` guard for cask idempotency. Explicit cask
+detection is deferred as a future enhancement.
 
-The top risks are all parity-related: sort-order divergence from incorrect Python sort semantics, trailing-newline/section-boundary byte drift, and the destructive-run hazard that makes generating golden fixtures a planning-first problem. Three categories of destructive-op regressions from prior milestones (catalog archiving order, unparseable-filename pruning, refuse-clobber rename) must be explicitly re-tested in the Python port. None of these risks are exotic — they are all directly visible in the Zsh source code and the v0.47.0–v0.49.0 defect record, making high-confidence mitigation strategies available for every one.
-
----
-
-## Resolved Cross-Report Tensions
-
-The following questions appeared as open items across individual research files and are **decided here**. Downstream planning must treat these as closed.
-
-### 1. CLI library: argparse (stdlib) vs Click
-
-**Decision: `argparse` (stdlib).**
-
-The distribution model is a stdlib `.pyz` zipapp that bundles only the package's own source. A `.pyz` cannot vendor third-party deps without `shiv` or `pex`, both of which add extraction overhead and are designed for apps that actually have dependencies. Click is a third-party runtime dep; `argparse` is stdlib. The flag set is fixed and simple (`--computer`, `--rename`, `--no-commit`, `--archive-days`, `--catalog-dir`, `--version`); argparse's mutually-exclusive groups model these cleanly. Click's benefits (decorators, type inference, shell completion scaffolding) are irrelevant at this flag complexity and add zero value in a zero-dep tool.
-
-### 2. Python version floor: 3.11
-
-**Decision: `python_requires = ">=3.11"`. The 3.9 question is closed.**
-
-Three independent justifications lock this:
-- `tomllib` is stdlib in 3.11+. The config file is TOML. Without 3.11, a `tomli` backport dep is required, which breaks the zero-dep `.pyz` goal.
-- Python 3.9 reached EOL on October 31, 2025. It receives no security patches. The Xcode CLT stub is frozen at 3.9.6 and Apple has not updated it in ~4 years — it is not a distribution target.
-- `syrupy` (the golden snapshot test library) requires Python >= 3.10. Our dev toolchain requires 3.11 at minimum.
-
-The realistic user base (macOS developers who install via pipx) already has Homebrew Python 3.11+. The README states `python3.11+` as a prerequisite.
-
-### 3. Config location: ~/.config/<app>/config.toml (XDG)
-
-**Decision: `${XDG_CONFIG_HOME:-$HOME/.config}/mac-catalog/config.toml`.**
-
-`~/Library/Application Support/` is the macOS convention for GUI apps that manage config on behalf of the user. Developer CLIs (`gh`, `kubectl`, `docker`, `terraform`, `ruff`, `stripe`, `op`) all use `~/.config` on macOS. The `platformdirs` library returns `~/Library/Application Support` on macOS by default — do not rely on its defaults. Construct the path directly (`Path.home() / ".config" / "mac-catalog" / "config.toml"` with `XDG_CONFIG_HOME` override) or use `platformdirs.PlatformDirs(appname, unix=True)`. Constructing directly is simpler and has no external dependency.
-
-### 4. Parity sort: shell out to LC_ALL=C sort -f -u
-
-**Decision: shell out. Do not reimplement in Python. This is a hard design rule.**
-
-`subprocess.run(["sort", "-f", "-u"], env={**os.environ, "LC_ALL": "C"})` is the `flush_section` implementation. Python's `sorted()` with `key=str.casefold` diverges from C-locale byte-order collation for any mixed-case name, non-ASCII character, or punctuation — which covers every real section. `locale.setlocale` is process-global and thread-unsafe. The shell-out is the same binary the Zsh script calls and guarantees byte-identical output with zero maintenance risk. Similarly, Chrome version-directory selection uses `sort -V` (via subprocess or a numeric-segment key) — not Python's default lexicographic sort.
+The central implementation risks are idempotency and safety. `brew install --cask` exits
+non-zero on an already-installed cask (Homebrew #15295), so each cask line requires the
+`brew list --cask` guard. VS Code and Cursor extension installs need `--list-extensions |
+grep` pre-checks rather than `--force`. The emitter must use `shlex.quote()` on every
+catalog-derived value in shell position and write the output file at `0o644` (never
+executable). The parser to `catalog/format.py` coupling is the primary anti-drift risk: a
+mandatory round-trip contract test in `tests/reinstall/test_parser_contract.py` is the
+mechanical guard.
 
 ---
 
@@ -54,213 +42,249 @@ The realistic user base (macOS developers who install via pipx) already has Home
 
 ### Recommended Stack
 
-The runtime package is purely stdlib — zero third-party dependencies. Every Zsh capability maps cleanly to a stdlib module: `json` + `plistlib` replace the `jq` / `plutil` chain; `datetime.timedelta` replaces BSD `date -v-Nd`; `subprocess.run(["git", ...])` replaces GitPython; `shutil.which` replaces `command -v`; `tomllib` (3.11 stdlib) reads the TOML config; `re` extracts YAML frontmatter from skills/agents. The one deliberate subprocess dependency that stays is the `sort` call — shelling out to `LC_ALL=C sort -f -u` for `flush_section` is the correct parity strategy.
-
-The dev/test stack is separate from the runtime and never appears in the `.pyz`: `pytest >= 8.0` (test runner), `syrupy >= 5.0` (golden snapshot tests, `.ambr` files), `ruff >= 0.15` (lint + format), `mypy >= 1.10` (type checking), `uv >= 0.5` (venv and package management). Distribution uses `hatchling` as the build backend (build-time only; zero runtime presence) and `python -m zipapp` for the `.pyz` artifact.
+No new dependencies. The entire feature is implemented with Python stdlib: `re` for the
+section-boundary parser, `pathlib` for file I/O and newest-catalog scanning, `dataclasses`
+for `ParsedItem`/`ParsedSection`/`ParsedCatalog`, and `shlex.quote()` for shell-safe
+argument quoting in the emitter. The generated script is plain bash with no Brewfile, no
+Jinja2, no template engine. A flat sequence of guarded install commands with inline version
+comments is all that is required, and string formatting handles it cleanly.
 
 **Core technologies:**
-- Python 3.11+: runtime floor — EOL-safe, unlocks `tomllib`, matches Homebrew default, covers `syrupy`
-- `argparse` (stdlib): CLI argument parsing — handles all flags; zero dep; mutually-exclusive groups model `--personal`/`--office`/`--computer` cleanly
-- `tomllib` (stdlib 3.11+): config file parsing — reads `~/.config/mac-catalog/config.toml`; read-only; no backport needed
-- `json` + `plistlib` (stdlib): JSON/plist manifest parsing — replaces `jq` + `plutil` entirely; no subprocess
-- `subprocess.run(["sort", ...])`: sort with `LC_ALL=C` env — parity-critical; must not be replaced with Python sort
-- `subprocess.run(["git", ...])`: git operations — `pull`, `add`, `commit`, `push`, `rev-parse`; `cwd=` kwarg replaces `cd "$SCRIPT_DIR"`
-- `pathlib` + `tempfile` + `os.replace`: all path ops and atomic writes — replaces string path concatenation and `> tmp && mv tmp real`
-- `python -m zipapp` (stdlib): `.pyz` build — no shiv, no pex; zero-dep tools use zipapp
-- `hatchling` (build-time only): wheel build backend for pipx/PyPI distribution
-- `syrupy` (dev only): golden snapshot tests — `assert result == snapshot`, `--snapshot-update`, human-readable `.ambr` diffs in git
-- `uv` (dev only): venv and package management per CLAUDE.md preference
+- `re` (stdlib): Right-anchored regex parsing of `emit_item` line shapes — purpose-built to
+  avoid the embedded-parens ambiguity pitfall
+- `shlex.quote` (stdlib): Shell-safe quoting for every catalog-derived value inserted into
+  generated shell commands — mandatory, not optional
+- `pathlib.Path` (stdlib): Newest-catalog scan + file write at `0o644`; already used in the
+  existing codebase
+- `dataclasses` (stdlib): `ParsedItem`, `ParsedSection`, `ParsedCatalog` — typed, testable,
+  no third-party ORM overhead
+
+**Install command syntax (verified live):**
+- Homebrew formula: `brew list <name> &>/dev/null || brew install <name>`
+- Homebrew cask: `brew list --cask <name> &>/dev/null || brew install --cask <name>`
+- mas: `mas list | grep -q "^<id> " || mas install <id>` (requires ID in catalog — see MAS format change)
+- VS Code: `code --list-extensions 2>/dev/null | grep -qi "^<id>$" || code --install-extension <id>`
+- Cursor: `cursor --list-extensions 2>/dev/null | grep -qi "^<id>$" || cursor --install-extension <id>`
+
+**Script conventions (non-negotiable):**
+- Shebang: `#!/usr/bin/env bash` (portable; `/bin/bash` on macOS may be 3.x)
+- Strict mode: `set -Eeuo pipefail`
+- Provenance header with catalog filename, timestamp, computer name, review warning
+- Section ordering: taps → formulae → casks → mas → VS Code → Cursor → manual checklist
+- File permissions: `0o644` — requires `bash reinstall.sh`, not `./reinstall.sh`
+- Never auto-execute: emitter is a pure string builder, zero subprocess calls
 
 ### Expected Features
 
-**Must have (table stakes) — all required for v1.0.0:**
-- All existing Zsh collectors ported at byte-parity: Homebrew, App Store, Setapp, web apps, Claude Code, Codex, OpenCode, Gemini, VS Code, Cursor, Chrome, Firefox
-- Config file at `~/.config/mac-catalog/config.toml` with `catalog_dir` key; `config init` subcommand for first-run setup
-- Config precedence chain: `--catalog-dir` flag > `MAC_CATALOG_DIR` env var > config file > error
-- Validate `catalog_dir` exists and is a git repo before any operation; clear error message with remediation hint
-- All existing flags ported: `--computer`, `--personal`, `--office`, `--machine`, `--rename`, `--archive-days`, `--no-commit`
-- `--version` and `--help` on every command; sensible exit codes (0 = success, 1 = config/usage, 2 = runtime)
-- Computer-folder menu with remembered default (interactive + `--computer` non-interactive)
-- Newest-per-machine retention, archive prune, git pull/commit/push
-- Graceful degradation: absent tool/browser writes `(none found)`, never aborts
-- `.pyz` zipapp artifact and `pipx install` distribution path
-- Golden-output parity test suite (section-level, normalized, file-based fixtures)
-- `config show` subcommand: print resolved effective config
+**Must have (P1 — v2.1.0 launch):**
+- `maccat reinstall` subcommand with `--from PATH` flag and interactive computer-picker
+  fallback reusing existing `select_computer()`
+- Catalog parser reading all section types back into structured `ParsedItem` objects
+- `reinstall.sh` header: shebang, strict mode, provenance, item count summary, review warning
+- Auto-install section: taps → formulae → casks → mas → VS Code → Cursor, each with
+  skip-if-installed guard and `# cataloged: version` inline comment
+- Tool-availability check (`command -v`) gating each section block; `brew` hard-exits on
+  miss, others warn-and-continue
+- Manual checklist section emitted via runtime `echo` statements (not static comments)
+  covering Setapp, web apps, Chrome/Firefox extensions, all AI-CLI tooling
+- Output path + `bash reinstall.sh` run instructions printed to stdout
+- MAS catalog format change: `MasCollector` emits `AppName (version) [id]` — prerequisite
+  for `mas install <id>` auto-install; older catalogs degrade mas entries to manual checklist
 
-**Should have (differentiators — v1.x after core is stable):**
-- Shell completion (bash/zsh) — medium complexity; defer until core is validated
-- `--dry-run` flag — high value for new users; medium complexity to thread through collectors
+**Should have (P2 — v2.1.x after validation):**
+- Item count summary in header comment (`# 42 formulae, 18 casks, 7 MAS apps, ...`)
+- Prerequisites comment block in header (`# Requires: brew, mas, code, cursor`)
+- Warn-and-continue for absent optional tools (vs. hard-exit on missing `mas`/`code`/`cursor`)
 
-**Defer to v2+:**
-- Named config profiles (multi-catalog-repo support) — speculative; `--catalog-dir` covers the one-off case
-- Reinstall/restore from a catalog — already tracked as the next milestone
-- Catalog diffing/change reports — tracked
+**Defer (v2.2+):**
+- Diff-from-current-state before generating (requires catalog-diffing milestone)
+- Multi-catalog merge (install union of two catalogs)
+- Explicit cask detection with `[cask]` id marker in catalog
 
-**Anti-features (do not build):**
-- Cross-platform support (Linux/Windows) — macOS-only by design; OS branching dilutes identity
-- Plugin system/extension API — personal cataloger; add collectors directly in the Python package
-- TUI (rich/textual) — numbered menu already tested; a TUI rewrite is pure risk
-- JSON/YAML output mode — plain-text sections are the product value; `git diff` is the dashboard
-- Telemetry — personal tool distributed to developers who read source; any phoning home destroys trust
+**Anti-features (never implement):**
+- Version-pinned `brew install formula@x.y.z` — no stable version-pin for most formulae;
+  cataloged version is comment-only
+- `brew bundle` / Brewfile output — cannot cover VS Code/Cursor extensions in one file
+- Auto-execution of the generated script — locked design decision
+- `--force` on extension installs — redownloads even when current; use `--list-extensions`
+  guard instead
 
 ### Architecture Approach
 
-The architecture inverts the Zsh anti-patterns: a `RunContext` frozen dataclass replaces module-level globals, a `Collector` ABC returning `CollectorResult` replaces the direct-append-to-OUTPUT_FILE pattern, and a `CatalogWriter` context manager with atomic tmp+rename replaces bare file appends. All dependencies flow downward toward leaf modules — no circular imports. The catalog-repo path is resolved once in `config.py`/`cli.py` and threaded as an explicit `Path` argument through `identity.py`, `retention.py`, `gitops.py`, and `CatalogWriter`; nothing uses `Path(__file__).parent` or `os.getcwd()` as a catalog root.
+The reinstall subpackage (`src/maccat/reinstall/`) follows the existing short-circuit
+dispatch pattern in `cli.py`: after `validate_catalog_repo()` and before the `--rename`
+guard, a one-liner dispatches to `run_reinstall(args, catalog_repo)` and returns. Four new
+modules are introduced — `parser.py`, `emitter.py`, `picker.py`, `cli.py` — and three
+existing modules are reused unchanged (`identity.py:select_computer()`,
+`naming.py:parse_catalog_filename()`, `config.py:resolve_catalog_repo()`). The critical
+coupling is the parser to `catalog/format.py:emit_item()` contract: the parser inverts
+exactly the four line shapes that `emit_item` produces, and a round-trip contract test
+(`tests/reinstall/test_parser_contract.py`) is the sole mechanical anti-drift guard.
 
 **Major components:**
-1. `__main__.py` + `cli.py` — entry point, `argparse` argument parsing, `RunContext` construction, interactive menus with TTY guards
-2. `config.py` — `Config` dataclass, `load_config()`, `resolve_catalog_repo()`; pure data, no side effects
-3. `identity.py` — `select_computer()`, `validate_computer_name()`, `upsert_machine_label()`, `rename_machine()`; all take `catalog_repo` Path
-4. `catalog/writer.py` + `catalog/format.py` — `CatalogWriter` context manager (atomic output), `emit_item()`, `flush_section()` (shells to `LC_ALL=C sort -f -u`), `write_section()`
-5. `collectors/` sub-package — `Collector` ABC, `CollectorResult`/`Section` dataclasses, REGISTRY (ordered list), one file per source (12 collectors)
-6. `helpers/` — `json_io.py` (`json_get`), `chrome_name.py` (`chrome_ext_name`), `vsc_name.py` (`resolve_vsc_ext_name`)
-7. `gitops.py` — `git_pull()`, `git_commit_and_push()`, `rename_commit()`; all take `catalog_repo` Path via `cwd=`
-8. `retention.py` — `retain_newest_per_host()`, `prune_old_archives()`; two-pass algorithm; skip-on-unparseable
-9. `naming.py` — `parse_catalog_filename()`, `make_catalog_filename()`; pure functions, regex-based
+1. `reinstall/parser.py` — Section-boundary state machine + right-anchored regex item
+   parser; produces `ParsedCatalog` with typed `ParsedItem` objects carrying `name`,
+   `version`, `id_`, and a degradation flag
+2. `reinstall/emitter.py` — Per-source renderers (`_brew_block`, `_editor_ext_block`,
+   `_manual_checklist_block`); static `SECTION_SOURCE_MAP` of 17 known section titles;
+   `shlex.quote()` on all catalog-derived shell arguments; pure string builder
+3. `reinstall/picker.py` — `resolve_catalog_path()`: `--from PATH` short-circuit or
+   `select_computer()` + newest-file scan; independently testable
+4. `reinstall/cli.py` — Thin orchestrator: resolve path → parse → emit → write at `0o644`
+   → print output path
 
-**Package layout:** `src/mac_software_list/` with `catalog/`, `collectors/`, and `helpers/` sub-packages. Use `mac_software_list` as the Python import name (matches pyproject.toml convention). `src/` layout (PEP 517) prevents accidental imports of the uninstalled package during test runs.
+**Key architectural constraint:** `catalog/format.py:emit_item()` must NOT be changed in
+this milestone except for the one deliberate change: `MasCollector` now calls it with the
+numeric ID as the third argument. All other `emit_item()` call sites remain unchanged.
+
+**MAS format change scope:** `MasCollector` in `collectors/mas.py` changes from
+`awk '{print $2, $3}'` (which discards column 1, the numeric ID) to a Python parse that
+extracts all three fields. The implementation subtlety: `mas list` column 3 already includes
+parentheses around the version number (e.g., `(14.0)`), so the Python parse must strip those
+parens before passing the version to `emit_item()` to avoid `AppName ((14.0)) [id]`.
 
 ### Critical Pitfalls
 
-1. **Sort-order divergence (LC_ALL=C)** — Python `sorted(lines, key=str.casefold)` diverges from C-locale byte-order for mixed-case and non-ASCII names. Fix: always shell out to `subprocess.run(["sort", "-f", "-u"], env={**os.environ, "LC_ALL": "C"})` in `flush_section`. Establish this before writing any collector — parity failures accumulate.
+1. **MAS ID absent from current catalog** — `MasCollector` discards column 1 of `mas list`
+   output. Auto-install via `mas install <id>` requires the numeric ID. Resolution decided:
+   catalog format change in Phase 1. Catalogs generated before this change must degrade mas
+   entries to the manual checklist in the parser. Verify the fix avoids double-parenthesizing
+   the version (mas output already wraps version in parens).
 
-2. **Section boundary byte drift** — Trailing newlines from `print()`, `str.join()`, and `subprocess.stdout` are subtly different. A single extra `\n` at a section boundary shifts all downstream sections. Fix: establish `CatalogWriter.write_section()` and run a binary byte-comparison parity test on an empty catalog before writing any collector.
+2. **Formula/cask distinction is NOT a blocker** — `brew install <name>` works for both
+   formulae and casks in Homebrew 6.0.2+ (confirmed via `brew install --help`). The only
+   real issue is cask idempotency: `brew install --cask <name>` exits non-zero if already
+   installed. Use the guard pattern for all Homebrew items. Explicit cask type detection
+   is deferred. The PITFALLS agent over-flagged this as a scope blocker.
 
-3. **Archiving the just-written catalog (main-block ordering regression)** — Calling `retain_newest_per_host` before `generate_catalog` archives the new file before it exists. The v0.47.0 milestone documented this fix; the Python `main()` must replicate the order: generate → retain → prune → commit.
+3. **Parser ambiguity: embedded parentheses in app names** — A name like
+   `Smart Photo Widget (Dark).app (3.1.0)` must parse as name=`Smart Photo Widget (Dark).app`,
+   version=`3.1.0`. Use right-anchored parsing: strip `[id]` suffix first, then `(version)`
+   suffix, remainder is name. Never split on the first `(`.
 
-4. **Wrong catalog repo path (`__file__` / `cwd` drift)** — `Path(__file__).parent` points into the pipx venv, not the catalog repo. `os.getcwd()` is wherever the user launched from. Fix: `catalog_repo` is always resolved from config/flag in `config.py` and threaded as an explicit argument everywhere.
+4. **Shell injection via unquoted catalog values** — App names and version strings can
+   contain `&`, `'`, `"`, `$`, backticks. Use `shlex.quote()` on every catalog-derived value
+   in shell command position. Strip `\n`/`\r` from values used in comments. Establish
+   `quote_for_script()` as the sole interpolation path — never bare f-string interpolation.
 
-5. **Destructive-op regressions from prior milestones** — Three behaviors must be explicitly re-tested in Python: (a) `prune_old_archives` must skip (not delete) files with unparseable timestamps; (b) `retain_newest_per_host` must keep ALL files tied for newest (two-pass, not `max()`); (c) `rename_machine` must hard refuse-clobber before any `shutil.move()`.
+5. **Brew cask idempotency failure** — `brew install --cask <name>` exits non-zero when
+   already installed (Homebrew #15295, confirmed current). With `set -Eeuo pipefail` this
+   aborts the generated script mid-run. Every Homebrew item must use the guard:
+   `brew list --cask <name> &>/dev/null || brew install --cask <name>`.
 
-6. **Parity fixture generation hazard** — The Zsh script is destructive. Golden fixtures cannot be generated by running it against the real repo. Fixtures must come from a controlled machine state in a disposable clone or a synthetic fixture environment. This is a planning-first problem.
-
-7. **Non-TTY hang and EOF loop** — `input()` without a TTY guard blocks in cron/pipe. `except EOFError: continue` recreates the v0.49.0 infinite-loop defect. Fix: wrap all `input()` in `prompt()` with `sys.stdin.isatty()` guard; `except EOFError: return QuitSelection()`.
+6. **Parser to emitter drift on `emit_item` shapes** — Any future change to `emit_item()`
+   silently breaks the parser. Mitigation: module docstring cites the contract; round-trip
+   test in `tests/reinstall/test_parser_contract.py` covers all six degradation variants.
 
 ---
 
 ## Implications for Roadmap
 
-The ARCHITECTURE.md build-order analysis is the authoritative phase sequencer. The following phase structure is the direct output of that dependency analysis, with pitfall mappings added.
+Three phases are suggested. The dependency chain is strict: catalog format fix → parser →
+emitter → CLI wiring. Each phase is independently testable before the next begins.
 
-### Phase 1: Foundation — Output Format + Pure Helpers
+### Phase 1: Catalog Format Fix + Parser Foundation
 
-**Rationale:** `naming.py`, `catalog/format.py`, `catalog/writer.py`, and `helpers/json_io.py` have zero dependencies on the rest of the package. They produce all the load-bearing output contracts. Every collector and every parity test depends on these being correct. Start here; parity failures found early are cheap.
+**Rationale:** The MAS ID absence is a hard prerequisite. Building the parser before
+`MasCollector` emits the ID means mas auto-install must be retrofitted or ripped out later.
+Fixing the format first means the parser is built against the final line shapes. The
+round-trip contract test also cannot be written until `emit_item()` call shapes are final.
 
-**Delivers:** `emit_item()`, `flush_section()` (with `LC_ALL=C sort` shell-out), `CatalogWriter` (atomic tmp+rename), `write_section()`, `parse_catalog_filename()`, `make_catalog_filename()`, `json_get()`
+**Delivers:**
+- `MasCollector` changed to extract all three `mas list` columns and call
+  `emit_item(name, version, id_)` — new catalog line shape: `AppName (version) [id]`
+- Mas collector tests updated to verify the new format, including version de-parens fix
+- `reinstall/__init__.py` package marker
+- `reinstall/parser.py`: `ParsedItem` (with `degraded` flag), `ParsedSection`,
+  `ParsedCatalog` data structures; section-boundary state machine; right-anchored item
+  regex (`_ITEM_RE_FULL`, `_ITEM_RE_VERSION`, `_ITEM_RE_ID`); degradation handling;
+  sentinel-line skipping
+- `tests/reinstall/test_parser_contract.py`: round-trip test for all six `emit_item`
+  degradation variants; adversarial name fixtures (`Smart Photo Widget (Dark).app (3.1.0)`,
+  extension with `(beta)` in display name, multi-version brew entry)
 
-**Avoids:** Sort-order divergence (Pitfall 1), section boundary byte drift (Pitfall 3), `dict`/`set` non-determinism (Pitfall 4), atomic write omission (Pitfall 10)
+**Addresses:** mas auto-install (previously blocked), parser ambiguity pitfall, degraded
+entry handling, multi-version brew version-as-metadata
 
-**Research flag:** Standard patterns — all decisions are resolved in this summary.
+**Research flag:** None needed — all line shapes read directly from `format.py` source.
 
-### Phase 2: Helpers — Chrome and VS Code Name Resolution
+---
 
-**Rationale:** `helpers/chrome_name.py` and `helpers/vsc_name.py` wrap `json_io` and are shared across multiple collectors. Building them before collectors avoids duplication and keeps collectors thin.
+### Phase 2: Script Emitter
 
-**Delivers:** `chrome_ext_name()` (`__MSG_` resolution via `_locales/messages.json` with lowercase-key lookup), `resolve_vsc_ext_name()` (NLS placeholder resolution)
+**Rationale:** The emitter depends entirely on `ParsedCatalog` from Phase 1. Building it
+after the parser is validated means the emitter can be tested with known-good `ParsedCatalog`
+fixtures rather than parsing strings inline.
 
-**Research flag:** Standard patterns — fully documented in STACK.md and ARCHITECTURE.md.
+**Delivers:**
+- `reinstall/emitter.py`: `emit_reinstall_script(catalog, generated_date) -> str`
+- `_header_block()`: `#!/usr/bin/env bash`, `set -Eeuo pipefail`, provenance, item count
+  summary, review warning
+- `_brew_block()`: cask guard for every Homebrew item; `# cataloged: version` comments;
+  `shlex.quote()` on name; multi-version version string in comment only (no version arg)
+- `_mas_block()`: `mas list | grep -q "^<id> " || mas install <id>` guard; degrades to
+  manual checklist for entries lacking an ID (pre-format-change catalogs)
+- `_editor_ext_block("code", ...)` and `_editor_ext_block("cursor", ...)`: `--list-extensions
+  | grep -qi` guard; extension IDs normalized to lowercase; `shlex.quote()` on ID
+- `_manual_checklist_block()`: runtime `echo` statements for all non-auto-install sources;
+  `# [ ] name (version)` format with AI-CLI transport included
+- `command -v` guards at section start; `brew` hard-exits, others warn-and-continue
+- `SECTION_SOURCE_MAP`: static dict of 17 known section titles; unknown titles fall through
+  to manual checklist
+- `quote_for_script()` wrapper as sole shell-interpolation path
+- File written at `0o644`; zero subprocess calls in emitter
 
-### Phase 3: Config + Identity + Retention
+**Avoids:** Cask idempotency abort (brew list guard), shell injection (shlex.quote),
+auto-execution (pure string builder), PATH guard omission, version-arg breakage
 
-**Rationale:** The `catalog_repo` path threading is the architectural backbone. `identity.py` and `retention.py` both depend on `naming.py` (Phase 1). These three modules must be built and unit-tested before any pipeline modules can be wired together. This is also where two of the most dangerous regressions live (prune-on-parse-failure, tied-newest retention).
+**Research flag:** None needed — all syntax verified live.
 
-**Delivers:** `Config` dataclass + `load_config()` + `resolve_catalog_repo()` (XDG path, flag > env > file > error), `select_computer()`, `validate_computer_name()`, `upsert_machine_label()` (atomic TSV write), `rename_machine()` (refuse-clobber guard), `retain_newest_per_host()` (two-pass), `prune_old_archives()` (skip-on-unparseable), `config init` + `config show` subcommands
+---
 
-**Avoids:** Wrong catalog repo path (Pitfall 9), prune-on-parse-failure regression (Pitfall 7), tied-newest retention bug (Pitfall 8), refuse-clobber regression (Pitfall 11), atomic write omission for TSV (Pitfall 10)
+### Phase 3: Picker + CLI Wiring + Integration
 
-**Research flag:** Standard patterns — all behaviors directly documented in PITFALLS.md. Write tests before implementation for retention and prune (safety-critical).
+**Rationale:** The picker and orchestrator are thin wrappers over Phase 1 and 2 work.
+Touching `cli.py` last minimizes risk to the existing 13-step catalog-gen path.
 
-### Phase 4: Collectors
+**Delivers:**
+- `reinstall/picker.py`: `resolve_catalog_path(catalog_repo, from_path, computer_name)` —
+  `--from PATH` short-circuit or `select_computer()` + newest-file scan
+- `reinstall/cli.py`: `run_reinstall(args, catalog_repo)` — thin orchestrator
+- `cli.py` modifications: `reinstall` subparser with `--from` / `dest="from_path"` (handles
+  `from` keyword conflict); dispatch block after `validate_catalog_repo()`, before `--rename`
+- Integration smoke test: `maccat reinstall --from <fixture>` — verify file written, path
+  printed, `--rename` guard does not fire on reinstall args
 
-**Rationale:** All 12 collectors are independent of each other after Phase 2. They share the `Collector` ABC, `emit_item()`/`flush_section()`, and helpers. Within this phase, collectors can be built in any order; each is a self-contained unit. The REGISTRY is assembled last, encoding the fixed section order.
+**Avoids:** Inlining logic into `run()` (violates 13-step invariant); `from` keyword
+conflict in argparse; `--rename` guard accidentally triggering on reinstall
 
-**Delivers:** `collectors/base.py` (ABC, `CollectorResult`, `Section`), then: `homebrew.py`, `mas.py`, `setapp.py`, `webapps.py`, `claude.py`, `codex.py`, `opencode.py`, `gemini.py`, `vscode.py`, `cursor.py`, `chrome.py`, `firefox.py`, `collectors/__init__.py` (REGISTRY)
+**Research flag:** None needed — dispatch pattern confirmed from `cli.py` source.
 
-**Avoids:** `sort -V` for Chrome version dirs (Pitfall 2), MCP secret re-introduction (FMT-03 guards), `dict`/`set` non-determinism
-
-**Research flag:** The `claude mcp list` vs `~/.claude.json` question must be resolved before the Claude collector is implemented (see Open Questions). Chrome/Firefox filesystem paths should be verified against current macOS + browser versions.
-
-### Phase 5: Git + CLI + Main Orchestration
-
-**Rationale:** This phase wires all prior phases together. `gitops.py` depends on the catalog-repo path threading from Phase 3. `cli.py` / `__main__.py` depends on everything above. The main-block ordering regression is the primary risk.
-
-**Delivers:** `gitops.py` (`git_pull`, `git_commit_and_push` with `-- <pathspec>` guard), `cli.py` (argparse, TTY-guarded interactive menus, `RunContext` construction), `__main__.py` (entry point with Python version guard, correct `main()` call ordering), `--version` via `importlib.metadata`
-
-**Avoids:** Main-block ordering regression (Pitfall 6), non-TTY hang (Pitfall 14), EOF infinite loop (Pitfall 15), `git add` leading-dash injection (Pitfall 12), `--version` drift (Pitfall 16), `/usr/bin/python3` CLT stub hang (Pitfall 5)
-
-**Research flag:** Standard patterns — all behaviors specified in PITFALLS.md. Implement `prompt()` TTY wrapper before any interactive prompt.
-
-### Phase 6: Distribution
-
-**Rationale:** After the package is functionally complete, package it for distribution. The `.pyz` zipapp must be validated as an artifact (not just the dev install) since `__file__`-relative path access and C extension inclusion are zipapp-specific failure modes.
-
-**Delivers:** `pyproject.toml` (hatchling backend, `requires-python = ">=3.11"`, zero runtime deps, `[project.scripts]` entry point), `build-pyz.sh` (stdlib `python -m zipapp`, `#!/usr/bin/env python3` shebang), `.gitignore` entry for `*.pyz`, README install instructions, `pipx install` validation
-
-**Avoids:** Committing `.pyz` to git (Pitfall 17), zipapp `__file__`-relative data access (Pitfall 13), CLT stub hang in shebang (Pitfall 5), `--version` drift (Pitfall 16)
-
-**Research flag:** Standard patterns — fully documented in STACK.md.
-
-### Phase 7: Parity Tests
-
-**Rationale:** Golden-output parity tests are the safety gate for the entire port. They require all collectors (Phase 4) and the full pipeline (Phase 5), plus golden fixtures generated from the Zsh script under a controlled machine state. Parity test infrastructure (normalization utilities, fixture directory layout) should be scaffolded in Phase 1 to allow incremental format verification throughout development.
-
-**Delivers:** `tests/golden/` fixture directory, `normalize_catalog_body()` (strip timestamps + machine labels), section-level parity tests parametrized over golden fixtures, full-catalog integration smoke test, `PYTHONHASHSEED=random` CI config
-
-**Avoids:** False-confidence sort parity on ASCII-only fixtures (test with non-ASCII extension names), hash-randomization non-determinism
-
-**Research flag:** The parity-fixture generation strategy (how to produce controlled Zsh golden fixtures given the destructive-run hazard) is an **open planning question** — must be resolved in Phase 7 planning before implementation begins.
+---
 
 ### Phase Ordering Rationale
 
-- foundation → helpers → config+identity+retention → collectors → git+cli+main → distribution → parity tests is the exact dependency order from ARCHITECTURE.md
-- Each phase produces independently testable units before the phases that depend on them
-- The two safety-critical phases (retention logic, main orchestration ordering) have test-before-implementation requirements
-- Parity tests are last because they validate the complete system, but parity-test infrastructure is scaffolded in Phase 1 to allow incremental format verification throughout development
+- **Format fix gates mas auto-install.** Without the MAS ID in the catalog, the emitter
+  cannot generate `mas install <id>`. Building emitter first forces a mid-phase rewrite.
+- **Parser gates emitter.** The emitter's renderers take `ParsedCatalog` as input. The
+  emitter API cannot be written without finalized parser output types.
+- **Each phase is independently testable.** Phase 1: text-only parse tests. Phase 2:
+  `ParsedCatalog` fixture → assert script string content. Phase 3: real files on disk.
+- **`cli.py` changes are last.** The 13-step order in `run()` is NON-NEGOTIABLE. Touching
+  it last minimizes disruption risk to the existing catalog-gen path.
 
 ### Research Flags
 
-Phases needing additional research or planning consideration:
-- **Phase 4 (Collectors):** Chrome and Firefox filesystem paths should be verified against current macOS + browser versions. The `claude mcp list` vs `~/.claude.json` question must be resolved before the Claude collector is written.
-- **Phase 7 (Parity Tests):** Golden fixture generation strategy is an open planning question — disposable-clone fixture vs. synthetic Python fixture environment; must be planned explicitly.
+All three phases have standard, well-documented patterns. No `--research-phase` flag is
+needed during planning.
 
-Phases with standard, fully-documented patterns (no additional research needed):
-- **Phase 1 (Foundation):** All output format decisions are resolved in this summary.
-- **Phase 2 (Helpers):** Chrome name resolution and NLS lookup fully specified in STACK.md/ARCHITECTURE.md.
-- **Phase 3 (Config + Identity + Retention):** All behaviors derived from the Zsh source and documented in PITFALLS.md.
-- **Phase 5 (Git + CLI):** TTY/EOF handling, argparse setup, `git add --` guard all specified.
-- **Phase 6 (Distribution):** zipapp and pyproject.toml conventions fully documented.
-
----
-
-## Watch Out For
-
-These are the highest-probability "looks done but isn't" traps from PITFALLS.md:
-
-| Check | How to Verify |
-|-------|---------------|
-| Sort parity with mixed-case + non-ASCII names | Binary compare Python vs Zsh output with `1Password`, `Bitwarden`, an extension with an accented name |
-| Section boundary bytes | `xxd` or `bytes` comparison at section boundaries; one extra `\n` is invisible in text diffs |
-| `retain_newest_per_host` two-pass | Test with two same-host same-timestamp files; both must survive |
-| `prune_old_archives` skip-not-delete | Put a `.gitkeep` in the archive dir; verify it is not deleted |
-| Main-block ordering | Two sequential runs: main folder has exactly 1 (newer) catalog, archive has the older |
-| TTY guard | `echo "" | mac-catalog` (no `--computer` flag) must exit fast with a clear error, not hang |
-| EOF handling | Ctrl-D at computer-select menu must produce clean quit, not traceback, not loop |
-| `git add --` guard | Computer folder named `-test` stages correctly |
-| Refuse-clobber rename | Rename to an existing folder name exits 1, both folders intact |
-| MCP secrets | Grep the generated catalog for `token`, `Bearer`, `sk-`, `ghp_`, `key=`, `Authorization` — zero hits |
-| `.pyz` zipapp | Run from `/tmp`; no `__file__`-relative path errors; `zipfile -l` shows no `.so`/`.dylib` |
-
----
-
-## Open Questions
-
-These items could not be fully resolved in research and must be addressed during phase planning:
-
-1. **Parity-fixture generation strategy** — The Zsh script is destructive (deletes archive catalogs older than the retention cutoff, moves files on `--rename`, commits to git). Golden fixtures must be generated from a controlled machine state without touching the real repo. Leading options: (a) a disposable `git clone` with a no-remote fixture catalog repo driven through a pty; (b) a synthetic Python fixture environment that mocks filesystem inputs to each collector. Option (b) is more controllable but requires careful fixture design. Must be planned explicitly before Phase 7 is detailed.
-
-2. **`claude mcp list` vs `~/.claude.json` parsing** — The Claude collector can either shell out to `claude mcp list --json` (CLI-first, matching the Zsh pattern) or parse `~/.claude.json` directly. The ARCHITECTURE.md integration table lists the CLI path. The question is whether `claude mcp list` produces stable, parseable JSON suitable for parity tests. Verify against the installed Claude Code version before the Claude collector is written.
-
-3. **Package name canonicalization** — ARCHITECTURE.md uses `maclist` as the Python package name in some examples; STACK.md uses `mac_software_list`. Recommendation: `mac-software-list` as the PyPI/pipx install name, `mac_software_list` as the Python import package name. Decide once in Phase 1 when `pyproject.toml` is first created.
+- **Phase 1:** All line shapes read from `format.py` source; test fixtures in
+  `test_homebrew.py` confirm mas ID is discarded. Build order and parser algorithm fully
+  specified in ARCHITECTURE.md.
+- **Phase 2:** All install command syntax verified live. Idempotency behaviors confirmed
+  against official sources and Homebrew issue tracker. Shell-safety patterns are stdlib.
+- **Phase 3:** Dispatch insertion point confirmed from `cli.py` source; `select_computer()`
+  signature confirmed from `identity.py`.
 
 ---
 
@@ -268,40 +292,81 @@ These items could not be fully resolved in research and must be addressed during
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All claims verified against live machine (Python 3.9.6 stub, Homebrew 3.14, `tomllib` presence). Zero-dep stdlib feasibility verified capability-by-capability. |
-| Features | HIGH | Distribution conventions well-documented; config precedence and XDG location confirmed by multiple independent sources. |
-| Architecture | HIGH | Architecture derived directly from reading `update-list.sh` line-by-line and the v0.46.0–v0.49.0 defect record. |
-| Pitfalls | HIGH | All 17 pitfalls derived from the actual Zsh source code and live pty-driven UAT defect records from prior milestones. No speculation. |
+| Stack | HIGH | Install syntax verified live (Homebrew 6.0.2, mas 7.0.0); VS Code CLI from official docs; Cursor base syntax HIGH (`--force` flag MEDIUM — community-confirmed, not in official docs) |
+| Features | HIGH | Scope locked in PROJECT.md; all behaviors confirmed against official docs and Homebrew issue tracker |
+| Architecture | HIGH | All module signatures read from source; dispatch pattern and `emit_item()` shapes confirmed from `cli.py` and `format.py` source |
+| Pitfalls | HIGH | All pitfalls derived from reading actual collector source; test fixtures in `test_homebrew.py` confirm mas ID is absent |
 
-**Overall confidence: HIGH**
+**Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Parity fixture generation strategy** (Open Question 1): Must be resolved in Phase 7 planning before any parity test implementation begins.
-- **`claude mcp list` CLI stability** (Open Question 2): A one-time spot-check of `claude mcp list --json` output format before Phase 4 Claude collector planning will close this quickly.
-- **Package name canonicalization** (Open Question 3): Trivial to close — decide `mac_software_list` as the import name in Phase 1 when `pyproject.toml` is first created.
+- **Cursor `--force` flag:** Confirmed working via community gists but not in official Cursor
+  docs. No impact on implementation — the generated script uses the `--list-extensions` guard
+  instead of `--force`, so this gap is moot.
+
+- **MAS version de-parenthesization:** `mas list` column 3 includes parentheses around the
+  version number (e.g., `(14.0)`). The `MasCollector` fix must strip those parens before
+  passing to `emit_item()`. Verify against actual `mas list` output at the start of Phase 1.
+
+- **Formula/cask name collision edge case:** A name existing as both a Homebrew formula and
+  a cask (rare) will get plain `brew install <name>` which resolves to the formula. For the
+  rare collision, a comment in the generated script noting `# if this is a cask: brew install
+  --cask <name>` is sufficient. No scope change needed.
+
+- **Taps:** If the catalog contains formulae from third-party taps, the generated script
+  cannot emit `brew tap <tap>` prerequisites because tap information is not currently
+  cataloged. In v2.1.0 the taps section will be empty or omitted. Document this limitation
+  in the script header.
 
 ---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `/Users/ken/dev/mac-software-list/update-list.sh` — authoritative Zsh reference; behavioral source of truth for format, degradation rules, sort, retention math, filename convention
-- Python 3.11 stdlib docs (`tomllib`, `json`, `plistlib`, `zipapp`, `dataclasses`, `pathlib`, `argparse`) — live machine verified
-- `syrupy` PyPI v5.3.2 (June 2026) — requires Python >=3.10; confirmed
-- PyPA — Writing pyproject.toml, Creating CLI tools (`[project.scripts]` format, hatchling syntax)
-- `.planning/MILESTONES.md` — v0.47.0 main-block ordering fix; v0.49.0 UAT defects (four confirmed live bugs)
+- `src/maccat/collectors/mas.py` — `_parse_mas_output`: awk column-skip confirms ID absent
+- `src/maccat/collectors/homebrew.py` — `collect()`: formula+cask concatenation without type marker
+- `src/maccat/catalog/format.py` — `emit_item()`: all four line shapes and degradation rules
+- `src/maccat/cli.py` — existing subcommand dispatch pattern, 13-step orchestration order
+- `src/maccat/identity.py` — `select_computer()` signature
+- `tests/collectors/test_homebrew.py` (lines 120–129) — fixture confirms mas ID is discarded
+- Homebrew 6.0.2 live verification — `brew help install`, cask idempotency behavior
+- mas 7.0.0 live verification — `mas help install`, idempotency warning behavior
+- [VS Code CLI docs](https://code.visualstudio.com/docs/configure/command-line) — `--install-extension`, `--force`, `--profile` flags
+- [Homebrew Manpage](https://docs.brew.sh/Manpage) — `--cask`, `-y`/`--no-ask`, upgrade behavior
+- [Homebrew issue #15295](https://github.com/Homebrew/brew/issues/15295) — cask already-installed hard error
+- [Homebrew issue #21416](https://github.com/Homebrew/brew/issues/21416) — taps-before-formulae ordering required
+- [Homebrew discourse: skip-if-installed](https://discourse.brew.sh/t/skip-ignore-brew-install-if-package-is-already-installed/633) — canonical `brew list || brew install` guard pattern
+- [betterdev.blog minimal safe bash template](https://betterdev.blog/minimal-safe-bash-script-template/) — `#!/usr/bin/env bash` + `set -Eeuo pipefail`
 
 ### Secondary (MEDIUM confidence)
-- mac.install.guide — Xcode CLT ships Python 3.9.6 (Oct 2024; verified unchanged June 2026 on this machine)
-- atmos.tools changelog, ruff GitHub issue #10739, platformdirs issue #98 — XDG convention for macOS developer CLIs
-- Python 3.9 EOL announcement (Red Hat, Dec 2025) — EOL date October 31, 2025
-- shiv docs — comparison with zipapp; justification for "use zipapp for zero-dep tools"
+- [Cursor forum: --list-extensions](https://forum.cursor.com/t/command-line-list-extensions/103565) — `cursor --install-extension` and `cursor --list-extensions` confirmed working on macOS
+- [Community gist: VS Code extensions to Cursor](https://gist.github.com/kigster/fcf644441be8f5d9e1c5434ca9f1723a) — `cursor --force --install-extension` pattern in practice
+- [Brewfile tips gist (ChristopherA)](https://gist.github.com/ChristopherA/a579274536aab36ea9966f301ff14f3f) — taps → formulae → casks → mas ordering convention
+- [mas-cli README](https://github.com/mas-cli/mas) — `mas install` behavior and scripting commands
 
-### Tertiary (LOW confidence, no action required)
-- ConfigArgParse precedence pattern — config precedence chain is a well-established convention; the specific library is not used
-- pytest-approvaltests — referenced in FEATURES.md as optional; not recommended (plain file-based fixtures preferred)
+### Tertiary (LOW confidence)
+- Cursor official docs for `--force` flag on `cursor --install-extension` — not yet documented;
+  behavior inferred from VS Code codebase inheritance and community gist confirmation
 
 ---
-*Research completed: 2026-06-14*
+
+## Cross-Researcher Conflict Resolution
+
+**Conflict 1 — Formula/cask distinction (PITFALLS flagged as blocker; STACK and ARCHITECTURE did not):**
+RESOLVED: Not a blocker. `brew install <name>` installs a formula or cask (confirmed via
+`brew install --help`). The only genuine issue is cask idempotency (non-zero exit if already
+installed, Homebrew #15295), which is resolved by the `brew list --cask` guard pattern. No
+catalog format change is needed. ARCHITECTURE.md's `SECTION_SOURCE_MAP` correctly uses plain
+`brew install` for all Homebrew items.
+
+**Conflict 2 — MAS App Store ID (ARCHITECTURE showed mas as manual-only; PITFALLS showed it as a hard blocker):**
+RESOLVED: The catalog format WILL change in Phase 1 (Option 2 from PITFALLS.md).
+`MasCollector` will emit `AppName (version) [id]` preserving the numeric ID. The
+`SECTION_SOURCE_MAP` entry for `"App Store Applications"` should be `("auto", "id_")` for
+catalogs generated after the change. The parser's degradation flag determines which path is
+taken at emitter runtime for older catalogs.
+
+---
+*Research completed: 2026-06-16*
 *Ready for roadmap: yes*
