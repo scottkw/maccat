@@ -98,6 +98,29 @@ EXPECTED_STEMS: list[str] = [
     "firefox-extensions",
 ]
 
+# ---------------------------------------------------------------------------
+# Parity cases invalidated by Phase 22 (ZSH-02 — versioned output)
+# ---------------------------------------------------------------------------
+# These three sections now emit `name (version)` lines. The frozen zsh goldens
+# remain name-only (they will be deleted in Phase 23). Regenerating the goldens
+# from Python output would recreate the tautological-parity anti-pattern — skip
+# exactly these three cases instead and keep the remaining 14 intact.
+
+XFAIL_STEMS: dict[str, str] = {
+    "homebrew-packages": (
+        "Phase 22 versioned output intentionally diverges from the frozen zsh golden "
+        "(ZSH-02). Full parity suite is retired in Phase 23."
+    ),
+    "setapp-applications": (
+        "Phase 22 versioned output intentionally diverges from the frozen zsh golden "
+        "(ZSH-02). Full parity suite is retired in Phase 23."
+    ),
+    "web-installed-applications": (
+        "Phase 22 versioned output intentionally diverges from the frozen zsh golden "
+        "(ZSH-02). Full parity suite is retired in Phase 23."
+    ),
+}
+
 # Webapps caveat comment (reproduced verbatim so the committed golden matches).
 # web-installed-applications: zsh hardcodes /Applications — Python synthetic only.
 # Zsh parity is [ASSUMED] per 17-RESEARCH.md §Assumptions A1.
@@ -324,6 +347,10 @@ def test_section_parity(
     present files.
     update_golden=True (--update-golden flag) → write normalized output and skip.
     """
+    # Skip parity cases invalidated by Phase 22's versioned output (ZSH-02).
+    if section_stem in XFAIL_STEMS:
+        pytest.skip(XFAIL_STEMS[section_stem])
+
     golden_file = GOLDEN_DIR / f"{section_stem}.golden.txt"
 
     # Build normalized Python output for this section.
