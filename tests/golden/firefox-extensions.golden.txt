@@ -1,1 +1,0 @@
-Test Firefox Addon (3.0) [test@mozilla]

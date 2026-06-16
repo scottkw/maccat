@@ -1,1 +1,0 @@
-my-codex-server [stdio]

@@ -53,27 +53,3 @@ def catalog_repo(git_repo: Path) -> Path:
     catalog = computer_dir / make_catalog_filename("personal", "20260614120000")
     catalog.write_text("test catalog", encoding="utf-8")
     return git_repo
-
-
-# ---------------------------------------------------------------------------
-# --update-golden flag (TEST-01/02 golden fixture update guard)
-# ---------------------------------------------------------------------------
-
-
-def pytest_addoption(parser: pytest.Parser) -> None:
-    parser.addoption(
-        "--update-golden",
-        action="store_true",
-        default=False,
-        help=(
-            "Regenerate golden fixture files from current Python collector output. "
-            "Only run manually when a format change is intentional. "
-            "NEVER triggers on a normal `pytest` run."
-        ),
-    )
-
-
-@pytest.fixture()
-def update_golden(request: pytest.FixtureRequest) -> bool:
-    """True only when --update-golden is passed on the command line."""
-    return request.config.getoption("--update-golden")  # type: ignore[no-any-return]

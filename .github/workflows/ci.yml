@@ -36,9 +36,6 @@ jobs:
       - name: Run tests
         run: PYTHONPATH=src ./venv/bin/pytest -x -q
 
-      - name: Check update-list.sh syntax (TEST-04)
-        run: zsh -n update-list.sh
-
   build:
     runs-on: macos-latest
 

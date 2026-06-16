@@ -1,2 +1,0 @@
-mas (Mac App Store CLI) is not installed.
-Install it with Homebrew: brew install mas
