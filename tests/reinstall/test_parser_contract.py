@@ -48,6 +48,12 @@ ADVERSARIAL_CASES = [
     ("Foo (Bar (Baz)) [9]", "Foo (Bar (Baz))", None, "9", False),
     # KNOWN LOSSY (WR-03): nested parens, no id — falls back to name-only.
     ("Foo (Bar (Baz))", "Foo (Bar (Baz))", None, None, False),
+    # KNOWN LOSSY (WR-02): embedded bracket in a name without a real id is
+    # ambiguous — symmetric to the embedded-paren case. Right-anchored matching
+    # takes the trailing "[...]" as the id, so an app named "Foo [Bar]" is
+    # re-interpreted as name "Foo" with id "Bar". Real mas/brew names rarely
+    # contain brackets, so this only affects hand-edited/external catalogs.
+    ("Foo [Bar]", "Foo", None, "Bar", False),
     # KNOWN LOSSY (WR-01): a name that legitimately ends in whitespace is not
     # round-trippable. emit_item("App ", "1.0", "") -> "App  (1.0)" (name's space
     # + emit's separator space); the WR-04 "\\s+" tolerance consumes BOTH, so the

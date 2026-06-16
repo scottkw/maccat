@@ -14,6 +14,12 @@ tests/reinstall/test_parser_contract.py):
     only affects hand-edited/external catalogs.
   * Embedded single-level parens without a distinct version ("App (Beta)"):
     right-anchored matching takes the LAST "(...)" as the version by design.
+  * Embedded brackets in a name without a real id ("Foo [Bar]"): symmetric to
+    the embedded-paren case — right-anchored matching takes the trailing "[...]"
+    as the id, so "Foo [Bar]" parses to name "Foo", id "Bar". A name that
+    legitimately contains brackets is therefore not round-trippable. Real
+    mas/brew names rarely contain brackets, so this only affects
+    hand-edited/external catalogs.
   * Trailing-whitespace names ("App " emitted as "App  (1.0)"): the WR-04
     "\\s+"/"\\s*$" tolerance also consumes a space that is part of the name
     itself, so a name that legitimately ends in whitespace is NOT round-trippable
