@@ -2,6 +2,8 @@
 
 A Python tool that catalogs all software **and developer tooling** installed on your macOS machine — applications, plus the extensions, plugins, MCP servers, and skills/agents of your AI coding CLIs, editors, and browsers. Each catalog is named with a **friendly machine label** you choose, each run keeps only the newest catalog **per machine** in the main folder, archives the rest, auto-prunes the archive after a configurable number of days (default 30), and syncs every change via git.
 
+It can also work in reverse: `maccat reinstall` turns any catalog back into a reviewable [`reinstall.sh`](#reinstall-from-a-catalog) — a never-auto-executed script that reinstalls the deterministic sources (Homebrew, Mac App Store, VS Code/Cursor extensions) and lists everything else as a manual checklist.
+
 ## Overview
 
 This tool generates comprehensive text-based catalogs of your installed software and tooling from multiple sources:
@@ -116,6 +118,43 @@ python3 maccat.pyz --computer MyMac
 | `--no-commit` | Skip automatic git commit and push |
 | `--archive-days N` | Set the archive-retention period in days for this run (default: 30) |
 | `--rename` | Separate mode: rename a machine label across all catalog files, then commit |
+
+### Reinstall from a catalog
+
+The `reinstall` subcommand reads a catalog back and generates a **`reinstall.sh`** script in the current directory that can rebuild a machine's software from the snapshot. The script is **never run for you** — it's written non-executable (mode `0644`) and printed for you to review and run yourself.
+
+```bash
+# Use an explicit catalog file
+python3 maccat.pyz reinstall --from /path/to/mac-software-list-[home]-20260616120000.txt
+
+# Or omit --from: pick a computer interactively and use its newest catalog
+python3 maccat.pyz reinstall
+
+# Non-interactive: pick a computer by name (uses that folder's newest catalog)
+python3 maccat.pyz --catalog-dir ~/my-catalog-repo reinstall --computer home
+```
+
+maccat prints the absolute path of the generated script:
+
+```
+/Users/you/reinstall.sh
+```
+
+**What the script does:**
+
+- **Auto-installs the deterministic sources** with idempotent, re-runnable, guarded commands:
+  - **Homebrew** — `brew list <n> &>/dev/null || brew list --cask <n> &>/dev/null || brew install <n>` (one command covers formulae and casks)
+  - **Mac App Store** — `mas install <id>` for apps whose numeric App Store ID is in the catalog (guarded so an already-installed app doesn't abort the run)
+  - **VS Code / Cursor extensions** — `code`/`cursor --install-extension <id>` behind a `command -v` PATH guard and a `--list-extensions` idempotency check
+  - Each line carries the cataloged version as a `# cataloged: …` comment (it installs the **latest** version, not a pin).
+- **Lists everything else as a manual checklist** (no fabricated install commands): Setapp apps, web-installed `/Applications`, Chrome/Firefox extensions, and all AI-CLI MCP servers / plugins / skills / agents (these are cataloged as identity-only for privacy, so there's nothing to auto-install).
+- Opens with `#!/usr/bin/env bash` + `set -Eeuo pipefail` and a provenance header naming the source catalog and generation date. Every catalog-derived value is shell-quoted, so it's safe to generate from any catalog.
+
+> **Note:** App Store entries are only auto-installed when the catalog records their numeric ID. Catalogs generated before v2.1.0 don't have it, so those apps fall into the manual checklist instead.
+
+| Subcommand | Description |
+|------------|-------------|
+| `reinstall [--from PATH]` | Generate `reinstall.sh` from a catalog (explicit `--from`, else the computer picker uses the newest catalog; `--computer NAME` selects non-interactively) |
 
 ## Machine Identity
 
@@ -260,10 +299,10 @@ git
 
 App Store Applications
 ------------------------------------
-Keynote (14.0)
-Numbers (14.0)
-Pages (14.0)
-Xcode (15.0)
+Keynote (14.0) [409183694]
+Numbers (14.0) [409203825]
+Pages (14.0) [409201541]
+Xcode (15.0) [497799835]
 ...
 
 Claude Code MCP Servers
