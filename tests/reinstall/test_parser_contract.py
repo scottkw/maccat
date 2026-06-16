@@ -208,6 +208,20 @@ _CATALOG_NONE_FOUND = (
     "  (none found)\n"
 )
 
+# WR-05: the exact layout cli.py produces — a content-less header section
+# (write_section("Installed Mac Software List")) immediately followed by the
+# first collector's write_section, then real sections.
+_CATALOG_REAL_HEADER_LAYOUT = (
+    "\nInstalled Mac Software List\n"
+    "------------------------------------\n"
+    "\nHomebrew Packages\n"
+    "------------------------------------\n"
+    "git (2.44.0)\n"
+    "\nApp Store Applications\n"
+    "------------------------------------\n"
+    "Safari (15.0) [1234567890]\n"
+)
+
 _CATALOG_DEGRADED = (
     "\nHomebrew Packages\n"
     "------------------------------------\n"
@@ -289,3 +303,30 @@ class TestParseCatalog:
         catalog_file.write_text(_CATALOG_TWO_SECTIONS, encoding="utf-8")
         result = parse_catalog(catalog_file)
         assert result.path == str(catalog_file)
+
+    def test_real_header_layout_yields_leading_empty_header_section(
+        self, tmp_path: Path
+    ) -> None:
+        """WR-05: the real cli.py header layout produces a leading empty header section.
+
+        Locks the contract: parse_catalog does NOT filter the content-less
+        "Installed Mac Software List" header; it appears as items=[],
+        degraded=False ahead of the real collector sections. Downstream
+        (Phase 25) consumers are responsible for skipping it.
+        """
+        catalog_file = tmp_path / "catalog.txt"
+        catalog_file.write_text(_CATALOG_REAL_HEADER_LAYOUT, encoding="utf-8")
+        result = parse_catalog(catalog_file)
+        assert [s.title for s in result.sections] == [
+            "Installed Mac Software List",
+            "Homebrew Packages",
+            "App Store Applications",
+        ]
+        header = result.sections[0]
+        assert header.items == []
+        assert header.degraded is False
+        # Real sections still parse correctly behind the empty header.
+        assert len(result.sections[1].items) == 1
+        assert result.sections[1].items[0].name == "git"
+        assert len(result.sections[2].items) == 1
+        assert result.sections[2].items[0].id == "1234567890"

@@ -132,6 +132,17 @@ def parse_catalog(path: Path) -> ParsedCatalog:
     EOF flush rule: if the file ends without a trailing blank line (the last
     write_lines call ends with a newline but no additional blank), the in-progress
     section is flushed after the loop (Pitfall 5 in RESEARCH.md).
+
+    Header-section contract (WR-05): real catalogs (see cli.py) begin with
+    write_section("Installed Mac Software List") immediately followed by the next
+    collector's write_section — a title + separator with ZERO content lines. The
+    state machine emits this as a leading ParsedSection(title="Installed Mac
+    Software List", items=[], degraded=False). This is intentional and locked by
+    test_real_header_layout_yields_leading_empty_header_section: parse_catalog
+    does NOT filter it, so downstream (Phase 25) consumers must skip empty,
+    non-degraded sections themselves. Note an empty header is indistinguishable
+    here from a section that legitimately produced no item lines, which is why
+    filtering is left to the consumer rather than applied in the parser.
     """
     path = Path(path)
     text = path.read_text(encoding="utf-8")
