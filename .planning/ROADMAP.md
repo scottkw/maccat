@@ -109,7 +109,10 @@ Full phase details archived in [milestones/v2.0.0-ROADMAP.md](milestones/v2.0.0-
   2. The existing mas collector tests pass with updated assertions reflecting the new format
   3. `parse_catalog(path)` returns a `ParsedCatalog` whose items correctly reflect name, version, and id for all four `emit_item` line shapes, including graceful handling of the `(none found)` sentinel and collector degradation messages
   4. The round-trip contract test in `tests/reinstall/test_parser_contract.py` passes for all six `emit_item` degradation variants, including adversarial fixtures with embedded parentheses in names
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 24-01-PLAN.md — Rewrite MasCollector._parse_mas_output + update TestMasCollector assertions (MAS-01)
+- [ ] 24-02-PLAN.md — Create reinstall/ subpackage (parser.py dataclasses + ITEM_RE + parse_catalog) + round-trip contract tests (PARSE-01)
 
 ### Phase 25: Script Emitter
 **Goal**: A `ParsedCatalog` can be rendered into a complete, injection-safe, idempotent `reinstall.sh` script string
@@ -164,6 +167,6 @@ Phases execute in numeric order: 24 → 25 → 26
 | 21. CLI Cleanup | v2.0.0 | 2/2 | Complete | 2026-06-16 |
 | 22. Versioned Catalog | v2.0.0 | 3/3 | Complete | 2026-06-16 |
 | 23. Retire the zsh Reference | v2.0.0 | 3/3 | Complete | 2026-06-16 |
-| 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 0/TBD | Not started | - |
+| 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 0/2 | Not started | - |
 | 25. Script Emitter | v2.1.0 | 0/TBD | Not started | - |
 | 26. Picker + CLI Wiring + Integration | v2.1.0 | 0/TBD | Not started | - |
