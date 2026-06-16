@@ -81,52 +81,21 @@ def validate_computer_name_quiet(val: str) -> str | None:
 def resolve_computer_selection(
     *,
     computer: str | None,
-    personal: bool,
-    office: bool,
-    machine: str | None,
 ) -> str | None:
-    """Map CLI selecting-flags to a folder name (or None for interactive fallback).
+    """Map the --computer flag to a folder name (or None for interactive fallback).
 
-    Zsh analog: update-list.sh lines 199–268 (the flag-alias cases inside
-    parse_arguments and the post-loop mutual-exclusion guard).
+    Validates and returns the supplied computer name, or returns None when no
+    name was supplied (caller falls back to the select_computer menu).
 
-    Selecting-flag count rules (mirror zsh exactly):
-    - More than one set → raise SystemExit("ERROR: … mutually exclusive.")
-    - Exactly one set   → resolve to its mapped value (validate name for
-      --computer/--machine; --personal/--office are fixed literals).
-    - Zero set          → return None  (caller falls back to select_computer menu)
+    - If computer is falsy (None or "")  → return None (interactive fallback).
+    - Otherwise                          → call validate_computer_name(computer)
+                                           and return computer.
 
-    NOTE: The --rename × selecting-flag combination guard (update-list.sh
-    lines 270–277) is NOT implemented here — it depends on RENAME_MODE parser
-    state and belongs to Phase 16's argparse dispatch.
+    NOTE: The --rename × selecting-flag combination guard belongs to cli.py
+    (it depends on argparse Namespace state and is not a concern of this function).
     """
-    # Count how many selecting flags are "set" (truthy).
-    # Empty-string computer/machine is treated the same as None (not set).
-    count = sum([
-        personal,
-        office,
-        bool(machine),   # "" is falsy → not set
-        bool(computer),  # "" is falsy → not set
-    ])
-
-    if count > 1:
-        raise SystemExit(
-            "ERROR: --personal, --office, --computer, and --machine are mutually exclusive."
-        )
-
-    if count == 0:
+    if not computer:
         return None
-
-    # Exactly one flag is set — resolve its value.
-    if personal:
-        return "personal"
-    if office:
-        return "office"
-    if machine:
-        validate_computer_name(machine)
-        return machine
-    # computer must be set (only remaining truthy option)
-    assert computer  # count == 1 and none of the above matched
     validate_computer_name(computer)
     return computer
 
