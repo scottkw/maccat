@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1.0
-milestone_name: Reinstall from Catalog
-status: Awaiting next milestone
-stopped_at: Roadmap created for v2.1.0 (Phases 24-26)
-last_updated: "2026-06-16T21:59:54.875Z"
-last_activity: 2026-06-16 — Milestone v2.1.0 completed and archived
+milestone: v2.2.0
+milestone_name: Broader Coverage
+status: planning
+last_updated: "2026-06-16T23:49:38.366Z"
+last_activity: 2026-06-16
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-16)
 
 ## Current Position
 
-Phase: Milestone v2.1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-16 — Milestone v2.1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-16 — Milestone v2.2.0 started
 
 ## Performance Metrics
 

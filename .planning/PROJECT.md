@@ -73,20 +73,33 @@ in v1.0.0; the zsh reference was retired in v2.0.0.)
   RST-02). Code review caught a real `set -Eeuo pipefail` BLOCKER (bare `mas install` aborting mid-run)
   and a broken `reinstall --computer NAME` flag, both fixed. 9/9 requirements; audit PASSED. 553 tests.
 
-## Current State
+## Current Milestone: v2.2.0 Broader Coverage
 
-No milestone active. v2.1.0 shipped 2026-06-16 — `maccat` now both **catalogs** a machine's full
-software + tooling state and **regenerates** a reviewable `reinstall.sh` from any catalog. The
-reinstall pipeline lives in `src/maccat/reinstall/` (parser → emitter → picker → cli). Next
-milestone's requirements will be defined fresh via `/gsd-new-milestone`.
+**Goal:** Extend the catalog to more browsers, an additional editor, and Codex plugins —
+so a single snapshot captures more of a machine's real tooling.
+
+**Target features:**
+- **Microsoft Edge extensions** — Chromium-based; extend the existing Chrome/Chromium collector
+  (all profiles, built-in components excluded, `__MSG_` name resolution) rather than duplicate it.
+- **Brave extensions** — Chromium-based; same shared-collector reuse as Edge.
+- **Zed extensions** — new collector for Zed's own extension system (name + version + id where obtainable).
+- **Safari extensions** — sandboxed macOS app-extensions; needs a different enumeration mechanism
+  (research will settle `pluginkit` vs App Store vs container scan). Highest-risk; may degrade to
+  name-only / a documented partial if a clean version/id isn't obtainable.
+- **Codex plugins** — new "Codex Plugins" catalog section alongside the existing "Codex MCP Servers".
+
+**Key context:**
+- All new sections follow the established `name (version) [id]` format (FMT-01) with graceful
+  degradation, deterministic stable sort (FMT-04), and FMT-03 secret-safety where applicable.
+- Edge + Brave + Chrome = 3 real Chromium examples, justifying a shared Chromium collector abstraction.
+- Additive only — no changes to existing sections, the catalog/archive/git flow, or the reinstall pipeline.
 
 ## Next Candidate Milestones
 
-After v2.1.0 (Reinstall from Catalog, shipped): catalog diffing / change reports (diff two
-catalogs over time, DIFF-01), additional browsers/editors (Safari, Edge, Brave, Zed, BRW-01),
-PKG-04 (pipx/PyPI as a second distribution channel), RST-03 (capture/restore brew taps), RST-04
-(best-effort AI-CLI tooling restore beyond a checklist), and the deferred v2 items (CHR-02/FF-02
-extension enabled-state, CDX-02 Codex plugins).
+After v2.2.0 (Broader Coverage, active): catalog diffing / change reports (DIFF-01), PKG-04
+(pipx/PyPI as a second distribution channel), RST-03 (capture/restore brew taps), RST-04
+(best-effort AI-CLI tooling restore beyond a checklist), and the deferred browser-extension
+enabled/disabled state (CHR-02/FF-02).
 
 ## Core Value
 
@@ -153,8 +166,9 @@ when any source isn't installed.
 
 ### Active
 
-_None — v2.1.0 shipped. No milestone is active. The next milestone's requirements will be
-defined fresh via `/gsd-new-milestone` (REQUIREMENTS.md is archived per-milestone)._
+_v2.2.0 Broader Coverage is active (started 2026-06-16). Requirements are being defined fresh in
+REQUIREMENTS.md: Edge / Brave / Zed / Safari extension cataloging (BRW-01) and a Codex Plugins
+section (CDX-02)._
 
 Candidate future milestones: catalog diffing/change reports (DIFF-01), additional browsers/editors
 (BRW-01), PKG-04 pipx/PyPI distribution, RST-03 brew-tap capture/restore, RST-04 best-effort AI-CLI
@@ -271,4 +285,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-16 after v2.1.0 milestone — shipped `maccat reinstall` (parse catalog → reviewable reinstall.sh; MAS-01, PARSE-01, GEN-01..04, MAN-01, RST-01/02). No milestone active.*
+*Last updated: 2026-06-16 — started milestone v2.2.0 Broader Coverage: catalog Edge / Brave / Zed / Safari extensions (BRW-01) and a Codex Plugins section (CDX-02). Additive coverage; existing sections + reinstall pipeline unchanged.*
