@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0.0
 milestone_name: Standalone maccat — CLI Cleanup & Versioned Catalog
 status: executing
-stopped_at: Roadmap created — 3 phases defined (21-23), all 14 requirements mapped. Ready to plan Phase 21.
-last_updated: "2026-06-16T15:13:01.402Z"
+stopped_at: Completed 23-01-PLAN.md
+last_updated: "2026-06-16T15:44:40.006Z"
 last_activity: 2026-06-16
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 8
+  completed_plans: 6
   percent: 67
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 22 — Versioned Catalog
+**Current focus:** Phase 23 — Retire the zsh Reference
 
 ## Current Position
 
-Phase: 22 (Versioned Catalog) — EXECUTING
-Plan: 3 of 3
+Phase: 23 (Retire the zsh Reference) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
 Last activity: 2026-06-16
 
-Progress: [██████████] 100%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [██████████] 100%
 | Phase 21-cli-cleanup P02 | 8 | 3 tasks | 2 files |
 | Phase 22 P22-02 | 7 | 3 tasks | 3 files |
 | Phase 22 P22-03 | 110s | 2 tasks | 1 files |
+| Phase 23-retire-zsh-reference P23-01 | 5min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,7 @@ Recent decisions affecting current work:
 - **Phase 22 implementation notes:** Homebrew versions via `brew list --formula --versions` / `--cask --versions`. Setapp + web-installed via stdlib `plistlib` reading `Info.plist` CFBundleShortVersionString. Graceful degradation: name-only when version unavailable. Raw-write sections stay raw (no flush_section).
 - **Phase 21 scope:** Remove from `cli.py`: `--personal`, `--office`, `--machine` args and the mutual-exclusion group. Remove from `identity.py`: the `personal`/`office`/`machine` parameters from `resolve_computer_selection`. Remove from `cli.py` step 3 guard and step 6 call. Update docstrings and `--help`.
 - [Phase ?]: test_naming.py confirmed unchanged — personal/office are filename fixture strings, not flag references
+- [Phase ?]: Manually created _locales/en/ in test to write JSON array as messages.json — avoids _make_ext locales kwarg
 
 ### Pending Todos
 
@@ -83,6 +85,6 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-06-16T15:13:01.395Z
-Stopped at: Roadmap created — 3 phases defined (21-23), all 14 requirements mapped. Ready to plan Phase 21.
+Last session: 2026-06-16T15:44:39.997Z
+Stopped at: Completed 23-01-PLAN.md
 Resume file: None
