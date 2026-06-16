@@ -101,3 +101,26 @@ class TestPlistVersion:
             )
         )
         assert get_plist_version(plist_file) == "3.0.0"
+
+    def test_array_root_plist_returns_empty(self, tmp_path: Path) -> None:
+        """A valid plist whose root is an array (not a dict) returns '' without raising.
+
+        Regression for CR-01: data.get() must not be reached when the root is a
+        list — that raised AttributeError and aborted the section (VER-05 violation).
+        """
+        plist_file = tmp_path / "Info.plist"
+        plist_file.write_bytes(plistlib.dumps(["a", "b", "c"], fmt=plistlib.FMT_XML))
+        assert get_plist_version(plist_file) == ""
+
+    def test_empty_short_version_falls_back_to_bundle_version(
+        self, tmp_path: Path
+    ) -> None:
+        """An explicitly-empty CFBundleShortVersionString falls through to CFBundleVersion."""
+        plist_file = tmp_path / "Info.plist"
+        plist_file.write_bytes(
+            plistlib.dumps(
+                {"CFBundleShortVersionString": "", "CFBundleVersion": "55"},
+                fmt=plistlib.FMT_XML,
+            )
+        )
+        assert get_plist_version(plist_file) == "55"

@@ -37,21 +37,28 @@ def get_plist_version(path: Path) -> str:
         >>> get_plist_version(Path("/nonexistent.plist"))
         ''
     """
-    # Fast-path: no file or empty file → cannot be a valid plist
-    if not path.is_file() or path.stat().st_size == 0:
-        return ""
-
     try:
+        # is_file() + stat() are syscalls that can race (TOCTOU) with an app
+        # update unlinking the file mid-scan — keep them inside the guard so a
+        # FileNotFoundError still degrades to "" (never raises).
+        if not path.is_file() or path.stat().st_size == 0:
+            return ""
         with path.open("rb") as fh:
-            data: dict[str, object] = plistlib.load(fh)
+            data = plistlib.load(fh)
     except Exception:  # noqa: BLE001 — catches plistlib.InvalidFileException,
         # OSError, PermissionError, struct.error, and any other parse failure
         return ""
 
-    # Key precedence: CFBundleShortVersionString > CFBundleVersion
+    # A valid plist root may be a list/str/number, not a dict — only a dict
+    # carries the version keys. Anything else degrades to "" (never raises).
+    if not isinstance(data, dict):
+        return ""
+
+    # Key precedence: CFBundleShortVersionString > CFBundleVersion.
+    # Truthiness skips an explicitly-empty value so it falls through to the next key.
     for key in ("CFBundleShortVersionString", "CFBundleVersion"):
         value = data.get(key)
-        if value is not None:
+        if value:
             return str(value)
 
     return ""
