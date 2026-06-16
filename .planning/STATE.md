@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0.0
-milestone_name: Standalone maccat — CLI Cleanup & Versioned Catalog
-status: Awaiting next milestone
-stopped_at: "Completed 23-03-PLAN.md (ZSH-04: scrub README zsh refs)"
-last_updated: "2026-06-16T16:05:30.799Z"
-last_activity: 2026-06-16 — Milestone v2.0.0 completed and archived
+milestone: v2.1.0
+milestone_name: Reinstall from Catalog
+status: planning
+last_updated: "2026-06-16T16:51:04.157Z"
+last_activity: 2026-06-16
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-16)
 
 ## Current Position
 
-Phase: Milestone v2.0.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-16 — Milestone v2.0.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-16 — Milestone v2.1.0 started
 
 ## Performance Metrics
 

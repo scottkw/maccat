@@ -2,11 +2,13 @@
 
 ## What This Is
 
-A single Zsh script (`update-list.sh`) that catalogs everything installed on a macOS
+**`maccat`** — a single-file Python (`.pyz`) CLI that catalogs everything installed on a macOS
 machine — applications plus the extensions, plugins, MCP servers, and skills/agents of the
 user's AI coding CLIs, editors, and browsers — into a timestamped, per-machine plain-text
-snapshot, auto-archives old catalogs, and auto-commits/pushes to git. It's a personal tool
-for keeping a restorable, diffable history of a machine's full software + tooling state.
+snapshot, auto-archives old catalogs, and auto-commits/pushes to git. Runs against a
+user-configured external catalog repo. It's a personal tool for keeping a restorable, diffable
+history of a machine's full software + tooling state. (Originally a Zsh script, ported to Python
+in v1.0.0; the zsh reference was retired in v2.0.0.)
 
 ## Shipped Milestones
 
@@ -50,19 +52,44 @@ for keeping a restorable, diffable history of a machine's full software + toolin
   removed; README now points to the public tool repo). A human checkpoint before the public push
   caught a private-a private Git host-host leak the plan missed. 12/12 requirements; audit PASSED. **GSD home
   moved to the maccat repo** — future feature work happens there; this repo is now data-only.
+- **v2.0.0 Standalone maccat — CLI Cleanup & Versioned Catalog** (2026-06-16) — made maccat the
+  standalone canonical tool: removed `--personal`/`--office`/`--machine` so `--computer NAME` is the
+  sole named-folder flag (CLI-03..06); added version numbers to every software section — Homebrew
+  formulae/casks via `brew list --versions`, Setapp + web-installed `/Applications` via a new
+  never-raising `plistlib` helper (VER-01..06); and retired `update-list.sh`, the `zsh_parity` suite,
+  and the CI `zsh -n` gate, leaving direct collector tests as standalone coverage (ZSH-01..04). Code
+  review caught a Critical never-raises bug in the plist helper; recovered from a mid-plan executor
+  crash. 14/14 requirements; audit PASSED. Released v2.0.0 `.pyz`.
 
-## Current Milestone
+## Current Milestone: v2.1.0 Reinstall from Catalog
 
-_None — v2.0.0 shipped 2026-06-16 (14/14 requirements, audit PASSED). maccat is now the
-standalone canonical tool: a single `--computer` flag, versioned catalog output, and no zsh
-reference. Pick the next milestone with `/gsd-new-milestone`._
+**Goal:** Generate a reviewable `reinstall.sh` from a chosen catalog — deterministically
+installable sources become install commands, everything else becomes a manual checklist.
+The script is never auto-executed.
 
-## Next Candidate Milestone
+**Target features:**
+- **`maccat reinstall` subcommand** — `--from PATH` selects an explicit catalog; if omitted,
+  the existing computer-picker chooses a computer and uses its newest catalog.
+- **Catalog parsing** — read a catalog's plain-text sections back into structured items
+  (name / version / id per source). The catalog is the source of truth.
+- **Auto-install section** — self-contained `reinstall.sh` with `brew install` (formulae +
+  casks), `mas install <id>`, and `code`/`cursor --install-extension <id>` lines; each line
+  carries the cataloged version as a comment (`# cataloged: 2.44.0`); installs latest.
+- **Manual checklist section** — non-deterministic sources listed for the user: Setapp apps,
+  web-installed `/Applications`, Chrome/Firefox extensions, and AI-CLI MCP servers / plugins /
+  skills / agents (identity-only reconfigure reminders).
+- **Never auto-execute** — output a script the user reviews and runs; safe to re-run where practical.
 
-**Reinstall / restore from a catalog** — generate a reviewable `reinstall.sh` from a chosen catalog
-(deterministic sources installed, the rest listed as a manual checklist; never auto-executed).
-Also tracked: catalog diffing/change reports, additional browsers/editors, PKG-04 (pipx/PyPI), and the
-deferred v2 items (CHR-02/FF-02 extension enabled-state, CDX-02 Codex plugins).
+**Key constraint:** AI-CLI MCP/plugins/skills can't be auto-installed — the catalog stores them
+as identity-only (`name [transport]`, no command/url/args/env) by the FMT-03 secret-safety design,
+so they can only be a manual reconfigure reminder.
+
+## Next Candidate Milestones
+
+After v2.1.0 (Reinstall from Catalog, now active): catalog diffing / change reports (diff two
+catalogs over time), additional browsers/editors (Safari, Edge, Brave, Zed), PKG-04 (pipx/PyPI as
+a second distribution channel), and the deferred v2 items (CHR-02/FF-02 extension enabled-state,
+CDX-02 Codex plugins).
 
 ## Core Value
 
@@ -214,6 +241,11 @@ distribution, and v2 items CHR-02/FF-02 enabled-state + CDX-02 Codex plugins whe
 | Remove `update-list.sh` + the `zsh_parity` byte-parity gate; maccat becomes the standalone source of truth | The zsh reference proved the port (v1.0.0) and has served its purpose; keeping it frozen blocks every output/CLI change. Backfill coverage with direct collector tests so the suite still stands | ✓ Good — v2.0.0 (every collector already had direct tests; only 2 helper branch-gaps needed backfill) |
 | Show ALL installed Homebrew versions inside the parens, not just the highest | A restore snapshot should reflect exactly what's installed; multi-version installs (e.g. `python@3.11`) are real | ✓ Good — v2.0.0 |
 | `.app` version: prefer CFBundleShortVersionString, fall back to CFBundleVersion, else name-only | Maximizes coverage while keeping the human-readable marketing version when present | ✓ Good — v2.0.0 |
+| Reinstall produces a reviewable `reinstall.sh`, never auto-executed | Installing software is high-impact and machine-specific; the user must review before running. A script is inspectable, editable, and re-runnable | — Pending v2.1.0 |
+| Auto-install only the deterministic sources (Homebrew, mas, VS Code/Cursor exts); everything else is a manual checklist | These have reliable CLI installers keyed on data the catalog holds (name / App Store id / extension id). Setapp, web apps, browser exts have no CLI install | — Pending v2.1.0 |
+| AI-CLI MCP/plugins/skills are manual-checklist only, never auto-installed | The catalog stores them identity-only (`name [transport]`) by FMT-03 secret-safety — the command/url/args/env needed to reinstall are deliberately absent | — Pending v2.1.0 |
+| Install latest, record the cataloged version as a comment (not version-pinned) | Pinning is unreliable across brew/mas/extensions (no versioned formulae variants, no mas version pin); the cataloged version stays as a reviewable reference | — Pending v2.1.0 |
+| The catalog `.txt` is the reinstall source of truth (parse it back), not a live system scan | Reinstall is about restoring a captured snapshot to a new/wiped machine; parsing the emitted plain-text sections closes the catalog→restore loop | — Pending v2.1.0 |
 
 ## Evolution
 
@@ -233,4 +265,5 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-16 after v2.0.0 milestone — shipped Standalone maccat (CLI Cleanup & Versioned Catalog): `--computer` is the sole named-folder flag, every software section carries versions, and the zsh reference + byte-parity gate are retired. maccat is now the standalone canonical tool. 14/14 requirements; audit PASSED. Next milestone TBD via `/gsd-new-milestone`.*
+
+*Last updated: 2026-06-16 — started milestone v2.1.0 Reinstall from Catalog: add a `maccat reinstall` subcommand that parses a chosen catalog and generates a reviewable, never-auto-executed `reinstall.sh` (auto-install Homebrew/mas/VS Code+Cursor; manual checklist for Setapp/web apps/browser exts/AI-CLI tooling; install-latest with cataloged version as a comment). Starts at Phase 24.*
