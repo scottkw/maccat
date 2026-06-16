@@ -1,4 +1,4 @@
-"""HomebrewCollector — raw-write byte-parity with update-list.sh:2233."""
+"""HomebrewCollector — versioned formulae + cask output (VER-01 / VER-02)."""
 from __future__ import annotations
 
 import shutil
@@ -11,11 +11,13 @@ TITLE = "Homebrew Packages"
 
 
 class HomebrewCollector(Collector):
-    """Collect Homebrew formulae and casks.
+    """Collect Homebrew formulae and casks with versions.
 
-    Zsh analog: update-list.sh lines 2233-2242 (generate_catalog Homebrew section).
+    Uses ``brew list --formula --versions`` / ``--cask --versions`` so each line
+    is ``name version [version2 ...]``. Every installed version is preserved,
+    space-joined inside the parens (VER-01/VER-02), e.g. ``python@3.11 (3.11.1 3.11.2)``.
     Raw-write: returns Section(raw=True); orchestrator writes via write_lines(),
-    NOT flush_section().
+    NOT flush_section() (ordering from ``brew`` is preserved for determinism, VER-06).
     """
 
     def available(self) -> bool:
@@ -31,6 +33,23 @@ class HomebrewCollector(Collector):
             return []
         return result.stdout.rstrip("\n").split("\n") if result.stdout.strip() else []
 
+    def _parse_brew_versions_line(self, line: str) -> str:
+        """Format one ``brew list --versions`` line as ``name (version...)``.
+
+        - ``"git 2.44.0"``                → ``"git (2.44.0)"``
+        - ``"python@3.11 3.11.1 3.11.2"`` → ``"python@3.11 (3.11.1 3.11.2)"`` (all versions)
+        - ``"git"`` (no version)          → ``"git"`` (graceful degradation, VER-05)
+        - ``""``                          → ``""`` (filtered out by caller)
+        """
+        tokens = line.split()
+        if not tokens:
+            return ""
+        name = tokens[0]
+        versions = tokens[1:]
+        if not versions:
+            return name
+        return f"{name} ({' '.join(versions)})"
+
     def collect(self) -> CollectorResult:
         if not self.available():
             print("  WARNING: brew not found.", file=sys.stderr)
@@ -43,7 +62,11 @@ class HomebrewCollector(Collector):
                     )
                 ]
             )
-        formulae = self._run(["brew", "list", "--formula"])
-        casks = self._run(["brew", "list", "--cask"])
-        lines = formulae + casks
-        return CollectorResult(sections=[Section(title=TITLE, items=lines, raw=True)])
+        formulae = self._run(["brew", "list", "--formula", "--versions"])
+        casks = self._run(["brew", "list", "--cask", "--versions"])
+        items = [
+            entry
+            for line in formulae + casks
+            if (entry := self._parse_brew_versions_line(line))
+        ]
+        return CollectorResult(sections=[Section(title=TITLE, items=items, raw=True)])
