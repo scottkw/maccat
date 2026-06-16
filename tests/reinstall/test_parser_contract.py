@@ -48,6 +48,12 @@ ADVERSARIAL_CASES = [
     ("Foo (Bar (Baz)) [9]", "Foo (Bar (Baz))", None, "9", False),
     # KNOWN LOSSY (WR-03): nested parens, no id — falls back to name-only.
     ("Foo (Bar (Baz))", "Foo (Bar (Baz))", None, None, False),
+    # KNOWN LOSSY (WR-01): a name that legitimately ends in whitespace is not
+    # round-trippable. emit_item("App ", "1.0", "") -> "App  (1.0)" (name's space
+    # + emit's separator space); the WR-04 "\\s+" tolerance consumes BOTH, so the
+    # trailing space is dropped from `name`. emit_item never produces trailing-space
+    # names, so this only affects hand-edited/external catalogs.
+    ("App  (1.0)", "App", "1.0", None, False),
 ]
 
 

@@ -14,6 +14,13 @@ tests/reinstall/test_parser_contract.py):
     only affects hand-edited/external catalogs.
   * Embedded single-level parens without a distinct version ("App (Beta)"):
     right-anchored matching takes the LAST "(...)" as the version by design.
+  * Trailing-whitespace names ("App " emitted as "App  (1.0)"): the WR-04
+    "\\s+"/"\\s*$" tolerance also consumes a space that is part of the name
+    itself, so a name that legitimately ends in whitespace is NOT round-trippable
+    (the trailing space is dropped from `name`, though `raw_line` is preserved).
+    emit_item-derived catalogs never produce trailing-space names
+    (MasCollector/HomebrewCollector build names via str.split()), so this only
+    affects hand-edited/external catalogs.
 """
 from __future__ import annotations
 
