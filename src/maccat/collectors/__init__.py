@@ -18,7 +18,7 @@ def get_registry() -> list[Collector]:
     This enables incremental per-plan development: each collector module can be imported
     and unit-tested independently without all 12 siblings being present.
 
-    Section order (21 sections from 15 collectors):
+    Section order (22 sections from 16 collectors):
       1.  Homebrew Packages             (raw)
       2.  App Store Applications        (raw)
       3.  Setapp Applications            (raw)
@@ -40,6 +40,7 @@ def get_registry() -> list[Collector]:
       19. Microsoft Edge Extensions
       20. Brave Browser Extensions
       21. Firefox Extensions
+      22. Safari Extensions
     """
     # Imports are inside the function body — safe to call get_registry() only when
     # all 15 collector modules exist (Phase 16 + beyond).
