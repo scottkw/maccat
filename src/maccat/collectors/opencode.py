@@ -25,6 +25,11 @@ from maccat.collectors.claude import _read_yaml_name
 _CONFIG_PATH = Path.home() / ".config/opencode/opencode.json"
 _AGENTS_DIR = Path.home() / ".config/opencode/agents"
 
+# Section title constants — module-level so tests can import them for the uniqueness guard.
+_PLUGINS_TITLE = "OpenCode Plugins"
+_MCP_TITLE = "OpenCode MCP Servers"
+_AGENTS_TITLE = "OpenCode Agents"
+
 # CAT-05: clamped transport whitelist — any value not in this set becomes "stdio"
 _TRANSPORT_WHITELIST: frozenset[str] = frozenset({"stdio", "http", "sse"})
 
@@ -63,7 +68,7 @@ class OpenCodeCollector(Collector):
         Path/URL guard: entry with no ``@`` that contains ``/`` → warn to stderr, skip.
         emit_item(name, "", "") → bare name.
         """
-        title = "OpenCode Plugins"
+        title = _PLUGINS_TITLE
         data = self._load_config()
         if data is None:
             return Section(title=title, items=[])
@@ -95,7 +100,7 @@ class OpenCodeCollector(Collector):
 
         emit_item(name, "", transport) → "name [transport]"
         """
-        title = "OpenCode MCP Servers"
+        title = _MCP_TITLE
         data = self._load_config()
         if data is None:
             return Section(title=title, items=[])
@@ -128,7 +133,7 @@ class OpenCodeCollector(Collector):
         Same YAML pattern as Claude Code agents (mirrors update-list.sh:1930).
         emit_item(name, "", "") → bare name.
         """
-        title = "OpenCode Agents"
+        title = _AGENTS_TITLE
         if not _AGENTS_DIR.is_dir():
             return Section(title=title, items=[])
         items: list[str] = []

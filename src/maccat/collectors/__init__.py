@@ -18,7 +18,7 @@ def get_registry() -> list[Collector]:
     This enables incremental per-plan development: each collector module can be imported
     and unit-tested independently without all 12 siblings being present.
 
-    Section order (17 sections from 12 collectors):
+    Section order (19 sections from 13 collectors):
       1.  Homebrew Packages             (raw)
       2.  App Store Applications        (raw)
       3.  Setapp Applications            (raw)
@@ -27,18 +27,20 @@ def get_registry() -> list[Collector]:
       6.  Claude Code MCP Servers
       7.  Claude Code Skills & Agents
       8.  Codex MCP Servers
-      9.  OpenCode Plugins
-      10. OpenCode MCP Servers
-      11. OpenCode Agents
-      12. Gemini CLI Extensions
-      13. Gemini CLI MCP Servers
-      14. VS Code Extensions
-      15. Cursor Extensions
-      16. Google Chrome Extensions
-      17. Firefox Extensions
+      9.  Codex Plugins
+      10. OpenCode Plugins
+      11. OpenCode MCP Servers
+      12. OpenCode Agents
+      13. Gemini CLI Extensions
+      14. Gemini CLI MCP Servers
+      15. VS Code Extensions
+      16. Cursor Extensions
+      17. Zed Extensions
+      18. Google Chrome Extensions
+      19. Firefox Extensions
     """
     # Imports are inside the function body — safe to call get_registry() only when
-    # all 12 collector modules exist (Phase 16 + beyond).
+    # all 13 collector modules exist (Phase 16 + beyond).
     from maccat.collectors.chrome import ChromeCollector
     from maccat.collectors.claude import ClaudeCollector
     from maccat.collectors.codex import CodexCollector
@@ -51,6 +53,7 @@ def get_registry() -> list[Collector]:
     from maccat.collectors.setapp import SetappCollector
     from maccat.collectors.vscode import VSCodeCollector
     from maccat.collectors.webapps import WebAppsCollector
+    from maccat.collectors.zed import ZedCollector
 
     # Return list MUST preserve section order from generate_catalog lines 2220-2313.
     # Do NOT re-sort alphabetically — order is semantically significant.
@@ -60,11 +63,12 @@ def get_registry() -> list[Collector]:
         SetappCollector(),
         WebAppsCollector(),
         ClaudeCollector(),      # yields 3 sections: Plugins, MCP Servers, Skills & Agents
-        CodexCollector(),       # yields 1 section: MCP Servers
+        CodexCollector(),       # yields 2 sections: MCP Servers, Plugins
         OpenCodeCollector(),    # yields 3 sections: Plugins, MCP Servers, Agents
         GeminiCollector(),      # yields 2 sections: Extensions, MCP Servers
         VSCodeCollector(),
         CursorCollector(),
+        ZedCollector(),         # yields 1 section: Zed Extensions
         ChromeCollector(),
         FirefoxCollector(),
     ]
