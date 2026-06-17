@@ -138,6 +138,20 @@ class TestZedDegradation:
             result = ZedCollector().collect()
         assert result.sections[0].items == []
 
+    @pytest.mark.parametrize(
+        "payload", ["[1, 2, 3]", '"hello"', "42", "null", "true"]
+    )
+    def test_zed_non_object_json_returns_empty(
+        self, tmp_path: Path, payload: str
+    ) -> None:
+        """WR-02: syntactically valid but non-object JSON (list/scalar/null) degrades
+        to items == [] instead of raising AttributeError on data.get(...)."""
+        index = tmp_path / "index.json"
+        index.write_text(payload, encoding="utf-8")
+        with patch.object(zed_mod, "_INDEX", index):
+            result = ZedCollector().collect()  # must not raise
+        assert result.sections[0].items == []
+
     def test_zed_missing_manifest_uses_ext_id_as_name(self, tmp_path: Path) -> None:
         """Entry with no 'manifest' key uses ext_id as name fallback; no exception."""
         index = tmp_path / "index.json"

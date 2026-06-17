@@ -44,6 +44,12 @@ class ZedCollector(Collector):
         except (json.JSONDecodeError, OSError):
             return CollectorResult(sections=[Section(title=_TITLE, items=[])])
 
+        # CAT-06: valid-but-non-object JSON (list/scalar/null) would raise
+        # AttributeError on data.get(...). Degrade to (none found) per the
+        # project's graceful-degradation constraint instead of crashing.
+        if not isinstance(data, dict):
+            return CollectorResult(sections=[Section(title=_TITLE, items=[])])
+
         items: list[str] = []
         for ext_id, info in data.get("extensions", {}).items():
             # CAT-06: non-dict entry degrades; skip.
