@@ -12,14 +12,14 @@ runs diff-empty (FMT-04). All implementation is stdlib-only (no new pip dependen
 
 ### Browser & Editor Coverage
 
-- [ ] **BRW-01**: Catalog **Microsoft Edge** user-installed extensions across all profiles —
+- [x] **BRW-01**: Catalog **Microsoft Edge** user-installed extensions across all profiles —
   `~/Library/Application Support/Microsoft Edge/<Profile>/Extensions/<id>/<version>/manifest.json`,
   Chromium model reusing the shared Chromium collector + `__MSG_`/`_locales` name resolution,
   built-in/component extensions excluded. Emits `name (version) [id]`. Degrades to `(none found)`
   when Edge is absent (presence detected by an actual profile with an `Extensions` dir, not just
   the base directory). (Known gap: Microsoft publishes no canonical component-ID denylist — ship
   with the Chrome baseline + a documented gap.)
-- [ ] **BRW-02**: Catalog **Brave** user-installed extensions across all profiles —
+- [x] **BRW-02**: Catalog **Brave** user-installed extensions across all profiles —
   `~/Library/Application Support/BraveSoftware/Brave-Browser/<Profile>/Extensions/...`, same shared
   Chromium collector, Brave's confirmed component-ID denylist applied, built-ins excluded.
 - [x] **BRW-03**: Catalog **Zed** installed extensions from
@@ -73,8 +73,8 @@ Explicitly excluded from v2.2.0.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BRW-01 | Phase 28 | Pending |
-| BRW-02 | Phase 28 | Pending |
+| BRW-01 | Phase 28 | Complete |
+| BRW-02 | Phase 28 | Complete |
 | BRW-03 | Phase 27 | Complete |
 | BRW-04 | Phase 29 | Pending |
 | CDX-02 | Phase 27 | Complete |
