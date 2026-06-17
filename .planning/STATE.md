@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.2.0
 milestone_name: Broader Coverage
-status: ready_to_plan
-stopped_at: Phase 28 complete (2/2) — ready to discuss Phase 29
-last_updated: 2026-06-17T20:42:17.988Z
-last_activity: 2026-06-17 -- Phase 28 execution started
+status: executing
+stopped_at: Roadmap created for v2.2.0 (Phases 27-29)
+last_updated: "2026-06-17T20:54:37.501Z"
+last_activity: 2026-06-17 -- Phase 29 execution started
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 4
+  completed_phases: 2
+  total_plans: 5
   completed_plans: 4
-  percent: 33
+  percent: 67
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 29 — safari extensions
+**Current focus:** Phase 29 — safari-extensions
 
 ## Current Position
 
-Phase: 29
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-17
+Phase: 29 (safari-extensions) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 29
+Last activity: 2026-06-17 -- Phase 29 execution started
 
 ```
 Progress: [                    ] 0% (0/3 phases)
