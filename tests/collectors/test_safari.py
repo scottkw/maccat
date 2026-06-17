@@ -284,6 +284,32 @@ class TestSafariNameResolution:
         item = result.sections[0].items[0]
         assert not item.startswith("safari ")
 
+    def test_appex_own_bundle_name_used(self, tmp_path: Path) -> None:
+        """No CFBundleDisplayName but a legit non-'safari' CFBundleName on the
+        appex itself resolves to that name — not the bundle id (WR-01)."""
+        appex = _make_appex(
+            tmp_path,
+            bundle_id="com.bitwarden.desktop.safari",
+            display_name="",
+            version="2026.5.0",
+            name="Bitwarden",
+        )
+        fixture = f"            Path = {appex}\n"
+        fake_pluginkit = tmp_path / "pluginkit"
+        fake_pluginkit.touch()
+        mock_r: MagicMock = MagicMock()
+        mock_r.returncode = 0
+        mock_r.stdout = fixture
+        with (
+            patch.object(safari_mod, "_PLUGINKIT", fake_pluginkit),
+            patch("subprocess.run", return_value=mock_r),
+        ):
+            result = SafariCollector().collect()
+        assert len(result.sections[0].items) == 1
+        item = result.sections[0].items[0]
+        assert item.startswith("Bitwarden ")
+        assert "com.bitwarden.desktop.safari" not in item.split("[", 1)[0]
+
     def test_identifier_fallback(self, tmp_path: Path) -> None:
         """When no display name is available, CFBundleIdentifier is used as name."""
         appex_path = tmp_path / "ext.appex"
