@@ -238,3 +238,334 @@ deterministic shell commands, not catalog text).
 ---
 *Stack research for: maccat v2.1.0 Reinstall from Catalog feature*
 *Researched: 2026-06-16*
+
+---
+
+# Stack Research — v2.2.0 Broader Coverage (Edge / Brave / Zed / Safari / Codex Plugins)
+
+**Domain:** macOS CLI catalog tool — new browser/editor/AI-CLI extension sources
+**Researched:** 2026-06-17
+**Confidence:** HIGH (all paths verified on live macOS; sources confirmed via official docs + on-disk inspection)
+
+---
+
+## 1. Microsoft Edge Extensions
+
+### Path (HIGH confidence — verified on-disk + Microsoft docs)
+
+```
+~/Library/Application Support/Microsoft Edge/<Profile>/Extensions/<id>/<version>/manifest.json
+```
+
+Profile enumeration mirrors Chrome exactly:
+- `Default/` first
+- Then `Profile */` sorted (same glob as `ChromeCollector`)
+
+Edge is not installed as a browser on this research machine (only `NativeMessagingHosts/` exists under `Microsoft Edge/`), so on machines where Edge is absent the base directory itself will be missing — graceful degradation fires on `not _BASE.is_dir()`.
+
+### Manifest format (HIGH confidence)
+
+Identical Chromium `manifest.json` + `_locales/<locale>/messages.json` format. `__MSG_` name resolution is needed and the existing `chrome_ext_name()` helper handles it without modification.
+
+### Component/built-in extension exclusion (MEDIUM confidence)
+
+Edge ships its own component extensions distinct from Google's Chrome denylist. The existing `COMPONENT_DENYLIST` in `chrome.py` covers 10 Google component IDs; Edge replaces those with Microsoft-specific equivalents. Official Microsoft documentation does not publish a canonical list of Edge component extension IDs. The recommended strategy:
+
+Use a **separate `EDGE_COMPONENT_DENYLIST`** frozenset. As a starting baseline, include the Chrome denylist (shared CRLSet etc.) and flag edge-specific IDs as needing expansion. The same per-profile guards (`skip Temp`, `skip _` prefix) already in `ChromeCollector._collect_profile()` provide a structural first filter. See PITFALLS.md for the open Edge component ID question.
+
+### Chrome collector reuse (HIGH confidence)
+
+**Yes — reuse verbatim with a different `_BASE`.** The `ChromeCollector._collect_profile()` method takes `extensions_dir: Path` and is stateless with respect to browser identity. A new `EdgeCollector` sets:
+- `_BASE = Path.home() / "Library/Application Support/Microsoft Edge"`
+- `_TITLE = "Microsoft Edge Extensions"`
+- `_DENYLIST = EDGE_COMPONENT_DENYLIST`
+
+Stdlib parsing: `json` only. No new deps.
+
+---
+
+## 2. Brave Extensions
+
+### Path (HIGH confidence — verified via Wazuh issue #32451 + on-disk structure)
+
+```
+~/Library/Application Support/BraveSoftware/Brave-Browser/<Profile>/Extensions/<id>/<version>/manifest.json
+```
+
+Profile enumeration: `Default/` first, then `Profile */` sorted — identical to Chrome.
+
+This machine has Brave installed (`BraveSoftware/Brave-Browser/NativeMessagingHosts/` exists) but no extensions installed yet, so `Default/Extensions/` does not exist. The `not ext_root.is_dir()` guard in `ChromeCollector.collect()` handles this correctly (skips missing `Extensions/` dirs per-profile).
+
+### Manifest format (HIGH confidence)
+
+Identical Chromium `manifest.json` + `_locales`. `chrome_ext_name()` works without modification.
+
+### Component/built-in extension exclusion (HIGH confidence — from Brave Components wiki)
+
+Brave ships 20 verified component extension IDs that appear in the `Extensions/` directory but are not user-installed. These must be excluded via a `BRAVE_COMPONENT_DENYLIST`:
+
+```python
+BRAVE_COMPONENT_DENYLIST: frozenset[str] = frozenset({
+    "eeigpngbgcognadeebkilcpcaedhellh",  # Autofill States Data
+    "iodkpdagapdfkphljnddpjlldadblomo",  # Brave Ad Block Updater
+    "gkboaolpopklhgplhaaiboijnklogmbc",  # Brave Ad Block List Catalog
+    "mfddibmblmbccpadfndgakiopmmhebop",  # Brave Ad Block Resources Library
+    "afalakplffnnnlkncjhbmahjfjhmlkal",  # Brave Local Data Updater
+    "cldoidikboihgcjfkhdeidbpclkineef",  # Brave Tor Client Updater (x86)
+    "cpoalefficncklhjfpglfiplenlpccdb",  # Brave Tor Client Updater (arm64)
+    "biahpgbdmdkfgndcmfiipgcebobojjkp",  # Brave Tor Client Updater (arm)
+    "kkjipiepeooghlclkedllogndmohhnhi",  # Brave User Model Installer
+    "giekcmmlnklenlaomppkphknjmnnpneh",  # Certificate Error Assistant
+    "hfnkpimlhhgieaddgfemjhofmfblmnib",  # CRLSet
+    "ggkkehgbnfjpeggfpleeakpidbkibbmn",  # Crowd Deny
+    "khaoiebndkojlmppeemjhbpbandiljpe",  # File Type Policies
+    "jamhcnnkihinmdlkakkaopbjbbcngflc",  # Hyphenation
+    "laoigpblnllgcgjnjnllmfolckpjlhki",  # MEI Preload
+    "gccbbckogglekeggclmmekihdgdpdgoe",  # NTP Sponsored Images
+    "aoojcmojmmcbpfgoecoadbdpnagfchel",  # NTP Background Images
+    "jflookgnkcckhobaglndicnbbgbonegd",  # Safety Tips
+    "oimompecagnajdejgnnjijobebaeigek",  # Widevine
+    "ojhpjlocmbogdgmfpkhlaaeamibhnphh",  # Zxcvbn Data Dictionaries
+})
+```
+
+All 20 IDs are 32-char lowercase alpha strings (validated). Brave Shields and Brave Wallet are compiled into the browser binary and do NOT appear as separate `Extensions/` entries — no filter needed for them.
+
+### Chrome collector reuse (HIGH confidence)
+
+**Yes — identical pattern to Edge.** `BraveCollector` sets `_BASE`, `_TITLE`, `_DENYLIST` and delegates to shared `_collect_profile()` logic.
+
+Stdlib parsing: `json` only.
+
+---
+
+## 3. Zed Extensions
+
+### Path (HIGH confidence — verified on-disk + Zed docs)
+
+| Path | Purpose |
+|------|---------|
+| `~/Library/Application Support/Zed/extensions/installed/<id>/extension.toml` | Per-extension manifest — authoritative |
+| `~/Library/Application Support/Zed/extensions/index.json` | Registry index (includes themes/languages — not extension-only) |
+
+**Use `installed/<id>/extension.toml`** — extension-only, avoids mixing with themes/languages, is the canonical extension authoring format.
+
+`~/.config/zed/` contains user config (`settings.json`) but NO extension data. All extension installation state lives in `~/Library/Application Support/Zed/`.
+
+### File format (HIGH confidence — verified with `tomllib` on live machine)
+
+`extension.toml` is valid TOML. Python 3.11+ `tomllib` (stdlib) parses it:
+
+```python
+import tomllib
+with open(ext_dir / "extension.toml", "rb") as f:
+    d = tomllib.load(f)
+ext_id  = d["id"]       # e.g. "html"  (matches directory name)
+name    = d["name"]     # e.g. "HTML"  (plain string, no __MSG__ localization)
+version = d["version"]  # e.g. "0.3.1"
+```
+
+All three fields are mandatory in the Zed extension schema. Names are plain strings — no `__MSG_` localization exists in Zed's extension system.
+
+The directory name under `installed/` equals `d["id"]` — use directory name as a fallback id if TOML parse fails.
+
+### CLI (HIGH confidence — verified)
+
+Zed CLI (`zed` v1.6.3) opens files/projects only. **No `zed extension list` subcommand exists.** On-disk manifest parsing is the only approach.
+
+### Component/built-in filter needed? (HIGH confidence)
+
+**No.** The `installed/` directory contains only user-installed extensions from Zed's extension gallery. Built-in language support is compiled into Zed or uses tree-sitter grammars, not the extension system. No denylist required.
+
+### Chrome collector reuse
+
+**Not applicable.** Requires a new `ZedCollector`. Enumeration: `glob("installed/*/extension.toml")`. Parsing: `tomllib`.
+
+---
+
+## 4. Safari Extensions
+
+### Enumeration method (HIGH confidence — verified with `pluginkit` on live machine)
+
+**Use `pluginkit -mAvv -p com.apple.Safari.web-extension`.**
+
+This is the correct macOS-built-in approach for modern macOS. Safari extensions since macOS 10.14 are sandboxed App Extensions (`.appex` bundles) embedded inside host `.app` bundles — they are NOT stored in a predictable user-scoped directory. The `pluginkit` daemon maintains the system registry of all registered app extensions.
+
+Verified plugin point values:
+- `com.apple.Safari.web-extension` — **correct, returns extensions** (Bitwarden confirmed)
+- `com.apple.Safari.extension` — returns no matches (legacy Gallery format, pre-10.14)
+- `com.apple.safari.extension` — returns no matches
+
+### Output format (HIGH confidence — parsed on live machine)
+
+```
+     com.bitwarden.desktop.safari(2026.5.0)
+        Path = /Applications/Bitwarden.app/Contents/PlugIns/safari.appex
+        UUID = ...
+     SDK = com.apple.Safari.web-extension
+     Display Name = Bitwarden
+     Short Name = Bitwarden
+```
+
+Parsing: iterate lines, match `^\s+([A-Za-z0-9._-]+)\(([^)]+)\)\s*$` to start an entry (bundle ID + pluginkit-reported version), then collect `Key = Value` tab-indented lines. Key fields: `Display Name`, `Path`.
+
+### Name/version/id fields (HIGH confidence — verified via `plistlib` on live machine)
+
+Two-tier approach:
+
+1. From pluginkit output: `Display Name` as name, version from `bundle_id(version)` suffix, `bundle_id` as id.
+2. Upgrade via `plistlib` (preferred): read `<Path>/Contents/Info.plist`:
+   - Name: `CFBundleDisplayName` or `CFBundleName`
+   - Version: `CFBundleShortVersionString` or `CFBundleVersion`
+   - ID: `CFBundleIdentifier`
+
+Verified: Bitwarden's `Info.plist` yields `CFBundleDisplayName=Bitwarden`, `CFBundleShortVersionString=2026.5.0`, `CFBundleIdentifier=com.bitwarden.desktop.safari`. All three fields obtainable via stdlib `plistlib`. The plistlib path can fail (OSError, binary plist corruption) — fall back to pluginkit-parsed values on any exception.
+
+Format: `emit_item("Bitwarden", "2026.5.0", "com.bitwarden.desktop.safari")` → `Bitwarden (2026.5.0) [com.bitwarden.desktop.safari]`
+
+### Alternatives considered and rejected
+
+| Alternative | Why Rejected |
+|-------------|-------------|
+| Scan `/Applications/*.app/Contents/PlugIns/*.appex` | Misses App Store extensions installed outside `/Applications`; slow; `pluginkit` is the authoritative registry |
+| `defaults read com.apple.Safari` | Returns fragmented preference keys, not a clean installed-extension list; unreliable across macOS versions |
+
+### Chrome collector reuse
+
+**Not applicable.** Requires a new `SafariCollector`. Stdlib modules: `subprocess`, `re`, `plistlib`.
+
+---
+
+## 5. Codex Plugins / Agents
+
+### Context (HIGH confidence — verified on live machine)
+
+Installed Codex version: **0.46.0** (`codex --version`). The plugin system was introduced in **v0.117.0**. At v0.46.0:
+
+- No `[plugins.]` section in `~/.codex/config.toml` (grep count: 0).
+- No `~/.codex/plugins/` directory.
+- No `codex plugin` subcommand (`codex plugin --help` → "unexpected argument 'plugin'").
+- `~/.codex/.tmp/plugins/` is a **marketplace catalog cache** (remote plugin registry, not installed plugins).
+
+The current "plugin-like" primitive at v0.46.0 is **`[agents."NAME"]`** sections in `~/.codex/config.toml`, with per-agent `.toml` files in `~/.codex/agents/`. This machine has 33 registered agents (all from the GSD plugin installed as a local plugin from `~/.codex/get-shit-done/`).
+
+### For Codex v0.117+ (plugin system, HIGH confidence via official docs)
+
+- Install path: `~/.codex/plugins/cache/<marketplace>/<plugin-name>/<version>/.codex-plugin/plugin.json`
+- Plugin manifest fields: `name` (string), `version` (string), `description` (string)
+- CLI (v0.133+): `codex plugin list --json` → array with `pluginId`, `name`, `version`, `installedPath`
+- Prefer CLI if available (version-aware); fall back to filesystem scan of `plugins/cache/`
+
+### For Codex v0.46.0 (agents-only, HIGH confidence via on-disk verification)
+
+- Path: `~/.codex/config.toml`, section headers `[agents."NAME"]`
+- Fields: `description` (string), `config_file` (optional path to agent `.toml`)
+- Agent `.toml` files have `name`, `description` — **no `version` field**
+- Format degrades to: `emit_item(name, "", "")` → name-only line (FMT-01 graceful degradation)
+
+### Recommended collector design
+
+```
+1. shutil.which("codex") — if absent, emit empty section
+2. Try: codex plugin list --json (v0.117+)
+   → success + JSON array: parse name/version/pluginId
+3. Fallback: scan ~/.codex/plugins/cache/ filesystem
+   → found: parse .codex-plugin/plugin.json for name/version
+4. Fallback: grep [agents."NAME"] from ~/.codex/config.toml
+   → found: emit name-only items (no version)
+5. Nothing found: emit empty section (none found)
+```
+
+Section title: **"Codex Agents"** (accurate for v0.46.0 reality; also covers plugins when upgraded).
+
+### Relationship to existing `CodexCollector`
+
+`CodexCollector` → "Codex MCP Servers" (covers `[mcp_servers.]` sections). New collector → "Codex Agents" (covers `[agents.]` sections / `plugins/cache/`). No overlap. Both coexist. The new collector mirrors the CLI-then-TOML-fallback structure of the existing one.
+
+**FMT-03 safety:** `[agents."NAME"]` sections in config.toml contain only `description` and `config_file` — no secrets. Agent `.toml` files contain `developer_instructions` (a system prompt) but no credentials. The TOML text-grep approach (section headers only) and/or reading only `name`/`version`/`description` from plugin.json are safe.
+
+Stdlib modules: `json`, `re`, `subprocess`, `shutil`, `tomllib` (optional, for agent .toml files).
+
+---
+
+## Shared Chromium Collector Abstraction
+
+With Chrome + Edge + Brave all using identical `_collect_profile()` logic, this milestone creates 3 real examples — exactly the project's 3-example threshold for justified abstraction. Recommended refactor:
+
+```python
+# src/maccat/collectors/chromium.py  (new shared base)
+class ChromiumCollector(Collector):
+    _BASE: ClassVar[Path]
+    _TITLE: ClassVar[str]
+    _DENYLIST: ClassVar[frozenset[str]]
+
+    def _collect_profile(self, extensions_dir: Path) -> list[str]: ...  # shared
+    def collect(self) -> CollectorResult: ...                             # shared
+
+# src/maccat/collectors/chrome.py
+class ChromeCollector(ChromiumCollector):
+    _BASE = Path.home() / "Library/Application Support/Google/Chrome"
+    _TITLE = "Google Chrome Extensions"
+    _DENYLIST = CHROME_COMPONENT_DENYLIST  # rename existing COMPONENT_DENYLIST
+
+# src/maccat/collectors/edge.py  (new)
+class EdgeCollector(ChromiumCollector):
+    _BASE = Path.home() / "Library/Application Support/Microsoft Edge"
+    _TITLE = "Microsoft Edge Extensions"
+    _DENYLIST = EDGE_COMPONENT_DENYLIST
+
+# src/maccat/collectors/brave.py  (new)
+class BraveCollector(ChromiumCollector):
+    _BASE = Path.home() / "Library/Application Support/BraveSoftware/Brave-Browser"
+    _TITLE = "Brave Extensions"
+    _DENYLIST = BRAVE_COMPONENT_DENYLIST
+```
+
+Current `ChromeCollector._collect_profile()` and `.collect()` are already factored to accept a `Path` argument — extraction is mechanical, not a redesign.
+
+---
+
+## stdlib Parsing Summary
+
+| Source | Stdlib Module(s) | New vs Existing |
+|--------|-----------------|-----------------|
+| Edge extensions | `json` | Reuses `chrome_ext_name()` helper; new collector class only |
+| Brave extensions | `json` | Reuses `chrome_ext_name()` helper; new collector class only |
+| Zed extensions | `tomllib` | New `ZedCollector`; `tomllib` already in stdlib (Python 3.11+) |
+| Safari extensions | `subprocess`, `re`, `plistlib` | New `SafariCollector`; all modules already in stdlib |
+| Codex agents/plugins | `json`, `re`, `subprocess`, `shutil` | New collector; mirrors pattern of existing `CodexCollector` |
+
+**Zero new pip dependencies.** The `.pyz` zipapp constraint is fully satisfied.
+
+---
+
+## What NOT to Add
+
+| Do Not Add | Why |
+|-----------|-----|
+| Any pip package | Constraint: stdlib-only, single `.pyz` zipapp |
+| `tomllib` backport (`tomli`) | Python 3.14.6 is the runtime; `tomllib` is in stdlib since 3.11 — no backport needed |
+| Edge component ID guessing | Without an official Microsoft published list, do not fabricate IDs; start with Chrome denylist as baseline and expand in a follow-on as IDs are confirmed |
+| `codex plugin list` without fallback | v0.46.0 (the installed version) has no plugin subcommand; the CLI call must be wrapped in try/except subprocess or returncode check |
+| Safari App Store enumeration | App Store data is not accessible without private APIs; `pluginkit` is the correct system-provided tool |
+| Filesystem scan of all `/Applications/*.appex` | Slow, incomplete (misses non-Applications installs), not the system's authoritative source |
+
+---
+
+## Sources
+
+- Verified on-disk: `~/Library/Application Support/BraveSoftware/Brave-Browser/` — NativeMessagingHosts only (Brave installed, no extensions)
+- Verified on-disk: `~/Library/Application Support/Microsoft Edge/` — NativeMessagingHosts only (Edge browser not installed)
+- Verified on-disk: `~/Library/Application Support/Zed/extensions/installed/html/extension.toml` — tomllib parse confirmed
+- Verified live: `pluginkit -mAvv -p com.apple.Safari.web-extension` → Bitwarden 2026.5.0 with Path + plistlib fields confirmed
+- Verified live: `~/.codex/config.toml`, Codex v0.46.0 — no `[plugins.]` section, 33 `[agents.]` entries
+- [Brave Components wiki](https://github.com/brave/brave-browser/wiki/Brave-Components) — 20 component extension IDs (HIGH confidence)
+- [Wazuh issue #32451](https://github.com/wazuh/wazuh/issues/32451) — confirms Brave macOS path `~/Library/Application Support/BraveSoftware/Brave-Browser/Default/Extensions/` (HIGH confidence)
+- [Microsoft Edge alternate distribution](https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/alternate-distribution-options) — confirms Edge macOS profile path structure (HIGH confidence)
+- [Zed Installing Extensions](https://zed.dev/docs/extensions/installing-extensions) — confirms `~/Library/Application Support/Zed/extensions/installed/` as install location (HIGH confidence)
+- [Codex Build Plugins](https://developers.openai.com/codex/plugins/build) — confirms `~/.codex/plugins/cache/$MARKETPLACE/$PLUGIN/$VERSION/.codex-plugin/plugin.json` for v0.117+ (HIGH confidence)
+- [GitHub issue #17431 openai/codex](https://github.com/openai/codex/issues/17431) — confirms no `codex plugin list` CLI in v0.46; manual config only (HIGH confidence)
+
+---
+*Stack research for: maccat v2.2.0 Broader Coverage — Edge, Brave, Zed, Safari, Codex Plugins/Agents*
+*Researched: 2026-06-17*

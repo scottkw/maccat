@@ -1,40 +1,125 @@
 # Project Research Summary
 
-**Project:** maccat v2.1.0 — Reinstall from Catalog
-**Domain:** macOS software cataloger CLI — `maccat reinstall` subcommand
-**Researched:** 2026-06-16
-**Confidence:** HIGH
+**Project:** maccat v2.2.0 — Broader Coverage (Edge, Brave, Zed, Safari, Codex Plugins)
+**Domain:** macOS CLI catalog tool — new browser/editor/AI-CLI extension sources
+**Researched:** 2026-06-17
+**Confidence:** HIGH (all paths verified on live macOS; all architectural claims grounded in source reads)
 
 ## Executive Summary
 
-The `maccat reinstall` feature closes the catalog loop by generating a `reinstall.sh` bash
-script from an existing plain-text catalog snapshot. The implementation is fully stdlib-only
-(Python `re`, `pathlib`, `dataclasses`, `shlex`) with zero new dependencies. The feature
-decomposes cleanly into three new modules — a section-boundary parser, a script emitter, and
-a thin CLI orchestrator — wired into the existing `cli.py` subcommand dispatch as a one-liner
-short-circuit after catalog repo resolution. All four deterministic sources (Homebrew, mas,
-VS Code extensions, Cursor extensions) are auto-installable; all other sources land in a
-runtime-echoed manual checklist.
+maccat v2.2.0 adds five new extension sources to the existing catalog: Microsoft Edge, Brave, Zed, Safari, and a Codex Plugins section. The architectural approach is additive throughout — four new collector files plus modifications to Chrome and Codex — with zero changes to the reinstall pipeline (parser and emitter handle all new sections automatically). All five sources are implemented with stdlib only (`json`, `tomllib`, `subprocess`, `re`, `plistlib`); the `.pyz` zipapp constraint remains fully satisfied with no new pip dependencies.
 
-Two scoped decisions shape the implementation and must not be re-litigated. First, the mas
-App Store ID is NOT currently in the catalog (the collector discards column 1 of `mas list`
-output), so v2.1.0 will add a catalog format change: `MasCollector` will emit `AppName
-(version) [id]` using `emit_item`'s full three-field path, enabling `mas install <id>` in
-the generated script. Older catalogs that predate this change will degrade those entries to
-the manual checklist. Second, the formula/cask distinction is NOT a scope blocker: `brew
-install <name>` installs a formula or a cask in modern Homebrew (verified Homebrew 6.0.2),
-so the emitter uses plain `brew install` for all Homebrew items with a `brew list --cask
-<name> &>/dev/null || brew install --cask <name>` guard for cask idempotency. Explicit cask
-detection is deferred as a future enhancement.
+The dominant pattern in this milestone is the Chromium collector abstraction. Chrome, Edge, and Brave share identical profile-scan logic differing only by base path, section title, and component denylist — three real examples satisfy the project's 3-example threshold for justified abstraction. A new `ChromiumBaseCollector` in `collectors/chromium.py` holds all shared logic; each browser becomes a three-line thin subclass. The Brave denylist (20 component IDs) is fully confirmed from the Brave wiki; the Edge denylist is confirmed to exist but lacks a single authoritative Microsoft source — ship with Chrome denylist as baseline and a documented gap, verified against a real Edge install during implementation.
 
-The central implementation risks are idempotency and safety. `brew install --cask` exits
-non-zero on an already-installed cask (Homebrew #15295), so each cask line requires the
-`brew list --cask` guard. VS Code and Cursor extension installs need `--list-extensions |
-grep` pre-checks rather than `--force`. The emitter must use `shlex.quote()` on every
-catalog-derived value in shell position and write the output file at `0o644` (never
-executable). The parser to `catalog/format.py` coupling is the primary anti-drift risk: a
-mandatory round-trip contract test in `tests/reinstall/test_parser_contract.py` is the
-mechanical guard.
+The two highest-risk items are Safari and the Codex Plugins section. Safari requires a subprocess call to `pluginkit` followed by per-extension `plistlib` reads — both must be individually never-raising, and the pluginkit output format is undocumented across macOS versions. The Codex Plugins section must handle an installed Codex v0.46.0 that has no plugin system at all — graceful degradation to `(none found)` is the common case today, not an edge case. The recommended build order defers Safari to last precisely because it has the most failure modes and the most cross-cutting test requirements.
+
+---
+
+## Cross-Document Reconciliations
+
+These points were divergent across the four research files. The resolved positions are authoritative for implementation.
+
+### 1. Zed source of truth: `index.json` over `installed/` scan
+
+**Resolved: parse `~/Library/Application Support/Zed/extensions/index.json`.**
+
+`index.json` is the canonical registry. It provides `id`, `name`, and `version` in a single JSON read with no per-extension TOML parsing needed. Scanning `installed/<id>/extension.toml` is slower, risks picking up `work/` (incomplete downloads), and reads a second file per extension unnecessarily.
+
+**Filter `dev: true` entries.** The `index.json` schema includes a `"dev": false/true` field per extension. Dev extensions are local-filesystem extensions not installable from the registry — they must be excluded from the catalog (a restore-focused snapshot should not include non-restorable items). The ARCHITECTURE.md reference to `installed_extensions.json` and the `~/.config/zed/` path is superseded by live verification in STACK.md and PITFALLS.md confirming `~/Library/Application Support/Zed/extensions/index.json` as the correct file.
+
+```python
+# Correct path (live-verified)
+_INDEX = Path.home() / "Library/Application Support/Zed/extensions/index.json"
+
+# Filter: exclude dev extensions
+for ext_id, info in data.get("extensions", {}).items():
+    if info.get("dev"):
+        continue
+    manifest = info.get("manifest", {})
+    name    = manifest.get("name", ext_id)
+    version = manifest.get("version", "")
+    # emit_item(name, version, ext_id)
+```
+
+### 2. Safari: correct pluginkit point and name field
+
+**Resolved: use `com.apple.Safari.web-extension` (NOT `com.apple.Safari.extension`).**
+
+`com.apple.Safari.extension` returns zero matches on live macOS (legacy Gallery format, pre-10.14). `com.apple.Safari.web-extension` returns modern App Extension-based extensions and is the only correct filter, verified live against Bitwarden 2026.5.0.
+
+**Resolved: read `CFBundleDisplayName`, NOT `CFBundleName`.**
+
+`CFBundleName` is the binary executable name (commonly `"safari"` in the appex). `CFBundleDisplayName` is the human-readable name that appears in Safari's Extension Manager. This is verified live: Bitwarden's appex has `CFBundleName = "safari"` and `CFBundleDisplayName = "Bitwarden"`. Reading `CFBundleName` would catalog every extension as its binary name.
+
+Name resolution chain (in order):
+```
+appex_plist["CFBundleDisplayName"]
+  -> parent_app_plist["CFBundleDisplayName"]
+  -> parent_app_plist["CFBundleName"]
+  -> bundle_id from pluginkit output
+```
+
+**Safari is LOW risk for name/version/id completeness.** The plist approach reliably yields full `name (version) [id]` entries for App Store extension bundles — no `__MSG__` locale resolution needed. Complexity is in the subprocess+plist chain, not in data availability.
+
+**Version source:** always `CFBundleShortVersionString` from the appex `Info.plist`. Discard the pluginkit parenthetical version — pluginkit can cache `(null)` for 119/485 extensions on the test machine.
+
+### 3. Codex Plugins (CDX-02): current machine produces an empty section
+
+**Resolved: the collector degrades silently to `(none found)` on Codex v0.46.0.**
+
+The installed Codex is **v0.46.0**. The plugin system was introduced in v0.117.0 (March 2026). On this machine there are zero `[plugins.*]` entries — the section will be empty until Codex is upgraded. This is the common case today, not an edge case.
+
+**Collector design (multi-tier fallback):**
+1. `shutil.which("codex")` absent — emit empty section, no NOTE
+2. Try `codex plugin list --json` (available ~v0.133+) — parse `pluginId`, `name`, `version`
+3. Fallback: scan `~/.codex/plugins/cache/` for `.codex-plugin/plugin.json` — parse `name`, `version`
+4. Fallback: text-grep `~/.codex/config.toml` for `[plugins."name@marketplace"]` headers — emit `name [name@marketplace]` (no version per FMT-03)
+5. Nothing found — `(none found)`
+
+**Section title: `"Codex Plugins"`** — distinct from existing `"Codex MCP Servers"`.
+
+**NEVER read plugin bundle `.mcp.json` files** — these can contain `env.API_KEY` credentials (FMT-03 violation). Text-grep `config.toml` headers only, exactly as `CodexCollector._collect_via_toml` does for MCP servers.
+
+**FLAG: on this machine the `"Codex Plugins"` section will emit `(none found)` until Codex is upgraded beyond v0.117.0.**
+
+### 4. Chromium abstraction: `ChromiumBaseCollector` with correct presence detection
+
+**Resolved: extract `ChromiumBaseCollector` to `collectors/chromium.py`; Chrome/Edge/Brave are thin subclasses.**
+
+Three real examples (Chrome, Edge, Brave) satisfy the project's 3-example threshold. The shared base holds `_collect_profile()`, `collect()`, and the base Chromium `COMPONENT_DENYLIST` (10 IDs, moved from `chrome.py`). Each subclass overrides `_BASE`, `_TITLE`, and `_DENYLIST`.
+
+**Presence detection must check for an actual profile, not just the base directory.** Brave's `~/Library/Application Support/BraveSoftware/Brave-Browser/` exists on the test machine (NativeMessagingHosts registration) despite no installed profile. `_base.is_dir()` alone is a false positive.
+
+Correct pattern:
+```python
+def collect(self) -> CollectorResult:
+    if not self._base.is_dir():
+        # Base dir absent: browser definitely not installed
+        print(f"  NOTE: {self._browser_name} not installed.", file=sys.stderr)
+        return CollectorResult(sections=[Section(title=self._title, items=[])])
+    # Profile enumeration naturally returns [] if no Extensions dirs exist
+    # (handles NativeMessagingHosts-only case without spurious NOTE)
+    all_items: list[str] = []
+    for profile in [self._base / "Default"] + sorted(self._base.glob("Profile */")):
+        ext_root = profile / "Extensions"
+        if ext_root.is_dir():
+            all_items.extend(self._collect_profile(ext_root))
+    return CollectorResult(sections=[Section(title=self._title, items=all_items)])
+```
+
+**Edge component denylist gap:** Brave denylist (20 IDs) fully confirmed. Edge denylist has no single authoritative Microsoft source — ship with Chrome baseline, document the gap, verify during implementation.
+
+**`COMPONENT_DENYLIST` migration:** Move to `chromium.py`; re-export from `chrome.py` for backward compat (`from maccat.collectors.chromium import COMPONENT_DENYLIST`).
+
+**Test patch target update:** After refactor, update `test_chrome.py` patches from `patch.object(chrome_mod, "_BASE", ...)` to `patch.object(ChromeCollector, "_base", new=tmp_path)`.
+
+### 5. Reinstall impact: zero changes required
+
+**Resolved: no changes to `reinstall/parser.py` or `reinstall/emitter.py`.**
+
+The parser is title-agnostic; new sections parse automatically. The emitter's `SECTION_SOURCE_MAP` falls through unknown titles to `_manual_checklist_block` — correct per MAN-01 (browser extensions and Codex plugins have no CLI installer).
+
+**Required addition: section-title uniqueness test.** Assert all `_TITLE` constants across all collector modules form a set with no duplicates. Prevents copy-paste bugs from routing new sections to wrong reinstall renderers.
 
 ---
 
@@ -42,249 +127,142 @@ mechanical guard.
 
 ### Recommended Stack
 
-No new dependencies. The entire feature is implemented with Python stdlib: `re` for the
-section-boundary parser, `pathlib` for file I/O and newest-catalog scanning, `dataclasses`
-for `ParsedItem`/`ParsedSection`/`ParsedCatalog`, and `shlex.quote()` for shell-safe
-argument quoting in the emitter. The generated script is plain bash with no Brewfile, no
-Jinja2, no template engine. A flat sequence of guarded install commands with inline version
-comments is all that is required, and string formatting handles it cleanly.
+The milestone is stdlib-only. Zero new pip dependencies. Python 3.11+ stdlib modules: `json` (Chromium manifests, Zed `index.json`), `plistlib` (Safari appex `Info.plist`), `subprocess` (Safari pluginkit, Codex CLI), `re` (pluginkit output parsing, TOML header grep), `shutil` (Codex `which`). `tomllib` is available but not strictly required — `index.json` is JSON.
 
 **Core technologies:**
-- `re` (stdlib): Right-anchored regex parsing of `emit_item` line shapes — purpose-built to
-  avoid the embedded-parens ambiguity pitfall
-- `shlex.quote` (stdlib): Shell-safe quoting for every catalog-derived value inserted into
-  generated shell commands — mandatory, not optional
-- `pathlib.Path` (stdlib): Newest-catalog scan + file write at `0o644`; already used in the
-  existing codebase
-- `dataclasses` (stdlib): `ParsedItem`, `ParsedSection`, `ParsedCatalog` — typed, testable,
-  no third-party ORM overhead
-
-**Install command syntax (verified live):**
-- Homebrew formula: `brew list <name> &>/dev/null || brew install <name>`
-- Homebrew cask: `brew list --cask <name> &>/dev/null || brew install --cask <name>`
-- mas: `mas list | grep -q "^<id> " || mas install <id>` (requires ID in catalog — see MAS format change)
-- VS Code: `code --list-extensions 2>/dev/null | grep -qi "^<id>$" || code --install-extension <id>`
-- Cursor: `cursor --list-extensions 2>/dev/null | grep -qi "^<id>$" || cursor --install-extension <id>`
-
-**Script conventions (non-negotiable):**
-- Shebang: `#!/usr/bin/env bash` (portable; `/bin/bash` on macOS may be 3.x)
-- Strict mode: `set -Eeuo pipefail`
-- Provenance header with catalog filename, timestamp, computer name, review warning
-- Section ordering: taps → formulae → casks → mas → VS Code → Cursor → manual checklist
-- File permissions: `0o644` — requires `bash reinstall.sh`, not `./reinstall.sh`
-- Never auto-execute: emitter is a pure string builder, zero subprocess calls
+- `json` (stdlib) — Chromium manifest parsing, Zed `index.json` — already used throughout codebase
+- `plistlib` (stdlib) — Safari appex `Info.plist` for name/version/id — already available
+- `subprocess` (stdlib) — Safari `pluginkit` invocation, Codex `plugin list --json` — already used in `codex.py`
+- `re` (stdlib) — pluginkit output line parsing, Codex TOML header grep — already used throughout
 
 ### Expected Features
 
-**Must have (P1 — v2.1.0 launch):**
-- `maccat reinstall` subcommand with `--from PATH` flag and interactive computer-picker
-  fallback reusing existing `select_computer()`
-- Catalog parser reading all section types back into structured `ParsedItem` objects
-- `reinstall.sh` header: shebang, strict mode, provenance, item count summary, review warning
-- Auto-install section: taps → formulae → casks → mas → VS Code → Cursor, each with
-  skip-if-installed guard and `# cataloged: version` inline comment
-- Tool-availability check (`command -v`) gating each section block; `brew` hard-exits on
-  miss, others warn-and-continue
-- Manual checklist section emitted via runtime `echo` statements (not static comments)
-  covering Setapp, web apps, Chrome/Firefox extensions, all AI-CLI tooling
-- Output path + `bash reinstall.sh` run instructions printed to stdout
-- MAS catalog format change: `MasCollector` emits `AppName (version) [id]` — prerequisite
-  for `mas install <id>` auto-install; older catalogs degrade mas entries to manual checklist
+**Must have (table stakes):**
+- `ZedCollector` — `index.json` parse, emit `name (version) [id]`, filter `dev: true`, degrade gracefully
+- `SafariCollector` — `pluginkit -mAD -p com.apple.Safari.web-extension`, plist name/version/id, never-raises chain
+- `CodexCollector` extended — `_collect_plugins()` + `"Codex Plugins"` section (empty on v0.46.0 — documented)
+- `ChromiumBaseCollector` — extract from `ChromeCollector`, zero output change for Chrome
+- `EdgeCollector` — ChromiumBaseCollector subclass, Edge denylist (Chrome baseline + documented gap)
+- `BraveCollector` — ChromiumBaseCollector subclass, full 20-ID Brave denylist (confirmed from wiki)
+- All new sources: NOTE to stderr when absent, `(none found)` when empty, `raw=False` for flush_section
+- Section title uniqueness test across all 17+ collector modules
 
-**Should have (P2 — v2.1.x after validation):**
-- Item count summary in header comment (`# 42 formulae, 18 casks, 7 MAS apps, ...`)
-- Prerequisites comment block in header (`# Requires: brew, mas, code, cursor`)
-- Warn-and-continue for absent optional tools (vs. hard-exit on missing `mas`/`code`/`cursor`)
+**Should have (differentiators):**
+- `ChromiumBaseCollector` with browser-parameterized `_title` property
+- Brave `BRAVE_COMPONENT_DENYLIST` constant with all 20 IDs in `brave.py`
+- Safari version always from plistlib (never from pluginkit which can return `(null)`)
 
-**Defer (v2.2+):**
-- Diff-from-current-state before generating (requires catalog-diffing milestone)
-- Multi-catalog merge (install union of two catalogs)
-- Explicit cask detection with `[cask]` id marker in catalog
-
-**Anti-features (never implement):**
-- Version-pinned `brew install formula@x.y.z` — no stable version-pin for most formulae;
-  cataloged version is comment-only
-- `brew bundle` / Brewfile output — cannot cover VS Code/Cursor extensions in one file
-- Auto-execution of the generated script — locked design decision
-- `--force` on extension installs — redownloads even when current; use `--list-extensions`
-  guard instead
+**Defer (v2+):**
+- Extension enabled/disabled state for any browser (CHR-02/FF-02 — explicitly deferred)
+- Edge component denylist completeness beyond Chrome baseline (requires real Edge install)
+- Safari content blocker support (`com.apple.Safari.content-blocker` point identifier)
+- Codex plugin version resolution (requires reading bundle files — FMT-03 violation risk)
 
 ### Architecture Approach
 
-The reinstall subpackage (`src/maccat/reinstall/`) follows the existing short-circuit
-dispatch pattern in `cli.py`: after `validate_catalog_repo()` and before the `--rename`
-guard, a one-liner dispatches to `run_reinstall(args, catalog_repo)` and returns. Four new
-modules are introduced — `parser.py`, `emitter.py`, `picker.py`, `cli.py` — and three
-existing modules are reused unchanged (`identity.py:select_computer()`,
-`naming.py:parse_catalog_filename()`, `config.py:resolve_catalog_repo()`). The critical
-coupling is the parser to `catalog/format.py:emit_item()` contract: the parser inverts
-exactly the four line shapes that `emit_item` produces, and a round-trip contract test
-(`tests/reinstall/test_parser_contract.py`) is the sole mechanical anti-drift guard.
+The milestone follows the established `Collector -> CollectorResult -> Section` contract. New collectors are additive: five new files (`chromium.py`, `edge.py`, `brave.py`, `zed.py`, `safari.py`) plus modifications to `chrome.py` (thin subclass), `codex.py` (second section), and `collectors/__init__.py`. The orchestration loop in `cli.py`, reinstall parser, and reinstall emitter require zero changes.
 
 **Major components:**
-1. `reinstall/parser.py` — Section-boundary state machine + right-anchored regex item
-   parser; produces `ParsedCatalog` with typed `ParsedItem` objects carrying `name`,
-   `version`, `id_`, and a degradation flag
-2. `reinstall/emitter.py` — Per-source renderers (`_brew_block`, `_editor_ext_block`,
-   `_manual_checklist_block`); static `SECTION_SOURCE_MAP` of 17 known section titles;
-   `shlex.quote()` on all catalog-derived shell arguments; pure string builder
-3. `reinstall/picker.py` — `resolve_catalog_path()`: `--from PATH` short-circuit or
-   `select_computer()` + newest-file scan; independently testable
-4. `reinstall/cli.py` — Thin orchestrator: resolve path → parse → emit → write at `0o644`
-   → print output path
+1. `collectors/chromium.py` (NEW) — `ChromiumBaseCollector` with shared `_collect_profile()`, `collect()`, base `COMPONENT_DENYLIST`
+2. `collectors/chrome.py` (REFACTORED) — thin subclass; re-exports `COMPONENT_DENYLIST` for backward compat
+3. `collectors/edge.py` (NEW) — `EdgeCollector` with Edge base path + `EDGE_COMPONENT_DENYLIST`
+4. `collectors/brave.py` (NEW) — `BraveCollector` with Brave base path + `BRAVE_COMPONENT_DENYLIST` (20 IDs)
+5. `collectors/zed.py` (NEW) — `ZedCollector` parsing `index.json`, filtering `dev: true`
+6. `collectors/safari.py` (NEW) — `SafariCollector` shelling to pluginkit, reading appex plists, individually never-raising
+7. `collectors/codex.py` (MODIFIED) — `_collect_mcp()` + `_collect_plugins()`, `collect()` returns both sections
+8. `collectors/__init__.py` (MODIFIED) — 22-section registry (was 17 sections from 12 collectors)
 
-**Key architectural constraint:** `catalog/format.py:emit_item()` must NOT be changed in
-this milestone except for the one deliberate change: `MasCollector` now calls it with the
-numeric ID as the third argument. All other `emit_item()` call sites remain unchanged.
-
-**MAS format change scope:** `MasCollector` in `collectors/mas.py` changes from
-`awk '{print $2, $3}'` (which discards column 1, the numeric ID) to a Python parse that
-extracts all three fields. The implementation subtlety: `mas list` column 3 already includes
-parentheses around the version number (e.g., `(14.0)`), so the Python parse must strip those
-parens before passing the version to `emit_item()` to avoid `AppName ((14.0)) [id]`.
+**Registry section order after v2.2.0:**
+Homebrew → mas → Setapp → WebApps → Claude (x3) → Codex MCP Servers + Codex Plugins → OpenCode (x3) → Gemini (x2) → VS Code → Cursor → Zed → Chrome → Edge → Brave → Safari → Firefox
 
 ### Critical Pitfalls
 
-1. **MAS ID absent from current catalog** — `MasCollector` discards column 1 of `mas list`
-   output. Auto-install via `mas install <id>` requires the numeric ID. Resolution decided:
-   catalog format change in Phase 1. Catalogs generated before this change must degrade mas
-   entries to the manual checklist in the parser. Verify the fix avoids double-parenthesizing
-   the version (mas output already wraps version in parens).
+1. **Safari `CFBundleDisplayName` vs `CFBundleName`** — `CFBundleName` is the binary name (`"safari"`), not the user-visible name. Always read `CFBundleDisplayName`. Verified live on this machine. Test fixture must include divergent values.
 
-2. **Formula/cask distinction is NOT a blocker** — `brew install <name>` works for both
-   formulae and casks in Homebrew 6.0.2+ (confirmed via `brew install --help`). The only
-   real issue is cask idempotency: `brew install --cask <name>` exits non-zero if already
-   installed. Use the guard pattern for all Homebrew items. Explicit cask type detection
-   is deferred. The PITFALLS agent over-flagged this as a scope blocker.
+2. **Safari pluginkit `(null)` version** — 119/485 extensions on this machine have `(null)` as the pluginkit version. Always use `CFBundleShortVersionString` from plistlib as authoritative; discard pluginkit version string.
 
-3. **Parser ambiguity: embedded parentheses in app names** — A name like
-   `Smart Photo Widget (Dark).app (3.1.0)` must parse as name=`Smart Photo Widget (Dark).app`,
-   version=`3.1.0`. Use right-anchored parsing: strip `[id]` suffix first, then `(version)`
-   suffix, remainder is name. Never split on the first `(`.
+3. **Brave/Edge presence detection via base directory** — `~/Library/Application Support/BraveSoftware/Brave-Browser/` exists on this machine (NativeMessagingHosts only). Use `_base.is_dir()` for the NOTE message only; let profile enumeration return empty items naturally.
 
-4. **Shell injection via unquoted catalog values** — App names and version strings can
-   contain `&`, `'`, `"`, `$`, backticks. Use `shlex.quote()` on every catalog-derived value
-   in shell command position. Strip `\n`/`\r` from values used in comments. Establish
-   `quote_for_script()` as the sole interpolation path — never bare f-string interpolation.
+4. **Codex plugin FMT-03 — never read `.mcp.json` bundle files** — can contain `env.API_KEY` credentials. Text-grep `config.toml` for `[plugins."name@marketplace"]` header lines only.
 
-5. **Brew cask idempotency failure** — `brew install --cask <name>` exits non-zero when
-   already installed (Homebrew #15295, confirmed current). With `set -Eeuo pipefail` this
-   aborts the generated script mid-run. Every Homebrew item must use the guard:
-   `brew list --cask <name> &>/dev/null || brew install --cask <name>`.
+5. **Zed `dev: true` extensions must be excluded** — local installs not restorable from registry. Filter `info.get("dev") == True`. Test with fixture containing a dev extension.
 
-6. **Parser to emitter drift on `emit_item` shapes** — Any future change to `emit_item()`
-   silently breaks the parser. Mitigation: module docstring cites the contract; round-trip
-   test in `tests/reinstall/test_parser_contract.py` covers all six degradation variants.
+6. **Chrome test patch target breaks after refactor** — update `test_chrome.py` patches to `patch.object(ChromeCollector, "_base", new=tmp_path)`.
 
 ---
 
 ## Implications for Roadmap
 
-Three phases are suggested. The dependency chain is strict: catalog format fix → parser →
-emitter → CLI wiring. Each phase is independently testable before the next begins.
+### Phase 1: Codex Plugins + Zed
 
-### Phase 1: Catalog Format Fix + Parser Foundation
+**Rationale:** Both sources are independent of each other and of the Chromium work. Both are low-risk. Building them first validates the "new section falls to manual checklist in reinstall" path and establishes the uniqueness test infrastructure for all subsequent phases.
 
-**Rationale:** The MAS ID absence is a hard prerequisite. Building the parser before
-`MasCollector` emits the ID means mas auto-install must be retrofitted or ripped out later.
-Fixing the format first means the parser is built against the final line shapes. The
-round-trip contract test also cannot be written until `emit_item()` call shapes are final.
+**Delivers:** `"Codex Plugins"` section (empty on v0.46.0 — documented gap), `"Zed Extensions"` section with name/version/id from `index.json`, dev extension filtering, graceful degradation on absent installations.
 
-**Delivers:**
-- `MasCollector` changed to extract all three `mas list` columns and call
-  `emit_item(name, version, id_)` — new catalog line shape: `AppName (version) [id]`
-- Mas collector tests updated to verify the new format, including version de-parens fix
-- `reinstall/__init__.py` package marker
-- `reinstall/parser.py`: `ParsedItem` (with `degraded` flag), `ParsedSection`,
-  `ParsedCatalog` data structures; section-boundary state machine; right-anchored item
-  regex (`_ITEM_RE_FULL`, `_ITEM_RE_VERSION`, `_ITEM_RE_ID`); degradation handling;
-  sentinel-line skipping
-- `tests/reinstall/test_parser_contract.py`: round-trip test for all six `emit_item`
-  degradation variants; adversarial name fixtures (`Smart Photo Widget (Dark).app (3.1.0)`,
-  extension with `(beta)` in display name, multi-version brew entry)
+**Key notes:**
+- Zed: `~/Library/Application Support/Zed/extensions/index.json`; `data.get("extensions", {})` (never `data["extensions"]`); filter `dev: true`
+- Codex: extend `CodexCollector.collect()` to return 2 sections; mirror `ClaudeCollector` multi-section pattern; text-grep headers only (FMT-03)
+- Add section-title uniqueness test at end of this phase (run on every subsequent phase)
 
-**Addresses:** mas auto-install (previously blocked), parser ambiguity pitfall, degraded
-entry handling, multi-version brew version-as-metadata
+**Pitfalls to avoid:** Zed `work/` directory scan, Codex FMT-03 bundle read, Codex v0.46.0 empty-section graceful degrade
 
-**Research flag:** None needed — all line shapes read directly from `format.py` source.
+**Research flags:** None — fully specified.
 
 ---
 
-### Phase 2: Script Emitter
+### Phase 2: Chromium Refactor + Edge + Brave
 
-**Rationale:** The emitter depends entirely on `ParsedCatalog` from Phase 1. Building it
-after the parser is validated means the emitter can be tested with known-good `ParsedCatalog`
-fixtures rather than parsing strings inline.
+**Rationale:** Edge and Brave depend on `ChromiumBaseCollector`. The refactor must land and be validated (Chrome output unchanged) before adding Edge and Brave as thin subclasses. Build order within phase: `chromium.py` -> `chrome.py` refactor -> `test_chrome.py` patch update -> `brave.py` -> `edge.py`.
 
-**Delivers:**
-- `reinstall/emitter.py`: `emit_reinstall_script(catalog, generated_date) -> str`
-- `_header_block()`: `#!/usr/bin/env bash`, `set -Eeuo pipefail`, provenance, item count
-  summary, review warning
-- `_brew_block()`: cask guard for every Homebrew item; `# cataloged: version` comments;
-  `shlex.quote()` on name; multi-version version string in comment only (no version arg)
-- `_mas_block()`: `mas list | grep -q "^<id> " || mas install <id>` guard; degrades to
-  manual checklist for entries lacking an ID (pre-format-change catalogs)
-- `_editor_ext_block("code", ...)` and `_editor_ext_block("cursor", ...)`: `--list-extensions
-  | grep -qi` guard; extension IDs normalized to lowercase; `shlex.quote()` on ID
-- `_manual_checklist_block()`: runtime `echo` statements for all non-auto-install sources;
-  `# [ ] name (version)` format with AI-CLI transport included
-- `command -v` guards at section start; `brew` hard-exits, others warn-and-continue
-- `SECTION_SOURCE_MAP`: static dict of 17 known section titles; unknown titles fall through
-  to manual checklist
-- `quote_for_script()` wrapper as sole shell-interpolation path
-- File written at `0o644`; zero subprocess calls in emitter
+**Delivers:** `ChromiumBaseCollector` eliminating 3x code duplication, `"Brave Extensions"` with 20-ID denylist (fully known), `"Microsoft Edge Extensions"` with Chrome-baseline denylist (documented gap), Chrome output verified unchanged.
 
-**Avoids:** Cask idempotency abort (brew list guard), shell injection (shlex.quote),
-auto-execution (pure string builder), PATH guard omission, version-arg breakage
+**Key notes:**
+- Move `COMPONENT_DENYLIST` to `chromium.py`; re-export from `chrome.py`
+- Update `test_chrome.py` patches: `patch.object(ChromeCollector, "_base", new=tmp_path)`
+- `BRAVE_COMPONENT_DENYLIST`: 20 confirmed IDs from STACK.md
+- Edge denylist: install Edge locally, inspect `Extensions/` dir vs. `edge://extensions` UI; IDs on disk but invisible in UI are components to add
+- Presence detection: base dir check triggers NOTE message only; profile loop handles NativeMessagingHosts-only case silently
 
-**Research flag:** None needed — all syntax verified live.
+**Pitfalls to avoid:** Chrome denylist re-export backward compat, test patch target migration, `version_sort_tail` must be called (not `max()` or `sorted()[-1]`)
+
+**Research flags:** Edge component denylist requires phase-specific verification (install Edge, enumerate Extensions dir). Document as known gap in `EDGE_COMPONENT_DENYLIST` constant comment.
 
 ---
 
-### Phase 3: Picker + CLI Wiring + Integration
+### Phase 3: Safari
 
-**Rationale:** The picker and orchestrator are thin wrappers over Phase 1 and 2 work.
-Touching `cli.py` last minimizes risk to the existing 13-step catalog-gen path.
+**Rationale:** Safari is isolated — if pluginkit output format proves unworkable, it can be deferred without blocking any prior phase. Build last to contain risk. Validate `_parse_pluginkit_output` against real pluginkit output before finalizing.
 
-**Delivers:**
-- `reinstall/picker.py`: `resolve_catalog_path(catalog_repo, from_path, computer_name)` —
-  `--from PATH` short-circuit or `select_computer()` + newest-file scan
-- `reinstall/cli.py`: `run_reinstall(args, catalog_repo)` — thin orchestrator
-- `cli.py` modifications: `reinstall` subparser with `--from` / `dest="from_path"` (handles
-  `from` keyword conflict); dispatch block after `validate_catalog_repo()`, before `--rename`
-- Integration smoke test: `maccat reinstall --from <fixture>` — verify file written, path
-  printed, `--rename` guard does not fire on reinstall args
+**Delivers:** `"Safari Extensions"` section via `pluginkit -v -m -A -p com.apple.Safari.web-extension`, name from `CFBundleDisplayName`, version from `CFBundleShortVersionString`, id from `CFBundleIdentifier`.
 
-**Avoids:** Inlining logic into `run()` (violates 13-step invariant); `from` keyword
-conflict in argparse; `--rename` guard accidentally triggering on reinstall
+**Key notes:**
+- Use `-v` flag (verbose) to get appex path in output; path is 4th tab-separated field
+- Discard pluginkit version string; always use plistlib as authoritative version source
+- Each extension's plist read individually wrapped in try/except — never a single outer block
+- Smoke test with Bitwarden (confirmed installed on this machine: `com.bitwarden.desktop.safari`)
 
-**Research flag:** None needed — dispatch pattern confirmed from `cli.py` source.
+**Pitfalls to avoid:** Wrong pluginkit point identifier (`com.apple.Safari.extension` returns nothing), `CFBundleName` instead of `CFBundleDisplayName`, `(null)` version from pluginkit, single outer try/except, non-verbose pluginkit losing appex path
+
+**Research flags:** Validate `_parse_pluginkit_output` against real `pluginkit` output before shipping. This is the only collector where a live smoke test is essential before finalizing the parser.
 
 ---
 
 ### Phase Ordering Rationale
 
-- **Format fix gates mas auto-install.** Without the MAS ID in the catalog, the emitter
-  cannot generate `mas install <id>`. Building emitter first forces a mid-phase rewrite.
-- **Parser gates emitter.** The emitter's renderers take `ParsedCatalog` as input. The
-  emitter API cannot be written without finalized parser output types.
-- **Each phase is independently testable.** Phase 1: text-only parse tests. Phase 2:
-  `ParsedCatalog` fixture → assert script string content. Phase 3: real files on disk.
-- **`cli.py` changes are last.** The 13-step order in `run()` is NON-NEGOTIABLE. Touching
-  it last minimizes disruption risk to the existing catalog-gen path.
+- **Phase 1 first:** No dependencies, no existing-code risk, validates reinstall passthrough path for all new sections
+- **Phase 2 second:** Must land before Edge/Brave; Chrome regression risk is bounded; Brave denylist is known; Edge denylist gap is documented and acceptable to ship
+- **Phase 3 last:** Highest failure modes (undocumented subprocess + chained plist reads); isolated; can be deferred if pluginkit format proves unworkable
+- **Reinstall pipeline:** Zero changes throughout — parser/emitter are additive by design
 
 ### Research Flags
 
-All three phases have standard, well-documented patterns. No `--research-phase` flag is
-needed during planning.
+Phases with documented gaps requiring implementation-time research:
+- **Phase 2 (Edge denylist):** Install Edge locally; enumerate `Default/Extensions/` on fresh profile; cross-ref `edge://extensions` UI — IDs on disk but invisible in UI are component IDs. Document as known gap.
+- **Phase 3 (Safari pluginkit format):** Validate `_parse_pluginkit_output` against real `pluginkit -v -m -A -p com.apple.Safari.web-extension` output. Run smoke test with Bitwarden.
 
-- **Phase 1:** All line shapes read from `format.py` source; test fixtures in
-  `test_homebrew.py` confirm mas ID is discarded. Build order and parser algorithm fully
-  specified in ARCHITECTURE.md.
-- **Phase 2:** All install command syntax verified live. Idempotency behaviors confirmed
-  against official sources and Homebrew issue tracker. Shell-safety patterns are stdlib.
-- **Phase 3:** Dispatch insertion point confirmed from `cli.py` source; `select_computer()`
-  signature confirmed from `identity.py`.
+Phases with standard patterns (no additional research needed):
+- **Phase 1 (Codex + Zed):** Fully specified — `index.json` format verified live, CodexCollector TOML-header-grep pattern established.
+- **Phase 2 (Chromium base + Brave):** Fully specified — Brave denylist confirmed, base class extraction is mechanical.
 
 ---
 
@@ -292,81 +270,48 @@ needed during planning.
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Install syntax verified live (Homebrew 6.0.2, mas 7.0.0); VS Code CLI from official docs; Cursor base syntax HIGH (`--force` flag MEDIUM — community-confirmed, not in official docs) |
-| Features | HIGH | Scope locked in PROJECT.md; all behaviors confirmed against official docs and Homebrew issue tracker |
-| Architecture | HIGH | All module signatures read from source; dispatch pattern and `emit_item()` shapes confirmed from `cli.py` and `format.py` source |
-| Pitfalls | HIGH | All pitfalls derived from reading actual collector source; test fixtures in `test_homebrew.py` confirm mas ID is absent |
+| Stack | HIGH | All paths live-verified. `index.json` format confirmed. pluginkit output confirmed via Bitwarden test. Codex v0.46.0 vs v0.117.0 gap documented. Zero new deps confirmed. |
+| Features | HIGH | All five sources fully specified with entry formats, field sources, degradation rules, section titles. Brave denylist HIGH (wiki). Edge denylist gap explicitly documented. |
+| Architecture | HIGH | All integration points grounded in direct source reads (chrome.py, codex.py, claude.py, emitter.py, parser.py). Test patch migration documented. Registry order specified. |
+| Pitfalls | HIGH | Critical pitfalls (CFBundleDisplayName, pluginkit null version, Brave NativeMessagingHosts false-positive, FMT-03 bundle read) all verified live or from authoritative source. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Cursor `--force` flag:** Confirmed working via community gists but not in official Cursor
-  docs. No impact on implementation — the generated script uses the `--list-extensions` guard
-  instead of `--force`, so this gap is moot.
+- **Edge component denylist completeness (MEDIUM confidence):** No single authoritative Microsoft source. Mitigation: ship with Chrome baseline, add Edge-specific IDs during implementation, document in `EDGE_COMPONENT_DENYLIST` comment.
 
-- **MAS version de-parenthesization:** `mas list` column 3 includes parentheses around the
-  version number (e.g., `(14.0)`). The `MasCollector` fix must strip those parens before
-  passing to `emit_item()`. Verify against actual `mas list` output at the start of Phase 1.
+- **Codex v0.117.0+ plugin format stability (MEDIUM confidence):** Plugin system is newer than the installed version; schema may still evolve. Mitigation: text-grep headers only (immune to value-level churn); CLI call wrapped with fallback.
 
-- **Formula/cask name collision edge case:** A name existing as both a Homebrew formula and
-  a cask (rare) will get plain `brew install <name>` which resolves to the formula. For the
-  rare collision, a comment in the generated script noting `# if this is a cask: brew install
-  --cask <name>` is sufficient. No scope change needed.
-
-- **Taps:** If the catalog contains formulae from third-party taps, the generated script
-  cannot emit `brew tap <tap>` prerequisites because tap information is not currently
-  cataloged. In v2.1.0 the taps section will be empty or omitted. Document this limitation
-  in the script header.
+- **Safari pluginkit verbose format across macOS versions (MEDIUM confidence):** Undocumented internal tool. Mitigation: treat every field as optional; wrap per-extension plist reads individually; validate before shipping.
 
 ---
 
 ## Sources
 
-### Primary (HIGH confidence)
-- `src/maccat/collectors/mas.py` — `_parse_mas_output`: awk column-skip confirms ID absent
-- `src/maccat/collectors/homebrew.py` — `collect()`: formula+cask concatenation without type marker
-- `src/maccat/catalog/format.py` — `emit_item()`: all four line shapes and degradation rules
-- `src/maccat/cli.py` — existing subcommand dispatch pattern, 13-step orchestration order
-- `src/maccat/identity.py` — `select_computer()` signature
-- `tests/collectors/test_homebrew.py` (lines 120–129) — fixture confirms mas ID is discarded
-- Homebrew 6.0.2 live verification — `brew help install`, cask idempotency behavior
-- mas 7.0.0 live verification — `mas help install`, idempotency warning behavior
-- [VS Code CLI docs](https://code.visualstudio.com/docs/configure/command-line) — `--install-extension`, `--force`, `--profile` flags
-- [Homebrew Manpage](https://docs.brew.sh/Manpage) — `--cask`, `-y`/`--no-ask`, upgrade behavior
-- [Homebrew issue #15295](https://github.com/Homebrew/brew/issues/15295) — cask already-installed hard error
-- [Homebrew issue #21416](https://github.com/Homebrew/brew/issues/21416) — taps-before-formulae ordering required
-- [Homebrew discourse: skip-if-installed](https://discourse.brew.sh/t/skip-ignore-brew-install-if-package-is-already-installed/633) — canonical `brew list || brew install` guard pattern
-- [betterdev.blog minimal safe bash template](https://betterdev.blog/minimal-safe-bash-script-template/) — `#!/usr/bin/env bash` + `set -Eeuo pipefail`
+### Primary (HIGH confidence — live-verified or official source)
 
-### Secondary (MEDIUM confidence)
-- [Cursor forum: --list-extensions](https://forum.cursor.com/t/command-line-list-extensions/103565) — `cursor --install-extension` and `cursor --list-extensions` confirmed working on macOS
-- [Community gist: VS Code extensions to Cursor](https://gist.github.com/kigster/fcf644441be8f5d9e1c5434ca9f1723a) — `cursor --force --install-extension` pattern in practice
-- [Brewfile tips gist (ChristopherA)](https://gist.github.com/ChristopherA/a579274536aab36ea9966f301ff14f3f) — taps → formulae → casks → mas ordering convention
-- [mas-cli README](https://github.com/mas-cli/mas) — `mas install` behavior and scripting commands
+- Live verification: `~/Library/Application Support/Zed/extensions/index.json` — confirmed `{"extensions": {"html": {"manifest": {"id": "html", "name": "HTML", "version": "0.3.1"}, "dev": false}}}` format
+- Live verification: `pluginkit -mAD -p com.apple.Safari.web-extension` — Bitwarden 2026.5.0 only (correct filter confirmed; `com.apple.Safari.extension` returns nothing)
+- Live verification: `pluginkit -v -m -A -p com.apple.Safari.web-extension` — tab-separated format with path confirmed
+- Live verification: `plutil -p /Applications/Bitwarden.app/Contents/PlugIns/safari.appex/Contents/Info.plist` — `CFBundleDisplayName = "Bitwarden"`, `CFBundleName = "safari"` confirmed
+- Live verification: `~/.codex/config.toml`, Codex v0.46.0 — no `[plugins.]` section; 33 `[agents.]` entries
+- [Brave Components wiki](https://github.com/brave/brave-browser/wiki/Brave-Components) — 20 Brave component extension IDs (all 32-char lowercase alpha, validated)
+- `src/maccat/collectors/chrome.py` — `COMPONENT_DENYLIST`, `_collect_profile`, `available()` pattern
+- `src/maccat/collectors/codex.py` — `_collect_via_toml` TOML-header-grep pattern (FMT-03 model)
+- `src/maccat/collectors/claude.py` — multi-section `collect()` pattern
+- `src/maccat/reinstall/emitter.py` — `SECTION_SOURCE_MAP` (4 titles), manual fallthrough logic confirmed
+- `src/maccat/reinstall/parser.py` — title-agnostic state machine confirmed (SEPARATOR = 36 dashes)
+- [Codex changelog](https://developers.openai.com/codex/changelog) — plugin system in v0.117.0 (March 2026)
+- [Codex Build Plugins](https://developers.openai.com/codex/plugins/build) — `~/.codex/plugins/cache/` path for v0.117+
 
-### Tertiary (LOW confidence)
-- Cursor official docs for `--force` flag on `cursor --install-extension` — not yet documented;
-  behavior inferred from VS Code codebase inheritance and community gist confirmation
+### Secondary (MEDIUM confidence — community/multi-source)
+
+- [Wazuh issue #32451](https://github.com/wazuh/wazuh/issues/32451) — confirms Brave macOS path `~/Library/Application Support/BraveSoftware/Brave-Browser/Default/Extensions/`
+- [Microsoft Edge alternate distribution docs](https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/alternate-distribution-options) — confirms Edge macOS profile path structure
+- [Zed Installing Extensions](https://zed.dev/docs/extensions/installing-extensions) — confirms `~/Library/Application Support/Zed/extensions/installed/` (index.json confirmed as canonical via live verification)
+- [GitHub issue #17431 openai/codex](https://github.com/openai/codex/issues/17431) — confirms no `codex plugin list` CLI in v0.46
 
 ---
-
-## Cross-Researcher Conflict Resolution
-
-**Conflict 1 — Formula/cask distinction (PITFALLS flagged as blocker; STACK and ARCHITECTURE did not):**
-RESOLVED: Not a blocker. `brew install <name>` installs a formula or cask (confirmed via
-`brew install --help`). The only genuine issue is cask idempotency (non-zero exit if already
-installed, Homebrew #15295), which is resolved by the `brew list --cask` guard pattern. No
-catalog format change is needed. ARCHITECTURE.md's `SECTION_SOURCE_MAP` correctly uses plain
-`brew install` for all Homebrew items.
-
-**Conflict 2 — MAS App Store ID (ARCHITECTURE showed mas as manual-only; PITFALLS showed it as a hard blocker):**
-RESOLVED: The catalog format WILL change in Phase 1 (Option 2 from PITFALLS.md).
-`MasCollector` will emit `AppName (version) [id]` preserving the numeric ID. The
-`SECTION_SOURCE_MAP` entry for `"App Store Applications"` should be `("auto", "id_")` for
-catalogs generated after the change. The parser's degradation flag determines which path is
-taken at emitter runtime for older catalogs.
-
----
-*Research completed: 2026-06-16*
+*Research completed: 2026-06-17*
 *Ready for roadmap: yes*

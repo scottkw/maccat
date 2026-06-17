@@ -1,638 +1,831 @@
-# Architecture Research
+# Architecture Research: v2.2.0 Broader Coverage — New Collector Integration
 
-**Domain:** maccat v2.1.0 — Reinstall from Catalog
-**Researched:** 2026-06-16
-**Confidence:** HIGH (based on direct source reading of all relevant modules)
+**Domain:** maccat collector extension — Chromium shared abstraction + Edge/Brave/Zed/Safari/Codex Plugins
+**Researched:** 2026-06-17
+**Confidence:** HIGH
 
-## Integration Design
-
-### How `reinstall` Fits into the Existing Architecture
-
-The existing `run()` in `cli.py` already has a short-circuit dispatch pattern: `config`
-subcommand and `--rename` both dispatch early and return before the 13-step catalog-gen
-block. The `reinstall` subcommand follows the same pattern — third short-circuit, resolved
-after catalog-repo config and before computer selection.
-
-```
-cli.py run():
-  1. Parse args
-  2. config subcommand → dispatch + return          [existing]
-  3. --rename guard
-  4. load_config + resolve_catalog_repo             ← reinstall needs this too
-  5. reinstall subcommand → dispatch + return       [NEW — insert here]
-  6. --rename short-circuit
-  7. select_computer
-  ... 13-step catalog-gen block continues unchanged
-```
-
-The reinstall dispatch must happen AFTER step 4 (catalog repo resolution) because
-`reinstall` needs the catalog repo to resolve the computer folder or validate `--from`.
-It must happen BEFORE step 6 (`select_computer`) because the interactive picker in
-`reinstall/picker.py` calls `select_computer` itself rather than letting the main flow do it.
+All findings are grounded in direct source reads. File paths and line references point to
+the current codebase under `src/maccat/`.
 
 ---
 
-## System Overview
+## Standard Architecture
+
+### System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      cli.py  run()                                   │
-│   Subcommand dispatch (config / reinstall / catalog-gen)            │
-├───────────────────────────────┬─────────────────────────────────────┤
-│  EXISTING (unchanged)         │  NEW                                 │
-│  ┌──────────────────────┐     │  ┌────────────────────────────────┐  │
-│  │ config.py            │     │  │ reinstall/cli.py               │  │
-│  │ resolve_catalog_repo │     │  │ run_reinstall(args, repo)      │  │
-│  │ validate_catalog_repo│     │  └────────────┬───────────────────┘  │
-│  └──────────────────────┘     │               │                      │
-│  ┌──────────────────────┐     │  ┌────────────▼───────────────────┐  │
-│  │ identity.py          │ ◄───┤  │ reinstall/picker.py            │  │
-│  │ select_computer()    │     │  │ resolve_catalog_path()         │  │
-│  │ discover_computer_   │     │  │ (--from PATH or computer-picker│  │
-│  │   folders()          │     │  │  + newest-catalog scan)        │  │
-│  └──────────────────────┘     │  └────────────┬───────────────────┘  │
-│  ┌──────────────────────┐     │               │                      │
-│  │ naming.py            │ ◄───┤               │                      │
-│  │ parse_catalog_       │     │               │                      │
-│  │   filename()         │     │               │                      │
-│  └──────────────────────┘     │  ┌────────────▼───────────────────┐  │
-│                               │  │ reinstall/parser.py            │  │
-│  ┌──────────────────────┐     │  │ parse_catalog(path)            │  │
-│  │ catalog/format.py    │ ◄───┤  │  → ParsedCatalog               │  │
-│  │ emit_item()          │     │  │  (contract, not called)        │  │
-│  │ (contract reference) │     │  └────────────┬───────────────────┘  │
-│  └──────────────────────┘     │               │                      │
-│                               │  ┌────────────▼───────────────────┐  │
-│                               │  │ reinstall/emitter.py           │  │
-│                               │  │ emit_reinstall_script(catalog) │  │
-│                               │  │  → str (reinstall.sh content)  │  │
-│                               │  └────────────────────────────────┘  │
-└───────────────────────────────┴─────────────────────────────────────┘
+cli.py: run()
+  └── get_registry()  [collectors/__init__.py]
+        │
+        ├── HomebrewCollector, MasCollector, SetappCollector, WebAppsCollector
+        ├── ClaudeCollector, CodexCollector(*), OpenCodeCollector, GeminiCollector
+        ├── VSCodeCollector, CursorCollector, ZedCollector(NEW)
+        ├── ChromeCollector(*), EdgeCollector(NEW), BraveCollector(NEW)
+        ├── SafariCollector(NEW), FirefoxCollector
+        │
+        (*) CodexCollector: MODIFIED — yields 2 sections instead of 1
+        (*) ChromeCollector: REFACTORED — becomes thin subclass of ChromiumBaseCollector
+
+Each Collector.collect() → CollectorResult(sections=[Section(...)])
+
+cli.py orchestration loop (lines 318-327):
+  for collector in get_registry():
+      result = collector.collect()
+      for section in result.sections:
+          w.write_section(section.title)
+          if section.raw:
+              w.write_lines(section.items)
+          else:
+              w.write_lines(flush_section(section.items))
+
+reinstall/emitter.py SECTION_SOURCE_MAP (lines 230-235):
+  → new browser/editor/Codex sections NOT in map
+  → fall through to _manual_checklist_block()
+  → no changes to emitter.py needed
 ```
 
----
+### Component Responsibilities
 
-## Component Responsibilities
-
-| Component | Responsibility | Status |
-|-----------|----------------|--------|
-| `cli.py` `_build_parser()` | Add `reinstall` subparser with `--from` flag | MODIFIED |
-| `cli.py` `run()` | Insert reinstall dispatch block at step 5 | MODIFIED |
-| `reinstall/__init__.py` | Package marker | NEW |
-| `reinstall/cli.py` `run_reinstall()` | Orchestrate: resolve path → parse → emit → write | NEW |
-| `reinstall/picker.py` `resolve_catalog_path()` | `--from PATH` short-circuit or interactive select_computer + newest-file scan | NEW |
-| `reinstall/parser.py` `parse_catalog()` | Section-boundary state machine + per-line item parser | NEW |
-| `reinstall/emitter.py` `emit_reinstall_script()` | Per-source renderers producing the script string | NEW |
-| `identity.py` `select_computer()` | Reused verbatim — unchanged | EXISTING (reused) |
-| `identity.py` `discover_computer_folders()` | Reused via select_computer | EXISTING (reused) |
-| `naming.py` `parse_catalog_filename()` | Reused in picker for newest-catalog scan | EXISTING (reused) |
-| `config.py` `resolve_catalog_repo()` | Reused in cli.py dispatch block | EXISTING (reused) |
-| `catalog/format.py` `emit_item()` | Contract reference only — not called at reinstall runtime | EXISTING (contract) |
+| Component | Responsibility | File / Status |
+|-----------|----------------|---------------|
+| `ChromiumBaseCollector` | Parameterized Chromium extension scan (name, base path, denylist) | `collectors/chromium.py` NEW |
+| `ChromeCollector` | Chrome-specific paths/title via ChromiumBaseCollector | `collectors/chrome.py` REFACTORED |
+| `EdgeCollector` | Edge-specific paths/title via ChromiumBaseCollector | `collectors/edge.py` NEW |
+| `BraveCollector` | Brave-specific paths/title via ChromiumBaseCollector | `collectors/brave.py` NEW |
+| `ZedCollector` | Reads installed extensions JSON from `~/.config/zed/extensions/` | `collectors/zed.py` NEW |
+| `SafariCollector` | Shells out to `pluginkit -mAvvv -p com.apple.Safari.extension` | `collectors/safari.py` NEW |
+| `CodexCollector` | MODIFIED: yields 2 sections (MCP Servers + Plugins) | `collectors/codex.py` MODIFIED |
+| Registry | Ordered list including all new collectors in catalog section order | `collectors/__init__.py` MODIFIED |
+| Reinstall parser | Section-title-agnostic state machine; new sections parse automatically | `reinstall/parser.py` NO CHANGE |
+| Reinstall emitter | Routes sections to renderers; new sections fall through to checklist | `reinstall/emitter.py` NO CHANGE |
 
 ---
 
 ## Recommended Project Structure
 
 ```
-src/maccat/
-├── cli.py                    # MODIFIED: add reinstall subcommand + dispatch
-├── reinstall/
-│   ├── __init__.py           # empty package marker
-│   ├── cli.py                # run_reinstall(args, catalog_repo) — thin orchestrator
-│   ├── picker.py             # resolve_catalog_path(): --from or select+newest
-│   ├── parser.py             # parse_catalog(path) → ParsedCatalog
-│   └── emitter.py            # emit_reinstall_script(ParsedCatalog) → str
-└── [all existing modules unchanged]
+src/maccat/collectors/
+├── base.py               # Collector/Section/CollectorResult — unchanged
+├── chromium.py           # NEW: ChromiumBaseCollector (parameterized shared logic)
+├── chrome.py             # REFACTORED: thin subclass of ChromiumBaseCollector
+├── edge.py               # NEW: thin subclass of ChromiumBaseCollector
+├── brave.py              # NEW: thin subclass of ChromiumBaseCollector
+├── zed.py                # NEW: ZedCollector standalone
+├── safari.py             # NEW: SafariCollector standalone
+├── codex.py              # MODIFIED: collect() returns 2 sections
+├── __init__.py           # MODIFIED: register new collectors in section order
+└── [existing: claude, cursor, firefox, gemini, homebrew, mas, opencode, setapp, vscode, webapps]
+
+tests/collectors/
+├── test_chromium.py      # NEW: shared base logic tests
+├── test_chrome.py        # MODIFIED: update patch target post-refactor
+├── test_edge.py          # NEW: mirrors test_chrome.py structure
+├── test_brave.py         # NEW: mirrors test_chrome.py structure
+├── test_zed.py           # NEW
+├── test_safari.py        # NEW — mocks subprocess.run for pluginkit
+└── test_codex.py         # MODIFIED: cover new Codex Plugins section
 ```
 
 ### Structure Rationale
 
-- **`reinstall/` subpackage:** Isolates all new code. The existing catalog-gen pipeline
-  is untouched except for two wiring points in `cli.py`. Future milestones (catalog
-  diffing, etc.) follow the same subpackage pattern.
-- **`reinstall/cli.py` vs inlining:** Root `cli.py` has a NON-NEGOTIABLE 13-step order
-  comment. Embedding reinstall logic inside `run()` beyond a one-liner dispatch would
-  corrupt that invariant. The dispatch is modeled on the existing `config` subcommand
-  pattern: one `if args.subcommand == "reinstall": ... return`.
-- **`picker.py` separate from `reinstall/cli.py`:** `resolve_catalog_path()` is
-  independently testable (no argparse, no TTY side effects on the `--from` path).
+- **`collectors/chromium.py`** — The 3-browser threshold (Chrome, Edge, Brave) satisfies
+  the project's "3 real examples before abstracting" rule (CLAUDE.md). All profile-scan
+  logic, `COMPONENT_DENYLIST`, `version_sort_tail` selection, and `chrome_ext_name`
+  resolution live here once. Thin subclasses supply only browser name + base path.
+- **Separate `edge.py` / `brave.py`** rather than a single auto-discovery module — each
+  browser gets its own file for clarity, independent patchability in tests, and a clean
+  `available()` gate on its specific base directory.
+- **`codex.py` extended, not split** — mirrors how `claude.py` (lines 177-185) and
+  `gemini.py` return multiple sections from one collector. Adding a second Section to
+  `CodexCollector.collect()` is a two-function change with no cross-module impact.
 
 ---
 
-## (1) Subcommand Integration in `cli.py`
+## Architectural Patterns
 
-### Parser Changes
+### Pattern 1: Parameterized Chromium Base Collector
 
-```python
-# _build_parser() addition — parallel to "config" subparser
-reinstall_parser = subparsers.add_parser(
-    "reinstall",
-    help="Generate reinstall.sh from a catalog",
-)
-reinstall_parser.add_argument(
-    "--from",
-    dest="from_path",
-    metavar="PATH",
-    default=None,
-    help="Path to catalog .txt file (omit to use the computer-picker)",
-)
-```
+**What:** Extract the full body of `chrome.py`'s `_collect_profile` and `collect` into
+`chromium.py:ChromiumBaseCollector`, parameterized by `_browser_name: str`, `_base: Path`,
+and `_denylist: frozenset[str]`. Chrome, Edge, and Brave subclass it with only those
+constants different.
 
-Note: `from` is a Python keyword. Using `dest="from_path"` and accessing `args.from_path`
-throughout is the correct argparse pattern — it handles the keyword conflict cleanly.
+**When to use:** 3+ collectors share identical traversal logic with only path/title
+differing — satisfied here by Chrome, Edge, and Brave.
 
-### Dispatch Changes in `run()`
+**Integration points from actual source:**
 
-Insert between step 4 (validate_catalog_repo) and step 5 (--rename short-circuit):
+`chrome.py` today:
+- `_BASE = Path.home() / "Library/Application Support/Google/Chrome"` (line 32)
+- `_TITLE = "Google Chrome Extensions"` (line 33)
+- `COMPONENT_DENYLIST: frozenset[str]` (lines 19-30) — 10 component IDs
+- `_collect_profile(extensions_dir)` — iterates `Extensions/<id>/<ver>/manifest.json`,
+  calls `chrome_ext_name`, `json_get`, `emit_item`, `version_sort_tail` (lines 50-82)
+- `collect()` — enumerates Default + `Profile */` dirs, aggregates items (lines 84-103)
+- `available()` inherited from `Collector` base — returns `True` unconditionally
 
-```python
-# After validate_catalog_repo(catalog_repo):
-if args.subcommand == "reinstall":
-    from maccat.reinstall.cli import run_reinstall
-    run_reinstall(args, catalog_repo)
-    return
-```
-
-The `--rename` guard (step 3) must not fire on the `reinstall` subcommand. The guard
-checks `args.rename and bool(args.computer)`. Both are `False` by default for the
-`reinstall` subcommand, so no additional guard is needed — but document this in the code.
-
-### Computer selection reuse
-
-`reinstall/picker.py` calls `select_computer()` directly with the same signature used in
-the catalog-gen path:
+**Proposed `chromium.py` (base class):**
 
 ```python
-# catalog-gen path (existing):
-computer = select_computer(catalog_repo, computer_name=computer_pre)
+class ChromiumBaseCollector(Collector):
+    """Shared Chromium extension scan, parameterized by browser name and base path.
 
-# reinstall path (new, same call signature):
-computer = select_computer(catalog_repo, computer_name=args.computer)
-```
+    Subclasses set _browser_name, _base, and optionally _denylist.
+    """
 
-The `--computer NAME` flag from the parent parser flows through to `args.computer` for
-the reinstall subcommand, giving non-interactive selection for free.
+    _browser_name: str = ""
+    _base: Path = Path()
+    _denylist: frozenset[str] = frozenset()
 
----
+    @property
+    def _title(self) -> str:
+        return f"{self._browser_name} Extensions"
 
-## (2) Reverse Parser Architecture (`reinstall/parser.py`)
+    def available(self) -> bool:
+        return self._base.is_dir()
 
-### The format.py Contract
+    def collect(self) -> CollectorResult:
+        if not self._base.is_dir():
+            print(f"  NOTE: {self._browser_name} not installed.", file=sys.stderr)
+            return CollectorResult(sections=[Section(title=self._title, items=[])])
+        all_items: list[str] = []
+        profile_dirs: list[Path] = [self._base / "Default"]
+        profile_dirs += sorted(self._base.glob("Profile */"))
+        for profile in profile_dirs:
+            ext_root = profile / "Extensions"
+            if not ext_root.is_dir():
+                continue
+            all_items.extend(self._collect_profile(ext_root))
+        return CollectorResult(sections=[Section(title=self._title, items=all_items)])
 
-`emit_item()` in `catalog/format.py` produces exactly four line shapes. The parser must
-invert them. This is the primary coupling between existing and new code.
-
-**The four shapes (from `format.py` source, lines 35-43):**
-
-| emit_item inputs | Output shape | Regex to invert |
-|-----------------|--------------|-----------------|
-| name + version + id | `name (version) [id]` | `^(.+) \((.+)\) \[(.+)\]$` |
-| name + version | `name (version)` | `^(.+) \((.+)\)$` |
-| name + id | `name [id]` | `^(.+) \[(.+)\]$` |
-| name only | `name` | (no parens/brackets — bare string) |
-| id only (promoted) | `id` | same as name-only; brackets are suppressed |
-
-**Application order matters:** The full `(version) [id]` regex must be tried before the
-`(version)` regex, and `(version)` before `[id]`, because a line like
-`name (1.0) [ext.id]` would partially match the shorter patterns. Apply longest-match
-first.
-
-**The id-promoted case:** When `emit_item` receives `name=""` and `id_="something"`, it
-swaps them, emitting `something` with no brackets. The parser cannot distinguish this from
-a bare-name item. This is intentional: the emitter uses `item.id_` (if non-empty) or
-`item.name` as the install key per-section. For sections where the id is the install
-identifier (VS Code, Cursor), the raw `[id]` bracket is present and parsed. For promoted
-ids (rare degraded case) the emitter falls back to the name field.
-
-**Sentinel lines to skip (return None from `_parse_item_line`):**
-- `"  (none found)"` — exact string from `flush_section()` when a section is empty.
-- Lines matching known degradation messages (e.g. `"Homebrew is not installed."`,
-  `"mas CLI is not installed..."`, `"code CLI is not installed."`) — these are not
-  installable items. The safest approach: any item line that doesn't match any of the four
-  shapes AND starts with an uppercase letter followed by words (heuristic) is treated as a
-  degradation message and logged to stderr but not added to parsed items.
-
-### Section Boundary Detection
-
-`CatalogWriter.write_section()` (`catalog/writer.py` lines 67-68) writes:
-
-```
-\n{title}\n
-------------------------------------\n
-```
-
-The 36-dash separator is the reliable boundary marker. The title is the non-empty line
-immediately before it. The parser identifies a section by scanning ahead one line.
-
-**Algorithm:**
-
-```python
-def parse_catalog(path: Path) -> ParsedCatalog:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    sections: list[ParsedSection] = []
-    current_title: str | None = None
-    current_items: list[ParsedItem] = []
-    i = 0
-    while i < len(lines):
-        # Section boundary: current line is a candidate title,
-        # next line is exactly 36 dashes.
-        if (i + 1 < len(lines)
-                and lines[i + 1] == "-" * 36
-                and lines[i].strip()):
-            if current_title is not None:
-                sections.append(ParsedSection(current_title, current_items))
-            current_title = lines[i]
-            current_items = []
-            i += 2  # consume title + dashes
-            continue
-        # Item accumulation within a section
-        if current_title is not None and lines[i].strip():
-            item = _parse_item_line(lines[i])
-            if item is not None:
-                current_items.append(item)
-        i += 1
-    if current_title is not None:
-        sections.append(ParsedSection(current_title, current_items))
-    return ParsedCatalog(path=path, sections=sections)
-```
-
-### Data Structures
-
-```python
-@dataclass
-class ParsedItem:
-    name: str        # text before ( or [, or the full line for bare names
-    version: str     # text inside ( ); empty string when absent
-    id_: str         # text inside [ ]; empty string when absent
-    raw_line: str    # original line, for debugging
-
-@dataclass
-class ParsedSection:
-    title: str
-    items: list[ParsedItem]
-
-@dataclass
-class ParsedCatalog:
-    path: Path
-    sections: list[ParsedSection]
-
-    def section(self, title: str) -> ParsedSection | None:
-        """O(1) lookup by title via internal dict."""
+    def _collect_profile(self, extensions_dir: Path) -> list[str]:
+        # Identical logic to current chrome.py lines 50-82, using self._denylist
         ...
 ```
 
-### Anti-Drift Contract
-
-`reinstall/parser.py` must document the four line shapes in its module docstring with an
-explicit citation to `catalog/format.py:emit_item()`. The regex constants must be named:
+**Thin subclasses:**
 
 ```python
-# reinstall/parser.py — contract with catalog/format.py:emit_item()
-# Any change to emit_item() output shapes MUST be reflected here.
-_ITEM_RE_FULL    = re.compile(r"^(.+) \((.+)\) \[(.+)\]$")   # name (ver) [id]
-_ITEM_RE_VERSION = re.compile(r"^(.+) \((.+)\)$")             # name (ver)
-_ITEM_RE_ID      = re.compile(r"^(.+) \[(.+)\]$")             # name [id]
-_SENTINEL        = "  (none found)"
+# chrome.py
+_BASE = Path.home() / "Library/Application Support/Google/Chrome"
+
+class ChromeCollector(ChromiumBaseCollector):
+    _browser_name = "Google Chrome"
+    _base = _BASE
+    _denylist = COMPONENT_DENYLIST
+
+# edge.py
+_BASE = Path.home() / "Library/Application Support/Microsoft Edge"
+
+class EdgeCollector(ChromiumBaseCollector):
+    _browser_name = "Microsoft Edge"
+    _base = _BASE
+    _denylist = COMPONENT_DENYLIST  # same IDs — all Chromium browsers share these
+
+# brave.py
+_BASE = Path.home() / "Library/Application Support/BraveSoftware/Brave-Browser"
+
+class BraveCollector(ChromiumBaseCollector):
+    _browser_name = "Brave"
+    _base = _BASE
+    _denylist = COMPONENT_DENYLIST
 ```
 
-A round-trip test must be added to the test suite:
-`tests/reinstall/test_parser_contract.py` — call `emit_item()` for all six degradation
-variants, run output through `_parse_item_line()`, assert fields match inputs. This test
-is the mechanical anti-drift guard.
+**Section titles produced:**
+- `"Google Chrome Extensions"` — matches existing catalog output (no format change)
+- `"Microsoft Edge Extensions"` — new
+- `"Brave Extensions"` — new
+
+**`available()` per browser:**
+- Chrome: `Path(".../Google/Chrome").is_dir()`
+- Edge: `Path(".../Microsoft Edge").is_dir()`
+- Brave: `Path(".../BraveSoftware/Brave-Browser").is_dir()`
+
+**`COMPONENT_DENYLIST` placement:** Move the constant to `chromium.py`. Re-export from
+`chrome.py` for backward compatibility with existing tests that import it via
+`from maccat.collectors.chrome import COMPONENT_DENYLIST` (line 14 of `test_chrome.py`):
+
+```python
+# chrome.py — backward-compat re-export
+from maccat.collectors.chromium import COMPONENT_DENYLIST
+__all__ = ["ChromeCollector", "COMPONENT_DENYLIST"]
+```
+
+**Test patch target migration:** `test_chrome.py` patches `chrome_mod._BASE` via
+`patch.object(chrome_mod, "_BASE", ...)` (established in tests like `test_collects_default_profile`).
+After the refactor, `ChromeCollector._base = _BASE` reads from the module-level `_BASE`
+constant in `chrome.py` at class-definition time. The patch must override the class attribute
+itself — the simplest approach is to keep `_BASE` as a module-level constant in each
+subclass file so `patch.object(chrome_mod, "_BASE", ...)` continues to work. The base class
+reads `self._base` — if the subclass is defined as `_base = _BASE`, patching the module
+constant after class definition does NOT retroactively change the class attribute. The correct
+patch target post-refactor is `patch.object(ChromeCollector, "_base", new=tmp_path)`.
+Update `test_chrome.py` accordingly; document this in `test_chromium.py`.
 
 ---
 
-## (3) Script Emitter Architecture (`reinstall/emitter.py`)
+### Pattern 2: Multi-Section Collector (CodexCollector Extension)
 
-### Section-to-Source Mapping
+**What:** `CodexCollector.collect()` currently returns 1 section ("Codex MCP Servers",
+line 119 of `codex.py`). Extend to return 2 sections, matching the `ClaudeCollector`
+multi-section pattern.
 
-A static dict in `emitter.py` maps section title → source key. This is NOT derived from
-the collector registry at runtime (see Anti-Patterns). Unknown titles (from a future
-collector) fall through to `"manual"`.
+**Reference from actual source:**
+
+`claude.py` lines 177-185:
+```python
+def collect(self) -> CollectorResult:
+    return CollectorResult(
+        sections=[
+            self._collect_plugins(),
+            self._collect_mcp(),
+            self._collect_skills_agents(),
+        ]
+    )
+```
+
+`codex.py` today (lines 105-119):
+```python
+def collect(self) -> CollectorResult:
+    items: list[str] = []
+    if shutil.which("codex"):
+        items = self._collect_via_cli()
+    if not items and _TOML_PATH.is_file():
+        items = self._collect_via_toml()
+    return CollectorResult(sections=[Section(title=_TITLE, items=items)])
+```
+
+**Proposed extension:**
+
+Add module-level constants:
+```python
+_MCP_TITLE = "Codex MCP Servers"      # rename from _TITLE (same string value)
+_PLUGINS_TITLE = "Codex Plugins"      # new
+_PLUGINS_PATH = Path.home() / ".codex/plugins.json"   # verify path before implementing
+```
+
+Refactor existing logic into `_collect_mcp(self) -> Section` (rename from inline in
+`collect()`). Add `_collect_plugins(self) -> Section` mirroring `ClaudeCollector._collect_plugins`
+structure (lines 75-100 of `claude.py`).
+
+Change `collect()`:
+```python
+def collect(self) -> CollectorResult:
+    return CollectorResult(
+        sections=[
+            self._collect_mcp(),
+            self._collect_plugins(),
+        ]
+    )
+```
+
+Section order: MCP Servers first (position 8 in current catalog), Plugins second (new
+position 9). This matches the Codex-as-AI-CLI ordering convention: MCPs before plugins,
+consistent with Claude's Plugins → MCP Servers → Skills order being tool-specific rather
+than universal.
+
+**Caveat:** The Codex plugin system path (`~/.codex/plugins.json` or equivalent) must be
+confirmed against an actual Codex installation before implementation (see Pitfall 1).
+
+---
+
+### Pattern 3: Standalone New Collectors (Zed + Safari)
+
+**What:** New collectors that share no logic with existing collectors. Each is a single
+file implementing `Collector` directly, following the established graceful-degradation pattern.
+
+#### 3a: ZedCollector
+
+**File:** `collectors/zed.py`
+
+**Data source:** `~/.config/zed/extensions/installed_extensions.json`
+
+JSON structure (from Zed open-source documentation and source): a top-level object where
+keys are extension IDs and values are objects with `"version"` and other metadata fields.
+Example: `{"some-extension-id": {"version": "1.2.3", ...}, ...}`
+
+This is the installed-extensions index. `extension.toml` lives inside each extension's
+source directory and is for authoring — the installed index is JSON. No `tomllib` needed.
+
+**Helpers used:** `json.loads()` directly (same pattern as `claude.py` lines 84-99). The
+`json_io.py:json_get()` helper handles dotted keys but is less natural for top-level
+object iteration; use `json.loads()` + `.items()` directly.
+
+**emit_item call:** `emit_item(name, version, ext_id)` — name from `meta.get("name", ext_id)`,
+version from `meta.get("version", "")`, id is the dict key.
+
+**Proposed structure:**
 
 ```python
-# SECTION_SOURCE_MAP: section title -> ("auto"|"manual", install_key_field)
-# install_key_field: "name" | "id_" — which ParsedItem field holds the install key
-SECTION_SOURCE_MAP: dict[str, tuple[str, str]] = {
-    "Homebrew Packages":           ("auto",   "name"),
-    "App Store Applications":      ("manual", "name"),  # no id in catalog — see note
-    "Setapp Applications":         ("manual", "name"),
-    "Web-installed Applications":  ("manual", "name"),
-    "Claude Code Plugins":         ("manual", "name"),
-    "Claude Code MCP Servers":     ("manual", "name"),
-    "Claude Code Skills & Agents": ("manual", "name"),
-    "Codex MCP Servers":           ("manual", "name"),
-    "OpenCode Plugins":            ("manual", "name"),
-    "OpenCode MCP Servers":        ("manual", "name"),
-    "OpenCode Agents":             ("manual", "name"),
-    "Gemini CLI Extensions":       ("manual", "name"),
-    "Gemini CLI MCP Servers":      ("manual", "name"),
-    "VS Code Extensions":          ("auto",   "id_"),
-    "Cursor Extensions":           ("auto",   "id_"),
-    "Google Chrome Extensions":    ("manual", "name"),
-    "Firefox Extensions":          ("manual", "name"),
+_BASE = Path.home() / ".config/zed/extensions"
+_INSTALLED = _BASE / "installed_extensions.json"
+_TITLE = "Zed Extensions"
+
+class ZedCollector(Collector):
+    def available(self) -> bool:
+        return _INSTALLED.is_file()
+
+    def collect(self) -> CollectorResult:
+        if not _INSTALLED.is_file():
+            print("  NOTE: Zed not installed or no extensions found.", file=sys.stderr)
+            return CollectorResult(sections=[Section(title=_TITLE, items=[])])
+        try:
+            data = json.loads(_INSTALLED.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return CollectorResult(sections=[Section(title=_TITLE, items=[])])
+        if not isinstance(data, dict):
+            return CollectorResult(sections=[Section(title=_TITLE, items=[])])
+        items: list[str] = []
+        for ext_id, meta in data.items():
+            version = ""
+            name = ext_id  # fallback
+            if isinstance(meta, dict):
+                version = str(meta.get("version", ""))
+                name = str(meta.get("name", ext_id)) or ext_id
+            line = emit_item(name, version, ext_id)
+            if line:
+                items.append(line)
+        return CollectorResult(sections=[Section(title=_TITLE, items=items)])
+```
+
+No new helpers. No new imports beyond what `codex.py` already uses.
+
+#### 3b: SafariCollector
+
+**File:** `collectors/safari.py`
+
+**Data source:** `pluginkit -mAvvv -p com.apple.Safari.extension`
+
+`pluginkit` is `/usr/bin/pluginkit` — a macOS built-in present on macOS 10.10+. It enumerates
+PlugIn-based extensions registered with the system, including Safari extensions packaged as
+app extensions inside `.app` bundles.
+
+**Subprocess pattern:** mirrors `codex.py` lines 53-61:
+```python
+result = subprocess.run(
+    ["pluginkit", "-mAvvv", "-p", "com.apple.Safari.extension"],
+    capture_output=True, text=True, shell=False,
+)
+```
+
+**Output format (approximate, subject to macOS version variation):**
+```
+com.example.SomeApp.Extension (1.0)
+    Path = /Applications/SomeApp.app/Contents/PlugIns/SomeExtension.appex
+    Flags = [  ]
+    Display Name = Some App Extension
+    ...
+```
+
+The bundle identifier appears on the first line of each block (before the path/flags lines).
+The display name and version are embedded in the block. The exact format is undocumented
+and varies — the parser must treat every field as optional.
+
+**Parser approach:** Extract bundle ID from lines matching `^[a-z0-9.]+\s+\(.*\)` or
+similar; extract display name from `Display Name =` lines; extract version from `\(x.y.z\)`
+suffix on the first line. Degrade: if display name absent, use bundle ID. If version absent,
+emit name-only.
+
+**Graceful degradation contract:**
+- Non-zero exit OR empty stdout → `items=[]`, no error printed (zero extensions is valid)
+- `pluginkit` absent → `items=[]` + NOTE to stderr
+- Parse error on any block → skip that block, continue
+
+**Proposed structure:**
+
+```python
+_TITLE = "Safari Extensions"
+
+class SafariCollector(Collector):
+    def available(self) -> bool:
+        return bool(shutil.which("pluginkit"))
+
+    def collect(self) -> CollectorResult:
+        if not shutil.which("pluginkit"):
+            print("  NOTE: pluginkit not available.", file=sys.stderr)
+            return CollectorResult(sections=[Section(title=_TITLE, items=[])])
+        result = subprocess.run(
+            ["pluginkit", "-mAvvv", "-p", "com.apple.Safari.extension"],
+            capture_output=True, text=True, shell=False,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return CollectorResult(sections=[Section(title=_TITLE, items=[])])
+        items = _parse_pluginkit_output(result.stdout)
+        return CollectorResult(sections=[Section(title=_TITLE, items=items)])
+
+
+def _parse_pluginkit_output(output: str) -> list[str]:
+    """Parse pluginkit -mAvvv output into emit_item lines.
+
+    Treats every field as optional. Degrades to name-only or id-only on missing fields.
+    Never raises.
+    """
+    ...
+```
+
+`_parse_pluginkit_output` is the highest-risk function in the milestone — it must be
+validated against real `pluginkit` output before finalizing (see Pitfall 2).
+
+---
+
+## Data Flow
+
+### Catalog Generation with New Collectors
+
+```
+cli.py: run() line 318
+  │
+  └── for collector in get_registry():
+        result = collector.collect()     ← never raises (graceful degradation)
+        for section in result.sections:
+          w.write_section(section.title) ← title written unconditionally
+          w.write_lines(flush_section(section.items))
+                        ↑
+                        if items=[] → emits "  (none found)"
+                        if browser not installed → items=[] → "(none found)"
+```
+
+### Reinstall Pipeline (unchanged)
+
+```
+reinstall/parser.py:parse_catalog()
+  │  ← title-agnostic state machine (lines 166-232)
+  │  ← reads ANY section title — no hardcoded title list
+  │
+  └── ParsedCatalog containing (new sections parsed automatically):
+        ParsedSection("Microsoft Edge Extensions", items=[...])
+        ParsedSection("Brave Extensions", items=[...])
+        ParsedSection("Zed Extensions", items=[...])
+        ParsedSection("Safari Extensions", items=[...])
+        ParsedSection("Codex Plugins", items=[...])
+
+reinstall/emitter.py:emit_reinstall_script()
+  │
+  ├── SECTION_SOURCE_MAP.get(section.title)  ← new titles NOT in map (lines 230-235)
+  │                                          ← fall through to manual_sections list
+  └── _manual_checklist_block(section)       ← echoed as manual checklist
+                                             ← correct: browser exts + Codex plugins
+                                                cannot be auto-installed (MAN-01)
+```
+
+### Registry Insertion Order
+
+Current registry (`collectors/__init__.py` lines 57-70):
+```
+1.  HomebrewCollector
+2.  MasCollector
+3.  SetappCollector
+4.  WebAppsCollector
+5.  ClaudeCollector        → 3 sections (5, 6, 7)
+6.  CodexCollector         → 1 section  (8)
+7.  OpenCodeCollector      → 3 sections (9, 10, 11)
+8.  GeminiCollector        → 2 sections (12, 13)
+9.  VSCodeCollector        → section 14
+10. CursorCollector        → section 15
+11. ChromeCollector        → section 16
+12. FirefoxCollector       → section 17
+```
+
+**Proposed new registry order** (22 sections from 16 collectors):
+```
+1.  HomebrewCollector
+2.  MasCollector
+3.  SetappCollector
+4.  WebAppsCollector
+5.  ClaudeCollector        → 3 sections (5, 6, 7)
+6.  CodexCollector         → 2 sections (8="Codex MCP Servers", 9="Codex Plugins") [MODIFIED]
+7.  OpenCodeCollector      → 3 sections (10, 11, 12)
+8.  GeminiCollector        → 2 sections (13, 14)
+9.  VSCodeCollector        → section 15
+10. CursorCollector        → section 16
+11. ZedCollector           → section 17  [NEW]
+12. ChromeCollector        → section 18
+13. EdgeCollector          → section 19  [NEW]
+14. BraveCollector         → section 20  [NEW]
+15. SafariCollector        → section 21  [NEW]
+16. FirefoxCollector       → section 22
+```
+
+**Ordering rationale:**
+- AI-CLI tools (Claude, Codex, OpenCode, Gemini) grouped first after system software —
+  matches existing order.
+- Editors (VS Code, Cursor, Zed) grouped contiguously — natural affinity, existing
+  VS Code + Cursor ordering preserved, Zed inserted after.
+- Browsers grouped at the end (Chrome, Edge, Brave, Safari, Firefox) — matches existing
+  Chrome + Firefox ordering; Chromium-family browsers contiguous (18, 19, 20) for catalog
+  readability; Safari between Brave and Firefox.
+- CodexCollector stays at registry position 6 — its second Section ("Codex Plugins")
+  appears immediately after "Codex MCP Servers" in the output without any registry change,
+  because `collect()` returns both Sections in a single `CollectorResult`.
+
+**Registry code change (`collectors/__init__.py`):**
+
+```python
+def get_registry() -> list[Collector]:
+    from maccat.collectors.brave import BraveCollector    # NEW
+    from maccat.collectors.chrome import ChromeCollector
+    from maccat.collectors.edge import EdgeCollector      # NEW
+    from maccat.collectors.safari import SafariCollector  # NEW
+    from maccat.collectors.zed import ZedCollector        # NEW
+    # ... existing imports unchanged ...
+
+    return [
+        HomebrewCollector(),
+        MasCollector(),
+        SetappCollector(),
+        WebAppsCollector(),
+        ClaudeCollector(),       # 3 sections
+        CodexCollector(),        # 2 sections [was 1]
+        OpenCodeCollector(),     # 3 sections
+        GeminiCollector(),       # 2 sections
+        VSCodeCollector(),
+        CursorCollector(),
+        ZedCollector(),          # NEW
+        ChromeCollector(),
+        EdgeCollector(),         # NEW
+        BraveCollector(),        # NEW
+        SafariCollector(),       # NEW
+        FirefoxCollector(),
+    ]
+```
+
+---
+
+## Reinstall Impact Assessment
+
+**Parser (`reinstall/parser.py`): NO CHANGES NEEDED.**
+
+The state machine (lines 166-232) identifies sections by the `SEPARATOR` constant (36
+dashes, line 41), not by hardcoded title names. All five new section titles are parsed
+into `ParsedSection` objects automatically with zero code changes. Confirmed by reading
+the full parser source.
+
+**Emitter (`reinstall/emitter.py`): NO CHANGES NEEDED.**
+
+`SECTION_SOURCE_MAP` (lines 230-235) maps 4 known section titles to specific renderers:
+```python
+SECTION_SOURCE_MAP: dict[str, Callable[[ParsedSection], str]] = {
+    "Homebrew Packages": _brew_block,
+    "App Store Applications": _mas_block,
+    "VS Code Extensions": lambda section: _editor_ext_block(section, editor="code"),
+    "Cursor Extensions": lambda section: _editor_ext_block(section, editor="cursor"),
 }
 ```
 
-### Per-Source Renderers
-
-**Homebrew renderer:**
-
-```bash
-brew install git    # cataloged: 2.44.0
-brew install python@3.11    # cataloged: 3.11.9
-```
-
-Each item: `ParsedItem.name` is the install key (formulae and casks both work with `brew
-install`). Version comment from `ParsedItem.version`. No cask/formula distinction needed
-— `brew install` handles both.
-
-**VS Code / Cursor renderer (shared, parametrized by CLI name):**
-
-```bash
-code --install-extension ms-python.python    # Python (2025.x)
-cursor --install-extension anysphere.pyright    # Pyright (1.x)
-```
-
-Each item: `ParsedItem.id_` is the extension marketplace ID (the install key).
-`ParsedItem.name` and `ParsedItem.version` appear in the comment.
-
-**App Store renderer — MANUAL CHECKLIST ONLY:**
-
-`MasCollector` emits `AppName (version)` — it discards the numeric App Store ID in the
-awk pipe (`{print $2, $3}`, skipping column 1 which is the ID). The catalog has no
-installable identifier for MAS apps. Emitting `mas install <name>` is wrong; `mas
-install` requires the numeric ID. These items must appear in the manual checklist with a
-comment explaining the limitation.
-
-**Manual checklist renderer:**
-
-```bash
-# Setapp Applications
-#   [ ] CleanMyMac X (5.0.1)
-#   [ ] Bartender (5.x)
-
-# App Store Applications
-# NOTE: App Store IDs are not stored in the catalog. Install manually from the App Store.
-#   [ ] Xcode (16.x)
-
-# Claude Code MCP Servers (reconfigure via ~/.claude.json)
-#   [ ] my-mcp-server [stdio]
-```
-
-Format: `#   [ ] {name} ({version})` when version is present; `#   [ ] {name}` when not.
-AI-CLI entries include the transport in brackets where available: `#   [ ] {name} [stdio]`.
-
-### Script Output Structure
-
-```bash
-#!/bin/bash
-# reinstall.sh — generated by maccat reinstall
-# Catalog: mac-software-list-[MacBook]-20260616120000.txt
-# Generated: 2026-06-16
-#
-# REVIEW BEFORE RUNNING.
-# This script installs LATEST versions; the cataloged version is shown
-# as a comment. Pinning to specific versions is not supported.
-#
-# Safe to re-run: brew and code/cursor extension installs are idempotent.
-
-set -euo pipefail
-
-# =============================================================================
-# AUTO-INSTALL
-# =============================================================================
-
-echo "==> Installing Homebrew packages..."
-brew install git    # cataloged: 2.44.0
-brew install python@3.11    # cataloged: 3.11.9
-
-echo "==> Installing VS Code extensions..."
-code --install-extension ms-python.python    # Python (2025.x)
-
-echo "==> Installing Cursor extensions..."
-cursor --install-extension anysphere.pyright    # Pyright (1.x)
-
-# =============================================================================
-# MANUAL CHECKLIST
-# =============================================================================
-# Review and reinstall the following items manually.
-# Items in this section cannot be auto-installed.
-
-# Setapp Applications
-#   [ ] CleanMyMac X (5.0.1)
-
-# App Store Applications
-# NOTE: App Store IDs are not stored in the catalog.
-# Install manually from the App Store or via: mas install <id>
-#   [ ] Xcode (16.x)
-
-# Claude Code MCP Servers (reconfigure via 'claude' settings or ~/.claude.json)
-#   [ ] my-mcp-server [stdio]
-
-# Claude Code Skills & Agents
-#   [ ] my-skill
-
-# Google Chrome Extensions (reinstall from chrome.google.com/webstore)
-#   [ ] uBlock Origin (1.x)
-```
-
-### `emit_reinstall_script()` top-level shape
-
+New section titles not present in this dict fall through to `manual_sections` (lines 281-295):
 ```python
-def emit_reinstall_script(catalog: ParsedCatalog, generated_date: str) -> str:
-    parts: list[str] = []
-    parts.append(_header_block(catalog, generated_date))
-
-    # Auto-install block
-    auto_parts: list[str] = []
-    brew = catalog.section("Homebrew Packages")
-    if brew and brew.items:
-        auto_parts.append(_brew_block(brew))
-    vscode = catalog.section("VS Code Extensions")
-    if vscode and vscode.items:
-        auto_parts.append(_editor_ext_block("code", vscode))
-    cursor = catalog.section("Cursor Extensions")
-    if cursor and cursor.items:
-        auto_parts.append(_editor_ext_block("cursor", cursor))
-    if auto_parts:
-        parts.append(_AUTO_HEADER)
-        parts.extend(auto_parts)
-
-    # Manual checklist block
-    manual_titles = [
-        "App Store Applications",
-        "Setapp Applications",
-        "Web-installed Applications",
-        "Claude Code Plugins",
-        "Claude Code MCP Servers",
-        "Claude Code Skills & Agents",
-        "Codex MCP Servers",
-        "OpenCode Plugins",
-        "OpenCode MCP Servers",
-        "OpenCode Agents",
-        "Gemini CLI Extensions",
-        "Gemini CLI MCP Servers",
-        "Google Chrome Extensions",
-        "Firefox Extensions",
-    ]
-    parts.append(_manual_checklist_block(catalog, manual_titles))
-
-    return "\n".join(parts) + "\n"
+renderer = SECTION_SOURCE_MAP.get(section.title)
+if renderer is not None:
+    blocks.append(renderer(section))
+else:
+    manual_sections.append(section)
 ```
 
----
+This is the correct behavior for all v2.2.0 additions:
+- "Microsoft Edge Extensions", "Brave Extensions", "Safari Extensions", "Google Chrome
+  Extensions", "Firefox Extensions" — browser extensions have no CLI installer
+- "Zed Extensions" — no CLI installer
+- "Codex Plugins" — falls through (same as "Claude Code Plugins" and all other AI-CLI
+  plugins, which already fall through)
 
-## (4) New Modules, Modified Files, and Build Order
+The MAN-01 decision from v2.1.0 ("Setapp/web/browser/AI-CLI sources emitted as a manual
+checklist only — no fabricated installs") explicitly governs all v2.2.0 additions.
 
-### New vs Modified
-
-| File | Status | What Changes |
-|------|--------|-------------|
-| `src/maccat/cli.py` | MODIFIED | `_build_parser()`: add reinstall subparser + `--from` flag; `run()`: insert reinstall dispatch block after `validate_catalog_repo` |
-| `src/maccat/reinstall/__init__.py` | NEW | Empty package marker |
-| `src/maccat/reinstall/cli.py` | NEW | `run_reinstall(args, catalog_repo)` thin orchestrator |
-| `src/maccat/reinstall/picker.py` | NEW | `resolve_catalog_path(catalog_repo, from_path, computer_name)` |
-| `src/maccat/reinstall/parser.py` | NEW | `parse_catalog(path)`, `ParsedCatalog`, `ParsedSection`, `ParsedItem`, regex constants |
-| `src/maccat/reinstall/emitter.py` | NEW | `emit_reinstall_script(catalog)`, per-source renderers, `SECTION_SOURCE_MAP` |
-| `src/maccat/catalog/format.py` | UNCHANGED | Parser depends on its output contract — do NOT change `emit_item()` in this milestone |
-| `src/maccat/identity.py` | UNCHANGED | `select_computer()` reused as-is |
-| `src/maccat/naming.py` | UNCHANGED | `parse_catalog_filename()` reused in picker |
-| `src/maccat/config.py` | UNCHANGED | `resolve_catalog_repo()` reused in dispatch |
-
-### Build Order
-
-Dependencies determine sequencing. Each step is independently testable.
-
-**Step 1: `reinstall/parser.py` + `reinstall/__init__.py`**
-
-Dependencies: stdlib (`re`, `dataclasses`, `pathlib`) + `catalog/format.py` (contract
-reference only — `format.py` is read but not called). Fully testable with synthetic
-catalog text strings.
-
-Tests to write first:
-- Round-trip contract: `emit_item(n, v, i)` → line → `_parse_item_line()` → assert
-  fields match. All six `emit_item` degradation variants must round-trip.
-- Section-boundary detection on fixture catalog text.
-- Sentinel-line skipping (`  (none found)`, degradation messages).
-
-**Step 2: `reinstall/picker.py`**
-
-Dependencies: `naming.py` (`parse_catalog_filename`) and `identity.py`
-(`select_computer`). Both are stable. The `--from PATH` path is testable without any
-mocking; the interactive path mocks `select_computer`.
-
-**Step 3: `reinstall/emitter.py`**
-
-Dependencies: `reinstall/parser.py` (`ParsedCatalog`). Feed a `ParsedCatalog` built from
-known fixture data; assert each script section contains the expected lines. The App Store
-manual-only behavior must be tested explicitly.
-
-**Step 4: `reinstall/cli.py`**
-
-Dependencies: picker + parser + emitter. Thin orchestrator; integration test with a real
-catalog fixture file on disk.
-
-**Step 5: `cli.py` wiring**
-
-Add subparser + dispatch. Integration smoke test: `maccat reinstall --from <fixture>`.
-Verify `--rename` guard does not fire on the reinstall subcommand.
+**Conclusion: the reinstall pipeline requires zero changes for v2.2.0.** The additive-only
+architecture of the parser/emitter was designed to accommodate exactly this scenario.
 
 ---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Reinferring Section-to-Source Mapping from the Live Collector Registry
+### Anti-Pattern 1: Duplicating `_collect_profile` in Edge and Brave
 
-**What people do:** Call `get_registry()` at reinstall time to discover section titles,
-then cross-reference against parsed sections.
+**What people do:** Copy `chrome.py` to `edge.py` and `brave.py`, changing only `_BASE`
+and the section title string.
 
-**Why it's wrong:** Reinstall is a read-from-catalog operation. The catalog may have been
-generated by an older version of maccat with different or fewer section titles. A static
-`SECTION_SOURCE_MAP` in `emitter.py` is explicit, versionable, and testable. Unknown
-section titles (from a future collector) degrade gracefully to the manual checklist.
+**Why it's wrong:** Three identical copies of the 32-line `_collect_profile` logic means
+three places to fix any bug in version selection, denylist filtering, or `chrome_ext_name`
+resolution. The project's "3 real examples before abstracting" rule is now satisfied — copy
+is the wrong answer.
 
-**Do this instead:** Hard-code the 17 known section titles in `SECTION_SOURCE_MAP`.
-
----
-
-### Anti-Pattern 2: Emitting `mas install` Lines for App Store Apps
-
-**What people do:** Emit `mas install <name>` or try to reconstruct the numeric ID from
-the app name.
-
-**Why it's wrong:** `MasCollector._parse_mas_output()` runs `awk '{print $2, $3}'` which
-skips column 1 (the numeric App Store ID). The catalog has only `AppName (version)`. `mas
-install` requires the numeric ID. `mas search <name>` would require a live network call
-and can return multiple results, breaking the "catalog is source of truth" principle.
-
-**Do this instead:** Treat App Store apps as manual-checklist items in v2.1.0 with a
-comment: `# NOTE: App Store IDs are not stored in the catalog.`
+**Do this instead:** Introduce `chromium.py:ChromiumBaseCollector`. Each subclass is 3
+lines. Total new code is less than one copy of `_collect_profile`.
 
 ---
 
-### Anti-Pattern 3: Distinguishing Homebrew Formulae vs Casks for Install Commands
+### Anti-Pattern 2: Separate Collector File for Codex Plugins
 
-**What people do:** Emit `brew install --cask <name>` vs `brew install <name>` by
-attempting to infer type from the item name or a supplementary lookup.
+**What people do:** Create `codex_plugins.py:CodexPluginsCollector` as a new registry
+entry alongside the existing `CodexCollector`.
 
-**Why it's wrong:** The Homebrew section in the catalog merges formulae and casks with no
-type marker. `brew install <name>` works for both in modern Homebrew. Any heuristic for
-cask detection (e.g., presence of `.app` in the name) would be fragile and wrong.
+**Why it's wrong:** Creates two registry entries for one logical source. Diverges from the
+established multi-section pattern that `claude.py` (3 sections), `opencode.py` (3 sections),
+and `gemini.py` (2 sections) all follow. The `get_registry()` docstring annotates each
+collector with its section count — a second Codex collector breaks that convention.
 
-**Do this instead:** Emit `brew install <name>` for all Homebrew items. A future
-milestone can add a `[cask]` id marker to the catalog section if the distinction matters.
-
----
-
-### Anti-Pattern 4: Inlining Reinstall Logic into Root `cli.py`
-
-**What people do:** Add the parse/emit pipeline directly inside `run()` as another branch
-of the catalog-gen flow.
-
-**Why it's wrong:** `run()` has a NON-NEGOTIABLE 13-step order comment. Embedding
-reinstall logic there muddles the invariants, makes both flows harder to test in
-isolation, and violates the existing `config`/`--rename` short-circuit pattern.
-
-**Do this instead:** Dispatch to `reinstall/cli.py:run_reinstall()` as a one-liner
-short-circuit: `if args.subcommand == "reinstall": run_reinstall(args, catalog_repo); return`.
+**Do this instead:** Add `_collect_plugins(self) -> Section` to `CodexCollector` and
+extend `collect()` to return both sections, exactly as `ClaudeCollector` does (lines
+177-185 of `claude.py`).
 
 ---
 
-## Key Coupling: Parser ↔ `catalog/format.py`
+### Anti-Pattern 3: `COMPONENT_DENYLIST` Remaining Only in `chrome.py` After Refactor
 
-`reinstall/parser.py` and `catalog/format.py` share an implicit contract via the four
-line shapes. Python's import system cannot enforce this coupling. Two mechanical safeguards:
+**What people do:** Leave `COMPONENT_DENYLIST` in `chrome.py` after extracting
+`ChromiumBaseCollector` to `chromium.py`, then import it from `chrome.py` in `edge.py`
+and `brave.py`.
 
-1. **Docstring citation:** `reinstall/parser.py` module docstring must list all four
-   shapes with explicit reference: `# Contract with catalog/format.py:emit_item()`.
-2. **Round-trip test:** `tests/reinstall/test_parser_contract.py` calls `emit_item()` for
-   all six degradation variants and asserts `_parse_item_line()` inverts them. Any future
-   change to `emit_item()` that breaks this test is a breaking change requiring a parser
-   update.
+**Why it's wrong:** Creates a directional import dependency from `edge.py`/`brave.py`
+onto `chrome.py`. The denylist is a Chromium-level constant — all Chromium browsers share
+the same pre-installed component extension IDs. It belongs in the base module.
+
+**Do this instead:** Move `COMPONENT_DENYLIST` to `chromium.py`. Re-export it from
+`chrome.py` for backward compatibility with `test_chrome.py` line 14
+(`from maccat.collectors.chrome import COMPONENT_DENYLIST`).
+
+---
+
+### Anti-Pattern 4: Using `tomllib` for Zed Extension Discovery
+
+**What people do:** Assume Zed uses TOML for its installed-extensions index because
+individual extension metadata (`extension.toml`) is TOML.
+
+**Why it's wrong:** The installed-extensions index at
+`~/.config/zed/extensions/installed_extensions.json` is JSON. `extension.toml` is the
+authoring manifest inside an extension's source tree — not the installed-extensions index.
+`tomllib` would also require Python 3.11+ (the project targets 3.10+).
+
+**Do this instead:** Use `json.loads()` on `installed_extensions.json`. Same pattern as
+`codex.py` and `claude.py`.
+
+---
+
+### Anti-Pattern 5: Assuming `pluginkit` Has a Stable Parseable Format
+
+**What people do:** Write `_parse_pluginkit_output` assuming a fixed column layout
+across macOS versions.
+
+**Why it's wrong:** `pluginkit` is an undocumented internal tool with no public API
+contract. Output format can differ across macOS versions. Non-zero exit occurs on machines
+with no Safari extensions (valid state, not an error).
+
+**Do this instead:** Treat every field as optional. Use `try/except Exception` around
+the full parse. If a block has no `Display Name`, use the bundle ID. If version is absent,
+emit name-only. If exit code is non-zero, return `items=[]` silently. Validate against real
+`pluginkit` output before shipping. This is the highest-risk collector — build it last.
+
+---
+
+## Build Order (Phase Dependencies)
+
+```
+Phase A: Chromium shared-collector refactor + Edge + Brave
+  Dependencies: none (touches existing chrome.py, creates new files)
+  ├── Create collectors/chromium.py (ChromiumBaseCollector, COMPONENT_DENYLIST)
+  ├── Refactor collectors/chrome.py to thin subclass (re-export COMPONENT_DENYLIST)
+  ├── Create collectors/edge.py (EdgeCollector)
+  ├── Create collectors/brave.py (BraveCollector)
+  ├── Update collectors/__init__.py: import + register EdgeCollector, BraveCollector
+  ├── Update tests/collectors/test_chrome.py: fix patch targets
+  └── Create tests/collectors/test_chromium.py, test_edge.py, test_brave.py
+
+Phase B: Zed (independent — no dependency on Phase A)
+  ├── Create collectors/zed.py (ZedCollector)
+  ├── Update collectors/__init__.py: register ZedCollector before ChromeCollector
+  └── Create tests/collectors/test_zed.py
+
+Phase C: Codex Plugins (independent — no dependency on A or B)
+  ├── CONFIRM Codex plugins data path before writing any code
+  ├── Extend collectors/codex.py: _collect_mcp(), _collect_plugins(), updated collect()
+  └── Update tests/collectors/test_codex.py: cover new section
+
+Phase D: Safari (last — highest risk, isolated failure)
+  ├── Create collectors/safari.py (SafariCollector + _parse_pluginkit_output)
+  ├── VALIDATE _parse_pluginkit_output against real pluginkit output on macOS
+  ├── Update collectors/__init__.py: register SafariCollector between BraveCollector and FirefoxCollector
+  └── Create tests/collectors/test_safari.py (mocks subprocess.run)
+```
+
+**Rationale for this order:**
+
+1. **Phase A first** — touches an existing collector (`chrome.py`) and its test file.
+   Must land before Edge/Brave, which are built against the verified base class.
+   Low behavioral risk (Chrome output is unchanged) but must be completed and tested
+   before proceeding.
+
+2. **Phases B and C are independent** — Zed (new file only) and Codex Plugins (extends
+   existing file) have no dependencies on each other or on the Chromium refactor. Either
+   can be built in parallel with or after Phase A.
+
+3. **Phase D last** — Safari uses `pluginkit`, an undocumented subprocess tool. If the
+   output format proves unworkable on the developer's macOS version, Safari can be
+   deferred without blocking any other collector. The isolated last placement contains
+   the risk to a single phase.
+
+4. **Registry changes are incremental** — Phase A adds Edge/Brave to the registry; Phase B
+   adds Zed; Phase C makes no registry change (CodexCollector is already registered);
+   Phase D adds Safari. Each phase's registry update is a localized change.
+
+---
+
+## Integration Points
+
+### New Files and Modified Files
+
+| File | Status | Integration Point |
+|------|--------|-------------------|
+| `src/maccat/collectors/chromium.py` | CREATE | Base class; imported by chrome.py, edge.py, brave.py |
+| `src/maccat/collectors/chrome.py` | MODIFY | Becomes thin subclass; re-exports COMPONENT_DENYLIST |
+| `src/maccat/collectors/edge.py` | CREATE | Thin subclass; registered in get_registry() |
+| `src/maccat/collectors/brave.py` | CREATE | Thin subclass; registered in get_registry() |
+| `src/maccat/collectors/zed.py` | CREATE | Standalone; registered in get_registry() |
+| `src/maccat/collectors/safari.py` | CREATE | Standalone; registered in get_registry() |
+| `src/maccat/collectors/codex.py` | MODIFY | collect() returns 2 sections |
+| `src/maccat/collectors/__init__.py` | MODIFY | Import + register new collectors in section order |
+| `tests/collectors/test_chromium.py` | CREATE | Tests for shared base logic + patch target docs |
+| `tests/collectors/test_chrome.py` | MODIFY | Update patch targets post-refactor |
+| `tests/collectors/test_edge.py` | CREATE | Mirrors test_chrome.py structure |
+| `tests/collectors/test_brave.py` | CREATE | Mirrors test_chrome.py structure |
+| `tests/collectors/test_zed.py` | CREATE | New |
+| `tests/collectors/test_safari.py` | CREATE | New; mocks subprocess.run |
+| `tests/collectors/test_codex.py` | MODIFY | Cover new Codex Plugins section |
+
+### Modules That Do NOT Change
+
+| Module | Why unchanged |
+|--------|--------------|
+| `collectors/base.py` | `Collector`, `Section`, `CollectorResult` contract is sufficient as-is |
+| `helpers/chrome_name.py` | Reused by all Chromium collectors via `ChromiumBaseCollector._collect_profile`; no changes needed |
+| `helpers/json_io.py` | Used by Zed and Chromium collectors; no changes needed |
+| `helpers/plist_version.py` | Not needed for extension collectors |
+| `helpers/vsc_name.py` | VS Code/Cursor specific; unchanged |
+| `catalog/format.py` | `emit_item`, `flush_section`, `version_sort_tail` unchanged |
+| `reinstall/parser.py` | Title-agnostic state machine; new sections parse automatically |
+| `reinstall/emitter.py` | New sections fall through to manual checklist; no changes needed |
+| `cli.py` | `run()` calls `get_registry()` dynamically; new collectors appear automatically |
+
+---
+
+## Open Pitfalls
+
+**Pitfall 1 — Codex plugins data path is unconfirmed.**
+The `_collect_plugins()` implementation path (proposed as `~/.codex/plugins.json`) must
+be confirmed against an actual Codex installation or the Codex GitHub source before any
+code is written. If no plugin system exists in the currently installed Codex, implement
+`_collect_plugins()` to return `Section(title="Codex Plugins", items=[])` with a NOTE
+to stderr, treating it as a forward-looking stub. Do not fabricate a path.
+
+**Pitfall 2 — `pluginkit` output format for Safari extensions is undocumented.**
+`pluginkit -mAvvv -p com.apple.Safari.extension` output has not been validated against the
+developer's current macOS version. On a machine with no Safari extensions installed, the
+output may be empty or non-zero. Build `_parse_pluginkit_output` with fully mocked
+`subprocess.run` in tests, then validate manually against real `pluginkit` output.
+This is the one collector where a live smoke test is essential before finalizing the parser.
+
+**Pitfall 3 — Chrome test patch target changes after refactor.**
+`test_chrome.py` patches `chrome_mod._BASE` (module-level constant, `chrome.py` line 32).
+After refactoring, `ChromeCollector._base = _BASE` is set at class-definition time.
+`patch.object(chrome_mod, "_BASE", ...)` does NOT retroactively update the class attribute.
+The correct post-refactor patch is `patch.object(ChromeCollector, "_base", new=...)`.
+Document this in `test_chromium.py` and update all affected test cases in `test_chrome.py`.
+
+**Pitfall 4 — `COMPONENT_DENYLIST` export backward compatibility.**
+`test_chrome.py` line 14: `from maccat.collectors.chrome import COMPONENT_DENYLIST`.
+After moving the constant to `chromium.py`, `chrome.py` must re-export it:
+```python
+from maccat.collectors.chromium import COMPONENT_DENYLIST
+__all__ = ["ChromeCollector", "COMPONENT_DENYLIST"]
+```
+Without this, the import in `test_chrome.py` raises `ImportError` with no obvious cause.
 
 ---
 
 ## Sources
 
-- Direct source reading (all confidence HIGH):
-  - `src/maccat/catalog/format.py` — emit_item() degradation rules, all four line shapes
-  - `src/maccat/catalog/writer.py` — write_section() boundary format (36 dashes, leading newline)
-  - `src/maccat/cli.py` — existing subcommand dispatch pattern, 13-step orchestration order
-  - `src/maccat/identity.py` — select_computer() signature, resolve_computer_selection()
-  - `src/maccat/collectors/base.py` — Section, CollectorResult data types
-  - `src/maccat/collectors/__init__.py` — all 17 section titles and their canonical order
-  - `src/maccat/collectors/homebrew.py` — brew list --versions output format
-  - `src/maccat/collectors/mas.py` — awk {print $2, $3}: MAS ID discarded, no id in catalog
-  - `src/maccat/collectors/vscode.py` — emit_item(name, version, marketplace_id) confirmed
-  - `src/maccat/collectors/claude.py` — FMT-03 secret-safety: MCP entries are name+transport only
-  - `src/maccat/collectors/setapp.py` — raw-write, name-only or name+version
-  - `src/maccat/naming.py` — parse_catalog_filename() for newest-catalog scan
-  - `src/maccat/config.py` — resolve_catalog_repo() signature
-  - `.planning/PROJECT.md` — v2.1.0 milestone spec, key decisions (FMT-03, never-auto-execute,
-    manual-checklist-only for AI-CLI, install-latest-with-version-comment)
+All findings are grounded in direct source reads — no web research needed for this
+architecture document.
+
+- `src/maccat/collectors/chrome.py` — full body read; parameterization design derived from
+  this source (lines 19-103)
+- `src/maccat/collectors/base.py` — `Collector`, `Section`, `CollectorResult` contract
+- `src/maccat/collectors/__init__.py` — registry order, section counts, deferred import
+  pattern (lines 1-70)
+- `src/maccat/collectors/codex.py` — single-section pattern (lines 105-122); multi-section
+  extension design modeled on `claude.py`
+- `src/maccat/collectors/claude.py` — multi-section pattern (lines 177-185); `_collect_plugins`
+  pattern (lines 75-100)
+- `src/maccat/cli.py` — orchestration loop using `get_registry()` (lines 315-327); no changes
+  needed confirmed
+- `src/maccat/reinstall/parser.py` — title-agnostic state machine confirmed (lines 166-232);
+  `SEPARATOR` constant (line 41)
+- `src/maccat/reinstall/emitter.py` — `SECTION_SOURCE_MAP` (lines 230-235); manual fallthrough
+  logic (lines 281-295)
+- `src/maccat/helpers/chrome_name.py` — shared helper reused by all Chromium collectors
+- `src/maccat/helpers/json_io.py` — `json_get` pattern for Zed design
+- `src/maccat/helpers/plist_version.py` — not needed for extension collectors (confirmed)
+- `tests/collectors/test_chrome.py` — `patch.object(chrome_mod, "_BASE", ...)` pattern
+  (lines 43-46); `COMPONENT_DENYLIST` import (line 14); post-refactor impact analyzed
 
 ---
-
-*Architecture research for: maccat v2.1.0 Reinstall from Catalog*
-*Researched: 2026-06-16*
+*Architecture research for: maccat v2.2.0 — Edge / Brave / Zed / Safari / Codex Plugins*
+*Researched: 2026-06-17*

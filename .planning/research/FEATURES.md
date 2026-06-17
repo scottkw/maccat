@@ -1,23 +1,251 @@
 # Feature Research
 
-**Domain:** macOS reinstall-from-catalog script generation (v2.1.0 — `maccat reinstall`)
-**Researched:** 2026-06-16
-**Confidence:** HIGH (Homebrew/mas behaviors verified via official docs + Homebrew discourse; VS Code CLI behavior confirmed via microsoft/vscode issue tracker; Cursor CLI confirmed via official forum + community gists; bash conventions confirmed via betterdev.blog minimal template)
+**Domain:** macOS extension cataloging — v2.2.0 Broader Coverage (Edge, Brave, Zed, Safari, Codex Plugins)
+**Researched:** 2026-06-17
+**Confidence:** HIGH (all sources verified from live filesystem + working macOS tools)
 
 ---
 
-## Scope Boundary (Locked Decisions — Do Not Relitigate)
+## Scope Boundary
 
-The following decisions are already fixed and feed directly into feature categorization below:
+This file covers ONLY the five new sources in v2.2.0. Existing sections (Chrome, Firefox, VS Code,
+Cursor, Claude, Codex MCP, OpenCode, Gemini, Homebrew, mas, Setapp, web apps) are unchanged.
+The reinstall pipeline (v2.1.0) is additive: new browser/editor sections fall into the manual
+checklist in `reinstall.sh` identically to how Chrome and Firefox already do.
 
-| Decision | Source |
-|----------|--------|
-| Auto-install: Homebrew formulae + casks, `mas`, VS Code + Cursor extensions only | PROJECT.md v2.1.0 |
-| Everything else (Setapp, web apps, Chrome/Firefox exts, AI-CLI MCP/plugins/skills) → manual checklist | PROJECT.md v2.1.0 |
-| Install latest; cataloged version is a comment, not a pin | PROJECT.md v2.1.0 |
-| Never auto-execute the generated script | PROJECT.md v2.1.0 |
-| `--from PATH` flag + interactive computer-picker fallback | PROJECT.md v2.1.0 |
-| AI-CLI tooling is identity-only (FMT-03) — can only be a reconfigure reminder | PROJECT.md v2.1.0 |
+---
+
+## Source-by-Source Catalog Specification
+
+### 1. Microsoft Edge Extensions
+
+**Section title:** `Microsoft Edge Extensions`
+
+**Entry format:** `name (version) [id]` — full `emit_item` FMT-01 format.
+Degradation rules (inherited from `emit_item`):
+- name + version + id → `Bitwarden (2026.5.0) [nngceckbapebfimnlniiiahkandclblb]`
+- name + id (no version) → `Bitwarden [nngceckbapebfimnlniiiahkandclblb]`
+- name only → `Bitwarden`
+
+**Fields:**
+- `name`: human-readable display name from `manifest.json` `name` field; `__MSG_` placeholders
+  resolved via `chrome_name` helper (same logic as Chrome)
+- `version`: `manifest.json` `version` field
+- `id`: 32-char lowercase extension ID (the directory name under `Extensions/`)
+
+**Base path:** `~/Library/Application Support/Microsoft Edge`
+Profile enumeration order mirrors `ChromeCollector` exactly:
+1. `Default/Extensions/`
+2. `Profile N/Extensions/` — sorted ascending
+
+**Built-in component exclusion:** Edge ships its own component extensions. The Chrome
+`COMPONENT_DENYLIST` (10 Google-specific IDs) does NOT cover Edge components. Edge requires a
+separate denylist. Research confirmed Edge component IDs include Edge-specific entries (Wallet,
+Shopping Assistant, PDF Viewer, etc.) that are not in the Chrome denylist. Exact IDs are not yet
+researched exhaustively — this is a **phase-specific research flag** (see Feature Dependencies).
+Safe interim approach: reuse Chrome `COMPONENT_DENYLIST` to exclude known Google components that
+may also appear in Edge, plus add a dedicated `EDGE_COMPONENT_DENYLIST` researched during
+implementation. Standard Chromium internals guard (skip `Temp`, `_metadata` dirs) applies.
+
+**Profile deduplication:** cross-profile dedup via `flush_section` (raw=False), exactly as Chrome.
+
+**Dependency on existing code:**
+- Reuse `ChromeCollector._collect_profile()` — same manifest structure, same `version_sort_tail`,
+  same `chrome_ext_name` helper for `__MSG_` resolution
+- Only the base path and component denylist differ from Chrome
+- Pattern: extract a shared `ChromiumCollector` base class that `ChromeCollector`, `EdgeCollector`,
+  and `BraveCollector` all subclass, overriding `_BASE`, `_TITLE`, and `_COMPONENT_DENYLIST`
+
+**Complexity:** LOW — pure path substitution + component denylist research
+
+---
+
+### 2. Brave Extensions
+
+**Section title:** `Brave Extensions`
+
+**Entry format:** `name (version) [id]` — identical to Chrome/Edge.
+Same FMT-01 degradation rules.
+
+**Fields:** same as Edge/Chrome (name from manifest `name`, version from manifest `version`, id
+from directory name).
+
+**Base path:** `~/Library/Application Support/BraveSoftware/Brave-Browser`
+Profile enumeration order mirrors `ChromeCollector`:
+1. `Default/Extensions/`
+2. `Profile N/Extensions/` — sorted ascending
+
+**Built-in component exclusion:** Brave ships ~20 component extensions for Ad Block, Tor client,
+Widevine, NTP images, etc. Confirmed IDs from Brave wiki (HIGH confidence — official source):
+```
+eeigpngbgcognadeebkilcpcaekhjalm  (Autofill States Data)
+iodkpdagapdfkphljnddpjlldadblomo  (Ad Block Updater)
+gkboaolpopklhgplhaaiboijnklogmbc  (Ad Block List Catalog)
+mfddibmblmbccpadfndgakiopmmhebop  (Ad Block Resources Library)
+afalakplffnnnlkncjhbmahjfjhmlkal  (Local Data Updater)
+cldoidikboihgcjfkhdeidbpclkineef  (Tor Client Updater)
+cpoalefficncklhjfpglfiplenlpccdb  (Tor Client Updater alt)
+biahpgbdmdkfgndcmfiipgcebobojjkp  (Tor Client Updater alt)
+kkjipiepeooghlclkedllogndmohhnhi  (User Model Installer)
+giekcmmlnklenlaomppkphknjmnnpneh  (Certificate Error Assistant)
+hfnkpimlhhgieaddgfemjhofmfblmnib  (CRLSet)
+ggkkehgbnfjpeggfpleeakpidbkibbmn  (Crowd Deny)
+khaoiebndkojlmppeemjhbpbandiljpe  (File Type Policies)
+jamhcnnkihinmdlkakkaopbjbbcngflc  (Hyphenation)
+laoigpblnllgcgjnjnllmfolckpjlhki  (MEI Preload)
+gccbbckogglekeggclmmekihdgdpdgoe  (NTP Sponsored Images)
+aoojcmojmmcbpfgoecoadbdpnagfchel  (NTP Background Images)
+jflookgnkcckhobaglndicnbbgbonegd  (Safety Tips)
+oimompecagnajdejgnnjijobebaeigek  (Widevine)
+ojhpjlocmbogdgmfpkhlaaeamibhnphh  (Zxcvbn Data Dictionaries)
+```
+Apply the Chrome `COMPONENT_DENYLIST` (10 Google IDs) in addition to the Brave-specific list,
+because Brave inherits some Chromium components.
+
+**Profile deduplication:** cross-profile dedup via `flush_section` (raw=False), same as Chrome.
+
+**Dependency on existing code:** same shared `ChromiumCollector` base as Edge (above).
+
+**Complexity:** LOW — path substitution + known component denylist (IDs confirmed)
+
+---
+
+### 3. Zed Extensions
+
+**Section title:** `Zed Extensions`
+
+**Entry format:** `name (version) [id]` — full FMT-01 format.
+Degradation: name only if version absent (no id-only degradation expected since id is always
+present in the index).
+
+**Fields:**
+- `name`: `manifest.name` from the `index.json` `extensions` dict
+- `version`: `manifest.version` from the same dict
+- `id`: the key in the `extensions` dict (e.g., `"html"`)
+
+**Source:** `~/Library/Application Support/Zed/extensions/index.json`
+Format (verified on live system):
+```json
+{
+  "extensions": {
+    "html": {
+      "manifest": {
+        "id": "html",
+        "name": "HTML",
+        "version": "0.3.1",
+        ...
+      },
+      "dev": false
+    }
+  }
+}
+```
+All three fields (id, name, version) are available in one file — no per-extension manifest parse needed.
+
+**No profile concept:** Zed has a single user config; no cross-profile deduplication required.
+
+**No CLI:** The `zed` CLI binary does not expose an `--list-extensions` subcommand. The `index.json`
+file is the canonical installed-extension registry (confirmed by live system inspection).
+
+**Availability check:** `~/Library/Application Support/Zed/extensions/index.json` exists.
+If the file is absent (Zed not installed or no extensions installed), emit `  (none found)` via
+`flush_section` — consistent with all other collectors' degradation behavior.
+Print `  NOTE: Zed not installed.` to stderr when the base app support dir is absent entirely.
+
+**Dev extensions:** The `"dev": false/true` flag in the index entry identifies in-development
+extensions loaded from local disk. Include them (they are user-installed); filter is optional
+but the most natural behavior is to catalog everything present. Do NOT attempt to resolve a
+filesystem path for dev extensions.
+
+**Complexity:** LOW — single JSON parse, no locale resolution needed, no profile loops
+
+---
+
+### 4. Safari Extensions
+
+**Section title:** `Safari Extensions`
+
+**Entry format:** `name (version) [id]` — full FMT-01 format when all three fields obtainable.
+Degradation to `name (version)` or `name` when bundle ID or version is unavailable.
+
+**Fields:**
+- `name`: `CFBundleDisplayName` (preferred) or `CFBundleName` from the `.appex/Contents/Info.plist`
+- `version`: `CFBundleShortVersionString` (preferred) or `CFBundleVersion` from `Info.plist`
+- `id`: bundle identifier (`CFBundleIdentifier`) from `Info.plist` (e.g., `com.bitwarden.desktop.safari`)
+
+**Enumeration mechanism:** `pluginkit -v -m -p com.apple.Safari.web-extension`
+Output format (verified on live system):
+```
+     com.bitwarden.desktop.safari(2026.5.0)	UUID	timestamp	/Applications/Bitwarden.app/Contents/PlugIns/safari.appex
+```
+Parse: `bundle_id(version_from_pluginkit)` in column 1, `appex_path` in last tab-delimited column.
+Then read `appex_path/Contents/Info.plist` with `plistlib` for authoritative name, version, and id.
+Version from `Info.plist` is preferred over the pluginkit parenthetical (plist is authoritative);
+pluginkit version serves as fallback if plist read fails.
+
+**Also query:** `pluginkit -v -m -p com.apple.Safari.extension` for legacy `.safariextz`-based
+extensions (rarely seen, may return nothing). Merge results from both queries; dedup by bundle id.
+
+**Apple built-in exclusion:** Filtering by `-p com.apple.Safari.web-extension` already excludes
+Apple-internal extensions (e.g., `com.apple.Safari.*`, `com.apple.ScreenTime.*`). These appear
+under `pluginkit -m -A` but NOT under the `-p com.apple.Safari.web-extension` extension point —
+confirmed on live system. No explicit denylist needed.
+
+**Framing for partial data:** Safari extensions are installed as host-app bundles (`Bitwarden.app`
+ships `safari.appex` as a PlugIn). Reading `Info.plist` gives name + version + bundle ID cleanly
+in all tested cases. The plist approach is MORE reliable than Chrome manifest parsing because
+there are no `__MSG_` locale placeholders in App Store extension bundles. If `plistlib` read fails,
+degrade to emitting the bundle ID only (id-as-name promotion via `emit_item`). Do NOT invent a
+name from the appex filename — it is typically an unreadable slug.
+
+**Availability check:** If `pluginkit` returns no output for both extension points, emit
+`  (none found)`. If `pluginkit` itself is absent (not expected on macOS), print
+`  NOTE: pluginkit unavailable — Safari extensions skipped.` and emit empty section.
+
+**No profile concept:** Safari has one extension registry per macOS user account.
+
+**Complexity:** MEDIUM — requires subprocess (`pluginkit`), plist read, regex parse of pluginkit
+output. More steps than Chrome/Zed but each step is well-defined.
+
+---
+
+### 5. Codex Plugins (Agents)
+
+**Section title:** `Codex Plugins`
+
+**Entry format:** bare `name` — no version, no id (same as Claude/OpenCode agents sections).
+`emit_item(name, "", "")` → bare name.
+
+**Fields:**
+- `name`: the key from `[agents."name"]` in `~/.codex/config.toml`
+- version: not available (agent registrations have no version field)
+- id: not emitted (the section key IS the name; no separate id concept)
+
+**Source:** `~/.codex/config.toml` — text-grep of `[agents."name"]` section headers.
+Pattern: `^\[agents\."([^"]+)"\]$` — analogous to existing Codex MCP TOML grep.
+Only the section header line is read; `description`, `config_file`, and all other value lines
+are NOT read (FMT-03 secret-safety: `config_file` paths are benign but the same header-only
+discipline applied to MCP servers should apply here for consistency and future-proofing).
+
+**Context:** Codex 0.46.0 does not expose a `codex agents list` CLI subcommand. The `config.toml`
+text-grep is the only available path. The existing `CodexCollector._collect_via_cli()` tries
+`codex mcp list --json` for MCP servers — there is no equivalent for agents. TOML grep is
+therefore not a fallback but the primary path.
+
+**FMT-03 note:** Agent `config_file` values are filesystem paths to `.toml` files — not secrets.
+However, emitting full filesystem paths is unnecessary and potentially privacy-exposing (paths
+may reveal usernames or private project names). Emit name only; consistent with how Claude Code
+skills/agents are cataloged.
+
+**Availability check:** If `~/.codex/config.toml` is absent, emit `  (none found)`.
+If the file exists but has no `[agents.*]` sections, emit `  (none found)`.
+
+**Relationship to existing `CodexCollector`:** Add a new `_collect_agents()` method alongside
+`_collect_via_cli()` and `_collect_via_toml()`. Return a second `Section` titled
+`"Codex Plugins"` from `collect()` (alongside existing `"Codex MCP Servers"`). The section
+title `"Codex Plugins"` matches PROJECT.md v2.2.0 goal naming.
+
+**Complexity:** LOW — extends existing `CodexCollector` by ~15 lines; reuses `_TOML_PATH`
 
 ---
 
@@ -25,123 +253,129 @@ The following decisions are already fixed and feed directly into feature categor
 
 ### Table Stakes (Users Expect These)
 
-Features that make the generated `reinstall.sh` trustworthy and usable. Missing any of these produces a script that users will not trust or run.
-
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Bash shebang `#!/usr/bin/env bash` | Every standalone shell script needs a shebang; `env bash` is the portable standard over `/bin/bash` on macOS | LOW | Use `bash` not `zsh` — `reinstall.sh` must run on a fresh machine where maccat's own zsh context may not be configured; `pipefail` is bash-specific |
-| `set -Eeuo pipefail` strict mode at top | Makes the script fail fast on any error rather than silently continuing past failures; every serious bootstrap script in the community treats this as non-negotiable | LOW | `set -e` alone is insufficient — `pipefail` catches pipe failures; `E` propagates ERR traps through functions |
-| Generated-file header comment with provenance | User needs to know what catalog produced this script and when; without provenance the script is unauditable | LOW | Include: `# Generated by maccat reinstall`, catalog filename, timestamp, computer name |
-| "Review before running" warning in header | Users must be explicitly reminded this script is not auto-executed and should be reviewed; matches maccat's "never auto-execute" design decision | LOW | E.g., `# REVIEW THIS SCRIPT BEFORE RUNNING — it will install software on this machine` |
-| Skip-if-already-installed guard on every `brew install` line | `brew install` exits with code 1 when a package is already installed; without a guard, `set -e` aborts the script mid-run. This is a known long-standing limitation (Homebrew issues #2351, #2491, #12361 — no `--if-not-installed` flag has been added) | MEDIUM | Canonical pattern from Homebrew discourse: `brew list ripgrep &>/dev/null \|\| brew install ripgrep` |
-| Skip-if-already-installed guard on every `brew install --cask` line | Same issue as formulae; cask list check requires `brew list --cask` (different flag) | MEDIUM | Pattern: `brew list --cask firefox &>/dev/null \|\| brew install --cask firefox` |
-| Skip-if-already-installed guard on every `mas install` line | `mas install` idempotency is not documented as guaranteed; a `mas list` pre-check is the safe pattern | MEDIUM | Pattern: `mas list \| grep -q "^<id> " \|\| mas install <id>` |
-| Skip-if-already-installed guard on every `code --install-extension` line | `code --install-extension` on an already-installed extension prompts interactively ("update available?"), making it unsuitable for unattended scripting without a guard (confirmed VS Code issue #58965) | MEDIUM | Pattern: `code --list-extensions 2>/dev/null \| grep -qi "^<id>$" \|\| code --install-extension <id>` |
-| Skip-if-already-installed guard on every `cursor --install-extension` line | Same issue as VS Code; `cursor --install-extension` is confirmed to work via CLI but needs the same idempotency guard | MEDIUM | `cursor --list-extensions 2>/dev/null \| grep -qi "^<id>$" \|\| cursor --install-extension <id>` |
-| Tool-availability check before each section | `brew`, `mas`, `code`, `cursor` may not be installed on the target machine; running commands without them produces unhelpful errors | LOW | Pattern: `command -v brew &>/dev/null \|\| { echo "ERROR: brew not found. Install from https://brew.sh" >&2; exit 1; }`. Mirrors maccat's own graceful-degradation pattern |
-| Cataloged version as inline comment on every install line | The catalog snapshot carries version data; without it the script loses the "what was installed when" audit trail — this is the primary version-fidelity mechanism since version pinning is not possible | LOW | E.g., `brew install ripgrep  # cataloged: 14.1.1` |
-| Taps before formulae and casks | `brew bundle` has a confirmed bug where taps may not be processed before formulae that depend on them (issue #21416); generated scripts must emit taps first to avoid "no available formula" errors | LOW | Ordering: taps → formulae → casks |
-| Formulae before casks | Conventional Brewfile ordering; formulae are CLI tools that cask GUI apps sometimes depend on; expected by every Brewfile-familiar user | LOW | Matches `brew bundle dump` output order; formulae before casks before mas |
-| Clear section headers separating install types | Users reviewing the script need to navigate it by section (Homebrew Taps, Homebrew Formulae, Homebrew Casks, App Store, VS Code Extensions, Cursor Extensions, Manual Steps) | LOW | Use prominent `#` comment blocks with divider lines matching maccat's existing style |
-| `echo` progress messages at the start of each section | Prints section names as the script runs so the user can see what is happening during a long install run | LOW | E.g., `echo ""` + `echo "=== Installing Homebrew formulae ==="` before the formula block |
-| Manual checklist section at end of script | Non-deterministic sources cannot be scripted; they must be prominently listed for the user to action manually after the automated portion completes | MEDIUM | Section clearly marked as `# ============ MANUAL STEPS ============`; items output via `echo` at runtime so the user sees them in their terminal |
-| Manual section covers all non-auto-install sources | Setapp apps, web-installed `/Applications`, Chrome extensions, Firefox extensions, AI-CLI MCP servers / plugins / skills / agents — all must appear | MEDIUM | Completeness matters: a missing source creates a false sense that restoration is done |
-| `--from PATH` flag on `maccat reinstall` | Users need to specify an explicit catalog file for non-interactive use (scripting, CI, running from a different machine) | LOW | Feeds catalog parser with the explicit file path |
-| Interactive computer-picker fallback when `--from` is omitted | Consistent with v2.0.0 UX; reuses the existing `select_computer` menu to pick a computer and finds its newest catalog | LOW | Newest catalog = newest `.txt` in that computer's folder, same as the existing retention model |
-| Output path printed to stdout after generation | User needs to know where the script was written and how to run it | LOW | E.g., `Wrote reinstall.sh to: /path/to/reinstall.sh` + `Review it, then run: bash /path/to/reinstall.sh` |
+| Edge extensions: enumerate user-installed across all profiles | Edge is Chromium — users expect same coverage as Chrome | LOW | Reuse ChromiumCollector base; only path changes |
+| Edge extensions: `__MSG_` name resolution | Same locale-resolution requirement as Chrome | LOW | Reuse `chrome_ext_name` helper directly |
+| Edge extensions: exclude built-in component extensions | Chrome does this; users expect same quality | MEDIUM | Chrome denylist IDs don't fully cover Edge; needs Edge-specific research at implementation time |
+| Brave extensions: enumerate user-installed across all profiles | Brave is Chromium — same expectations | LOW | Reuse ChromiumCollector base |
+| Brave extensions: exclude Brave component extensions | 20 Brave-specific component IDs confirmed | LOW | IDs listed above; HIGH confidence from Brave wiki |
+| Zed extensions: enumerate installed with name + version + id | Zed has an extension system; users expect catalog parity with VS Code/Cursor | LOW | Single `index.json` parse; all fields present |
+| Safari extensions: enumerate via pluginkit | Safari extensions are user-visible in Safari preferences; users expect them in the catalog | MEDIUM | `pluginkit -p com.apple.Safari.web-extension`; plist read for name |
+| Safari extensions: human-readable name (not bundle ID) | Bundle IDs are opaque; catalog must show display name | MEDIUM | `CFBundleDisplayName` / `CFBundleName` from appex Info.plist |
+| Safari extensions: version from plist | Version available in Info.plist; expected for restore fidelity | LOW | `CFBundleShortVersionString` preferred |
+| Codex Plugins: enumerate registered agents | The `[agents.*]` entries in config.toml are the user's registered "plugins" for Codex | LOW | Extend CodexCollector; TOML header grep |
+| All sources: graceful degradation when absent | Consistent with all existing collectors | LOW | Print NOTE to stderr; return empty section → `(none found)` |
+| All sources: deterministic stable sort | FMT-04 — diff-empty on repeated runs | LOW | `flush_section` already handles this for all raw=False sections |
 
 ### Differentiators (Competitive Advantage)
 
-Features that go beyond what users minimally expect and make `maccat reinstall` demonstrably better than hand-writing a restore script.
-
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Item count summary in header comment | `# 42 formulae, 18 casks, 7 MAS apps, 31 VS Code extensions, 12 Cursor extensions, 23 manual items` lets the user sanity-check completeness before running | LOW | Generated from counts during parsing; zero runtime overhead |
-| Prerequisites block in header comment | A `# This script requires: brew, mas, code, cursor` comment block lets the user see all tool dependencies at a glance before the script even starts | LOW | Pure comment; no runtime cost; significantly improves reviewability |
-| `echo` runtime reminders for manual items at end of run | The script actively prints manual reminders when it finishes running, not just as static comments, so the user cannot miss them in their terminal | LOW | `echo "MANUAL: Install Setapp apps via https://setapp.com"` in a section after all automated installs |
-| Warn-and-continue for absent optional tools | If `mas` is absent, skip that section with a clear warning rather than aborting; matches maccat's own graceful-degradation pattern | MEDIUM | `command -v mas &>/dev/null \|\| { echo "WARNING: mas not installed — skipping App Store items. Install: brew install mas"; }` wrapping the mas block |
-| Catalog source filename and snapshot date prominently in header | Ties the generated script to a specific point-in-time snapshot; makes it possible to regenerate the script from the same catalog later | LOW | Catalog filename already encodes computer + timestamp |
-| Grouped sub-sections with origin comment | Within the formulae and casks sections, the catalog source names (e.g., "Homebrew Formulae", "Homebrew Casks") become sub-headers — matches the Brewfile functional-grouping convention and aids review | LOW | The catalog already has separate sections for formulae vs casks; no extra parsing needed |
-| MAS app name as comment alongside ID | `mas install 497799835  # 1Password 8 — cataloged: 8.10.38` is far more readable than a bare ID | LOW | App name already present in catalog line; include it in the comment |
+| Shared `ChromiumCollector` base class | Three Chromium browsers (Chrome, Edge, Brave) share 95% of logic; a base class eliminates duplication and ensures consistent behavior | LOW | Extract from existing `ChromeCollector`; subclasses override `_BASE`, `_TITLE`, `_COMPONENT_DENYLIST` |
+| Safari extensions via plist: more reliable than legacy .safariextz parse | plist-based approach gives clean name/version/id with no locale resolution needed | LOW | Simpler than Chrome manifest parsing |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+### Anti-Features (Correctly Excluded)
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Version-pinned `brew install` (`brew install ripgrep@14.1.1`) | Seems like better restore fidelity | Homebrew does not maintain stable versioned formula URLs for most packages; old versions are deleted from Cellar; `brew install <formula>@<version>` only works for a small subset of explicitly versioned formulae (e.g., `python@3.11`). Creates hard failures on new machines. | Carry the cataloged version as a `# cataloged: X.Y.Z` comment only; install latest |
-| `mas install` version pinning | Same fidelity reasoning | The Mac App Store has no CLI mechanism for installing a specific historic version | Comment only |
-| Output as a Brewfile (instead of `reinstall.sh`) | Leverages native `brew bundle` idempotency | A Brewfile cannot include `mas`, `code --install-extension`, `cursor --install-extension`, manual-checklist items, tool-availability checks, or the comments and formatting maccat needs, all in one reviewable document. Also requires `brew bundle` on the target. | Generate `reinstall.sh` with raw install commands + guards |
-| Auto-execute the generated script | Convenience | Directly contradicts the locked "never auto-execute" design decision; high-impact on the target machine | Print the output path; let user run it manually |
-| Browser extension auto-install | Completeness | Chrome and Firefox extensions have no headless CLI installer keyed on extension ID; install mechanisms are browser-UI-only or require enterprise policy deployment | List in manual section with name + extension ID |
-| AI-CLI MCP/plugin/skill auto-install | Completeness | Catalog stores only `name [transport]` by FMT-03 secret-safety design; the command/URL/args/env needed to re-add the server are intentionally absent | List as identity-only reconfigure reminders in manual section |
-| Interactive `--dry-run` mode on the generated `reinstall.sh` itself | Preview before running | The script itself IS the reviewable artifact — viewing it before running is the dry run. A `--dry-run` flag on the generated script adds code complexity with no additional trust value | The script is the dry run; user reviews it before executing |
-| Diff-from-current-state before generating | Shows only what is new | Requires a live system scan; this is the catalog-diffing feature planned as a post-v2.1.0 milestone | Deferred; out of scope |
-| Setapp auto-install | Convenience | Setapp has no public CLI installer keyed on app name; apps must be installed through the Setapp desktop client | Manual checklist item |
-| `--force` on extension install to skip the already-installed check | Simplifies the generated script | `code --force --install-extension` redownloads the extension from the marketplace even when no newer version exists — unnecessary network traffic and slower runs | Use the `--list-extensions` guard instead |
+| Feature | Why Excluded | Correct Behavior |
+|---------|--------------|-----------------|
+| Enabled/disabled state for Edge/Brave extensions | Deferred as CHR-02/FF-02 in existing design; consistently excluded from all browser extension sections | Omit entirely; catalog name + version + id only |
+| Enabled/disabled state for Safari extensions | Same CHR-02/FF-02 deferral | Omit entirely |
+| Safari extension permissions or entitlements | Not needed for catalog/restore identity | Name + version + bundle_id is sufficient |
+| Codex agent `description` or `config_file` values | description is prose, config_file is a filesystem path — neither belongs in the catalog | Name-only per FMT-03 pattern |
+| Codex agent `sandbox_mode` or `developer_instructions` | These are configuration values, not identity fields | Name-only |
+| Zed dev extension source paths | Dev extensions (flag: `"dev": true`) may have local paths — not stable across machines; name + version + id from index.json is sufficient | Catalog dev extensions by name/version/id same as installed ones; do not include path |
+| Multi-account/profile Safari extensions | Safari has one extension registry per macOS user; no profile concept exists | Single-pass enumeration |
+
+---
+
+## Multi-Profile Handling (Edge and Brave)
+
+**Chrome collector behavior (confirmed from source):**
+- Enumerates `Default/` first, then sorted `Profile */` directories
+- Accumulates all items across profiles into a single flat list
+- Deduplication via `flush_section` (`sort -f -u`) — one occurrence of each extension,
+  regardless of how many profiles have it installed
+
+**Edge and Brave:** mirror Chrome exactly. Same profile enumeration order (Default first, sorted
+Profile N dirs), same cross-profile dedup via `flush_section`. Users with identical extensions
+in multiple profiles see each extension once. This is the established maccat convention.
+
+---
+
+## Graceful Degradation Summary
+
+| Source | Not Installed | Name Unavailable | Version Unavailable | ID Unavailable |
+|--------|---------------|------------------|---------------------|----------------|
+| Edge | NOTE to stderr; `(none found)` | Fall back to ext_id (Chrome pattern) | `name [id]` via emit_item | `name (version)` via emit_item |
+| Brave | NOTE to stderr; `(none found)` | Fall back to ext_id (Chrome pattern) | `name [id]` via emit_item | `name (version)` via emit_item |
+| Zed | NOTE to stderr; `(none found)` | id promoted as name (emit_item rule) | `name [id]` via emit_item | Unlikely; id == manifest key |
+| Safari | NOTE to stderr; `(none found)` | Bundle ID promoted as name (emit_item) | `name [id]` via emit_item | Name-only via emit_item |
+| Codex Plugins | `(none found)` (config absent or no agents) | n/a (name IS the section key) | Not applicable (no version) | Not applicable (no id) |
+
+All sources: `flush_section` converts an empty item list to `  (none found)` (two leading spaces,
+matching the established pattern from `format.py`).
 
 ---
 
 ## Feature Dependencies
 
 ```
-maccat reinstall subcommand
-    └──requires──> catalog file selection (--from or computer-picker)
-                       └──requires──> catalog parser (plain-text sections → structured items)
-                                          └──enables──> all generated sections
+Edge/Brave Extensions
+    └──requires──> shared ChromiumCollector base
+                       └──requires──> existing chrome_ext_name helper (reuse as-is)
+                       └──requires──> existing version_sort_tail helper (reuse as-is)
+                       └──requires──> Edge/Brave-specific component denylists
+                                          Edge denylist: phase-specific research flag
+                                          Brave denylist: confirmed (20 IDs from Brave wiki)
 
-skip-if-installed guards
-    └──requires──> tool-availability checks (brew/mas/code/cursor confirmed present)
-                       └──must run before each section block
+Zed Extensions
+    └──requires──> ~/Library/Application Support/Zed/extensions/index.json
+                       └──no additional helpers needed
 
-manual checklist section
-    └──requires──> catalog parser (non-auto-install sections parsed and preserved)
+Safari Extensions
+    └──requires──> pluginkit CLI (always available on macOS)
+    └──requires──> plistlib (Python stdlib, already used in webapps/setapp collectors)
+    └──requires──> existing plist_version helper pattern (adapt for appex path)
 
-version comments
-    └──requires──> catalog parser (version field extracted per item)
-
-section ordering (taps → formulae → casks → mas → code → cursor → manual)
-    └──requires──> catalog parser (section identity preserved so items can be grouped correctly)
-
-item count summary
-    └──requires──> catalog parser (all sections counted)
+Codex Plugins section
+    └──requires──> existing CodexCollector (extend, do not replace)
+    └──requires──> existing _TOML_PATH path constant
 ```
 
 ### Dependency Notes
 
-- **Catalog file selection gates everything.** The `--from` flag or computer-picker resolves which `.txt` to parse; no parsing can begin until a file is chosen.
-- **Tool-availability checks must gate each section block.** A guard for `mas` only makes sense if `mas` itself is confirmed present; the check wraps the entire section, not individual lines.
-- **Section identity must survive parsing.** The parser must distinguish formulae from casks from MAS from VS Code from Cursor extensions to emit them in the correct order and with the correct install commands.
-- **Taps dependency is implicit.** If the catalog contains Homebrew formulae from third-party taps, those tap names must be recoverable from the catalog or inferred from the formula names. If the catalog does not capture tap information explicitly, taps section may be empty or omitted.
+- **ChromiumCollector base class gates Edge and Brave.** Refactor Chrome first, validate parity,
+  then add Edge and Brave as subclasses. This must not change Chrome's output.
+- **Safari has no dependency on the Chromium work.** It can be implemented independently.
+- **Codex Plugins has no dependency on any browser work.** It is a pure extension of the existing
+  `CodexCollector` and can be implemented first.
+- **Zed has no dependencies.** Simplest new source; good to implement first for confidence.
 
 ---
 
 ## MVP Definition
 
-### v2.1.0 Launch With
+### v2.2.0 Launch With
 
-The minimum `maccat reinstall` that closes the catalog → restore loop:
+All five new sources at full table-stakes quality:
 
-- [ ] `maccat reinstall` subcommand with `--from PATH` + computer-picker fallback
-- [ ] Catalog parser: reads formulae, casks, MAS apps, VS Code extensions, Cursor extensions, Setapp, web apps, Chrome exts, Firefox exts, AI-CLI tooling back into structured items (name / version / id per source)
-- [ ] `reinstall.sh` header: `#!/usr/bin/env bash`, `set -Eeuo pipefail`, generated-by comment, catalog source, timestamp, computer name, "review before running" warning
-- [ ] Auto-install section: taps (if any) → formulae → casks → MAS → VS Code extensions → Cursor extensions
-- [ ] Skip-if-installed guard on every `brew install`, `brew install --cask`, `mas install`, `code --install-extension`, `cursor --install-extension` line
-- [ ] Tool-availability check (`command -v`) gating each section
-- [ ] Cataloged version as `# cataloged: X.Y.Z` inline comment on every install line
-- [ ] `echo` progress banners between sections
-- [ ] Manual checklist section: Setapp, web apps, Chrome exts, Firefox exts, AI-CLI MCP/plugins/skills/agents — all emitted via `echo` at runtime
-- [ ] Output path + run instructions printed to stdout; script never auto-executed
+- [ ] `ZedCollector`: parse `index.json`, emit `name (version) [id]`, degrade gracefully
+- [ ] `SafariCollector`: `pluginkit` enumeration, plist name/version/id extraction, degrade gracefully
+- [ ] `CodexCollector` extended: add `_collect_agents()` + `"Codex Plugins"` section
+- [ ] `ChromiumCollector` base class extracted from `ChromeCollector` (no output change for Chrome)
+- [ ] `EdgeCollector`: ChromiumCollector subclass for `~/Library/Application Support/Microsoft Edge`
+- [ ] `BraveCollector`: ChromiumCollector subclass for `~/Library/Application Support/BraveSoftware/Brave-Browser`
+- [ ] All new sources: NOTE to stderr when absent, `(none found)` when empty
+- [ ] All new sources: deterministic sort via `flush_section` (raw=False)
+- [ ] All new sources: additive-only — no changes to existing sections or catalog structure
 
-### Add After Validation (v2.1.x)
+### Deferred (not v2.2.0)
 
-- [ ] Item count summary in header (`# 42 formulae, 18 casks, ...`) — trivial once parser is done
-- [ ] Prerequisites comment block in header (`# Requires: brew, mas, code, cursor`)
-- [ ] Warn-and-continue for absent optional tools (vs. hard exit)
-
-### Future Consideration (v2.2+)
-
-- [ ] Diff-from-current-state before generating (requires catalog-diffing milestone)
-- [ ] Multi-catalog merge (install union of two catalogs)
+- Enabled/disabled state for any browser extension (CHR-02/FF-02 — explicitly deferred)
+- Edge component denylist completeness (safe to ship with partial denylist + standard guards;
+  unrecognized components are rare on personal machines)
+- Safari legacy extension support (`.safariextz` format is effectively retired by Apple)
 
 ---
 
@@ -149,168 +383,44 @@ The minimum `maccat reinstall` that closes the catalog → restore loop:
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Catalog parser (section → structured items) | HIGH | MEDIUM | P1 |
-| `--from` + computer-picker selection | HIGH | LOW | P1 |
-| Generated header (shebang + strict mode + provenance + warning) | HIGH | LOW | P1 |
-| Section ordering (taps→formulae→casks→mas→code→cursor→manual) | HIGH | LOW | P1 |
-| Skip-if-installed guards (all 4 install tool types) | HIGH | MEDIUM | P1 |
-| Tool-availability checks per section | HIGH | LOW | P1 |
-| Cataloged version as inline comment | HIGH | LOW | P1 |
-| `echo` progress banners | MEDIUM | LOW | P1 |
-| Manual checklist section (all non-auto sources, via echo) | HIGH | MEDIUM | P1 |
-| Output path + run instructions printed | HIGH | LOW | P1 |
-| Item count summary in header | MEDIUM | LOW | P2 |
-| Prerequisites comment block | MEDIUM | LOW | P2 |
-| Warn-and-continue on absent optional tools | MEDIUM | MEDIUM | P2 |
+| Zed Extensions | HIGH | LOW | P1 |
+| Codex Plugins | HIGH | LOW | P1 |
+| Brave Extensions (ChromiumCollector base first) | HIGH | LOW | P1 |
+| Edge Extensions | HIGH | LOW | P1 |
+| Safari Extensions | HIGH | MEDIUM | P1 |
+| ChromiumCollector base class refactor | MEDIUM (engineering quality) | LOW | P1 (prerequisite) |
+| Edge component denylist (complete) | MEDIUM | MEDIUM | P2 (phase research flag) |
 
 **Priority key:**
-- P1: Must have for v2.1.0 launch
-- P2: Should add in v2.1.x after core works
-- P3: Future milestone
+- P1: Must have for v2.2.0 launch
+- P2: Improve after initial implementation; incomplete denylist ships with known gap documented
 
 ---
 
-## Conventions That Make the Script Trustworthy and Reviewable
+## Implementation Order Recommendation
 
-Concrete patterns drawn from surveyed tools (`brew bundle`, dotfile bootstrap communities, betterdev.blog minimal-safe-bash template, Homebrew discourse, microsoft/vscode issue tracker):
-
-### Shebang + Strict Mode
-```bash
-#!/usr/bin/env bash
-set -Eeuo pipefail
-```
-`#!/usr/bin/env bash` is portable across macOS where `/bin/bash` may be the system bash (3.x). `set -Eeuo pipefail` ensures fail-fast on any error, unset variable, or pipe failure. The `E` flag propagates ERR traps through functions.
-
-### Header Block Pattern
-```bash
-# ============================================================
-# Generated by maccat reinstall
-# Computer : My Work Mac
-# Catalog  : mac-software-list-[My Work Mac]-20260616120000.txt
-# Generated: 2026-06-16 12:00:00
-# Contents : 42 formulae, 18 casks, 7 MAS apps, 31 VS Code extensions,
-#            12 Cursor extensions, 23 manual items
-# Requires : brew, mas, code, cursor
-#
-# REVIEW THIS SCRIPT BEFORE RUNNING.
-# It will install software on this machine.
-# Run: bash reinstall.sh
-# ============================================================
-```
-
-### Tool-Availability Check Pattern (hard-exit for brew; warn-and-continue for optional tools)
-```bash
-# Hard-exit for brew — the script cannot do anything useful without it
-if ! command -v brew &>/dev/null; then
-  echo "ERROR: Homebrew not found. Install from https://brew.sh" >&2
-  exit 1
-fi
-
-# Warn-and-continue for optional tools
-_has_mas=true
-if ! command -v mas &>/dev/null; then
-  echo "WARNING: mas not installed — skipping App Store items. Install: brew install mas" >&2
-  _has_mas=false
-fi
-```
-
-### Skip-if-Installed Guard Patterns
-
-**Homebrew formula** (canonical pattern from Homebrew discourse):
-```bash
-brew list ripgrep &>/dev/null || brew install ripgrep  # cataloged: 14.1.1
-```
-
-**Homebrew cask:**
-```bash
-brew list --cask firefox &>/dev/null || brew install --cask firefox  # cataloged: 137.0
-```
-
-**MAS** (match on ID at start of line):
-```bash
-mas list | grep -q "^497799835 " || mas install 497799835  # 1Password 8 — cataloged: 8.10.38
-```
-
-**VS Code extension** (case-insensitive; extension IDs vary in case between catalog and list output):
-```bash
-code --list-extensions 2>/dev/null | grep -qi "^eamodio.gitlens$" \
-  || code --install-extension eamodio.gitlens  # GitLens — cataloged: 16.3.2
-```
-
-**Cursor extension** (`cursor --install-extension` confirmed working via Cursor forum + community gists):
-```bash
-cursor --list-extensions 2>/dev/null | grep -qi "^eamodio.gitlens$" \
-  || cursor --install-extension eamodio.gitlens  # GitLens — cataloged: 16.3.2
-```
-
-### Section Ordering (Matches Established Brewfile Convention)
-1. Homebrew taps (if any non-default taps needed)
-2. Homebrew formulae
-3. Homebrew casks
-4. Mac App Store (`mas`)
-5. VS Code extensions
-6. Cursor extensions
-7. Manual steps (always last)
-
-### Manual Checklist Section Pattern (runtime echo, not just static comments)
-```bash
-echo ""
-echo "============================================================"
-echo "MANUAL STEPS — the following require manual installation"
-echo "============================================================"
-echo ""
-echo "Setapp apps (install via Setapp desktop app after signing in):"
-echo "  - Proxyman (cataloged: 2.18.0)"
-echo "  - TablePlus (cataloged: 6.3.2)"
-echo ""
-echo "Web-installed apps (download from vendor websites):"
-echo "  - Zoom (cataloged: 6.4.0)"
-echo ""
-echo "Chrome extensions (install from Chrome Web Store by ID):"
-echo "  - uBlock Origin [cjpalhdlnbpafiamejdnhcphjbkeiagm] (cataloged: 1.62.0)"
-echo ""
-echo "AI-CLI tooling (reconfigure in each tool — connection details not stored):"
-echo "  - Claude Code MCP: filesystem [stdio]"
-echo "  - Claude Code MCP: github [stdio]"
-echo ""
-echo "============================================================"
-```
-
----
-
-## Critical Implementation Note: `brew install` Is NOT Idempotent in Scripts
-
-This is the single most important behavior difference between using `brew bundle install` (Brewfile approach) and generating raw `brew install` lines:
-
-- `brew bundle install` handles already-installed packages as an internal no-op — it is designed for idempotency.
-- `brew install <formula>` when the formula is already installed exits with **code 1** and prints "already installed", which causes `set -e` to abort the script.
-- The canonical workaround is the `brew list <formula> &>/dev/null || brew install <formula>` guard pattern.
-- A native `--if-not-installed` flag has been requested multiple times (Homebrew/brew issues #2351, #2491, #12361) and has not been implemented. The guard pattern is the established community solution.
-
-maccat must emit the guard on every `brew install` and `brew install --cask` line.
-
----
-
-## Key Finding: Cursor CLI Is Confirmed
-
-`cursor --install-extension <id>` and `cursor --list-extensions` are confirmed working CLI commands on macOS (Cursor official forum thread + community gists). The `cursor` CLI tool must be installed separately ("Shell Command: Install 'cursor' command in PATH" in Cursor's Command Palette). The generated script should include a `command -v cursor` tool-availability check identical to the one for `code`.
+1. **Codex Plugins** — extend existing CodexCollector (~15 lines). Zero risk to existing output.
+2. **Zed** — new collector, single JSON parse. No locale issues, no profile loops.
+3. **ChromiumCollector base** — extract from ChromeCollector, verify Chrome output unchanged.
+4. **Brave** — subclass ChromiumCollector; Brave denylist is fully known.
+5. **Edge** — subclass ChromiumCollector; Edge denylist needs phase research (document as known gap).
+6. **Safari** — most steps; pluginkit + plist. Implement last with most test surface.
 
 ---
 
 ## Sources
 
-- [Homebrew Bundle official docs](https://docs.brew.sh/Brew-Bundle-and-Brewfile) — HIGH confidence; directive types, idempotency behavior, `brew bundle check`
-- [Homebrew discourse: skip-if-installed](https://discourse.brew.sh/t/skip-ignore-brew-install-if-package-is-already-installed/633) — HIGH confidence; `brew list || brew install` canonical pattern and exit-code behavior
-- [Homebrew/brew issue #2351: suppress "already installed" warning](https://github.com/Homebrew/brew/issues/2351) — HIGH confidence; confirms non-zero exit on already-installed
-- [Homebrew/brew issue #21416: brew bundle should install taps first](https://github.com/Homebrew/brew/issues/21416) — HIGH confidence; confirms taps-before-formulae ordering is required
-- [VS Code --install-extension interactive prompt issue #58965](https://github.com/Microsoft/vscode/issues/58965) — HIGH confidence; confirms non-idempotent behavior on already-installed extensions; `--force` redownloads regardless
-- [Cursor --list-extensions forum thread](https://forum.cursor.com/t/command-line-list-extensions/103565) — MEDIUM confidence; confirms `cursor --install-extension` and `cursor --list-extensions` work on macOS
-- [Community gist: import VS Code extensions to Cursor](https://gist.github.com/kigster/fcf644441be8f5d9e1c5434ca9f1723a) — MEDIUM confidence; confirms `cursor --force --install-extension` pattern in practice
-- [betterdev.blog: minimal safe bash script template](https://betterdev.blog/minimal-safe-bash-script-template/) — HIGH confidence; `#!/usr/bin/env bash` + `set -Eeuo pipefail` standard
-- [Brewfile tips gist (ChristopherA)](https://gist.github.com/ChristopherA/a579274536aab36ea9966f301ff14f3f) — MEDIUM confidence; taps → formulae → casks → mas ordering convention
-- [bkuhlmann/mac_os framework](https://github.com/bkuhlmann/mac_os) — MEDIUM confidence; modular script separation, idempotent re-run design, separation by install type
-- [mas-cli README](https://github.com/mas-cli/mas) — MEDIUM confidence; `mas install` behavior and scripting commands
+- `src/maccat/collectors/chrome.py` — ChromeCollector implementation (verified, HIGH confidence)
+- `src/maccat/helpers/chrome_name.py` — `chrome_ext_name` helper (verified, HIGH confidence)
+- `src/maccat/catalog/format.py` — `emit_item` FMT-01 degradation rules (verified, HIGH confidence)
+- `src/maccat/collectors/codex.py` — existing CodexCollector / TOML pattern (verified, HIGH confidence)
+- `~/Library/Application Support/Zed/extensions/index.json` — live Zed extension index (verified)
+- `~/Library/Application Support/Zed/extensions/installed/html/extension.toml` — extension manifest (verified)
+- `pluginkit -v -m -p com.apple.Safari.web-extension` — live output on this machine (verified)
+- `/Applications/Bitwarden.app/Contents/PlugIns/safari.appex/Contents/Info.plist` — live plist (verified)
+- [Brave Components wiki](https://github.com/brave/brave-browser/wiki/Brave-Components) — Brave component IDs (HIGH confidence, official source)
+- `.planning/PROJECT.md` — v2.2.0 scope and CDX-02 definition (HIGH confidence)
 
 ---
-*Feature research for: maccat reinstall — generated reinstall.sh conventions (v2.1.0)*
-*Researched: 2026-06-16*
+*Feature research for: maccat v2.2.0 Broader Coverage — Edge, Brave, Zed, Safari, Codex Plugins*
+*Researched: 2026-06-17*
