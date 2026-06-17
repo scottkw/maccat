@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.2.0
 milestone_name: Broader Coverage
-status: ready_to_plan
-stopped_at: Phase 27 complete (2/2) — ready to discuss Phase 28
-last_updated: 2026-06-17T16:01:56.132Z
-last_activity: 2026-06-17 -- Phase 27 execution started
+status: executing
+stopped_at: Roadmap created for v2.2.0 (Phases 27-29)
+last_updated: "2026-06-17T16:42:45.528Z"
+last_activity: 2026-06-17 -- Phase 28 execution started
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 2
+  completed_phases: 1
+  total_plans: 4
   completed_plans: 2
-  percent: 0
+  percent: 33
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 28 — chromium refactor + edge + brave
+**Current focus:** Phase 28 — chromium-refactor-edge-brave
 
 ## Current Position
 
-Phase: 28
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-17
+Phase: 28 (chromium-refactor-edge-brave) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 28
+Last activity: 2026-06-17 -- Phase 28 execution started
 
 ```
 Progress: [                    ] 0% (0/3 phases)
