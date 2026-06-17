@@ -241,11 +241,138 @@ class TestCodexDegradation:
         assert result.sections[0].raw is False
 
     def test_collect_returns_exactly_one_section(self, tmp_path: Path) -> None:
-        """collect() always returns exactly 1 section."""
+        """collect() always returns exactly 2 sections (MCP + Plugins)."""
         missing_toml = tmp_path / "config.toml"
         with (
             patch("shutil.which", return_value=None),
             patch.object(codex_mod, "_TOML_PATH", missing_toml),
         ):
             result = CodexCollector().collect()
-        assert len(result.sections) == 1
+        assert len(result.sections) == 2
+
+
+# ===========================================================================
+# Plugins section (CDX-02)
+# ===========================================================================
+
+
+class TestCodexPluginsSection:
+    """Tests for CodexCollector._collect_plugins() — second section (CDX-02).
+
+    On Codex v0.46.0 (no plugin system) items == [] is expected, not an error.
+    """
+
+    def test_plugins_absent_both_paths_items_empty(self, tmp_path: Path) -> None:
+        """No CLI and no [plugins.*] headers in TOML → plugins section items == []."""
+        config_toml = tmp_path / "config.toml"
+        config_toml.write_text("[mcp_servers.some-srv]\n", encoding="utf-8")
+        with (
+            patch("shutil.which", return_value=None),
+            patch.object(codex_mod, "_TOML_PATH", config_toml),
+        ):
+            result = CodexCollector().collect()
+        assert len(result.sections) == 2
+        plugins_section = result.sections[1]
+        assert plugins_section.title == "Codex Plugins"
+        assert plugins_section.items == []
+
+    def test_plugins_toml_quoted_id_extracted(self, tmp_path: Path) -> None:
+        """TOML [plugins."myplug@npm"] header → item contains 'myplug' and 'myplug@npm'."""
+        config_toml = tmp_path / "config.toml"
+        config_toml.write_text(
+            '[plugins."myplug@npm"]\n'
+            'command = "secret-value"\n',
+            encoding="utf-8",
+        )
+        with (
+            patch("shutil.which", return_value=None),
+            patch.object(codex_mod, "_TOML_PATH", config_toml),
+        ):
+            result = CodexCollector().collect()
+        plugins_items = result.sections[1].items
+        assert any("myplug" in item for item in plugins_items), (
+            f"Expected 'myplug' in items, got: {plugins_items}"
+        )
+        assert any("myplug@npm" in item for item in plugins_items), (
+            f"Expected 'myplug@npm' in items, got: {plugins_items}"
+        )
+
+    def test_plugins_toml_quoted_id_no_value_lines(self, tmp_path: Path) -> None:
+        """CAT-05 regression: value line text (command=...) NEVER appears in plugins items."""
+        config_toml = tmp_path / "config.toml"
+        config_toml.write_text(
+            '[plugins."plug@npm"]\n'
+            'command = "secret-value"\n'
+            'env = {API_KEY = "sk-supersecret"}\n',
+            encoding="utf-8",
+        )
+        with (
+            patch("shutil.which", return_value=None),
+            patch.object(codex_mod, "_TOML_PATH", config_toml),
+        ):
+            result = CodexCollector().collect()
+        plugins_section = result.sections[1]
+        full_output = "\n".join(plugins_section.items)
+        assert "secret-value" not in full_output
+        assert "sk-supersecret" not in full_output
+        assert "command" not in full_output
+        # SECRET_PATTERN regression
+        assert not SECRET_PATTERN.search(full_output), (
+            f"CAT-05 VIOLATION: secret found in plugins output: {full_output!r}"
+        )
+
+    def test_plugins_toml_unquoted_barename(self, tmp_path: Path) -> None:
+        """TOML [plugins.barename] header (unquoted) → item contains 'barename'."""
+        config_toml = tmp_path / "config.toml"
+        config_toml.write_text("[plugins.barename]\n", encoding="utf-8")
+        with (
+            patch("shutil.which", return_value=None),
+            patch.object(codex_mod, "_TOML_PATH", config_toml),
+        ):
+            result = CodexCollector().collect()
+        plugins_items = result.sections[1].items
+        assert any("barename" in item for item in plugins_items), (
+            f"Expected 'barename' in items, got: {plugins_items}"
+        )
+
+    def test_plugins_section_title_is_constant(self, tmp_path: Path) -> None:
+        """sections[1].title is exactly _PLUGINS_TITLE == 'Codex Plugins'."""
+        missing_toml = tmp_path / "config.toml"
+        with (
+            patch("shutil.which", return_value=None),
+            patch.object(codex_mod, "_TOML_PATH", missing_toml),
+        ):
+            result = CodexCollector().collect()
+        assert result.sections[1].title == codex_mod._PLUGINS_TITLE
+        assert codex_mod._PLUGINS_TITLE == "Codex Plugins"
+
+    def test_collect_two_sections_stable_when_cli_nonzero(self, tmp_path: Path) -> None:
+        """collect() returns 2 sections even when codex CLI is present but returns non-zero."""
+        mock_r = MagicMock()
+        mock_r.returncode = 1
+        mock_r.stdout = ""
+        missing_toml = tmp_path / "config.toml"
+        with (
+            patch("shutil.which", return_value="/usr/bin/codex"),
+            patch("subprocess.run", return_value=mock_r),
+            patch.object(codex_mod, "_TOML_PATH", missing_toml),
+        ):
+            result = CodexCollector().collect()
+        assert len(result.sections) == 2
+        assert result.sections[0].title == "Codex MCP Servers"
+        assert result.sections[1].title == "Codex Plugins"
+
+    def test_plugins_cli_path_parsed_correctly(self) -> None:
+        """Plugins CLI returns JSON with pluginId → item contains name and id."""
+        mock_r = MagicMock()
+        mock_r.returncode = 0
+        mock_r.stdout = json.dumps([{"name": "myplugin", "pluginId": "myplugin@npm"}])
+        with (
+            patch("shutil.which", return_value="/usr/bin/codex"),
+            patch("subprocess.run", return_value=mock_r),
+        ):
+            result = CodexCollector().collect()
+        plugins_items = result.sections[1].items
+        full_output = "\n".join(plugins_items)
+        assert "myplugin" in full_output
+        assert "myplugin@npm" in full_output
