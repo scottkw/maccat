@@ -147,7 +147,11 @@ Plans:
   3. A generated catalog includes a "Brave Browser Extensions" section listing user-installed extensions across all profiles as `name (version) [id]`; all 20 confirmed Brave component IDs are excluded via `BRAVE_COMPONENT_DENYLIST`
   4. Presence detection for Edge and Brave uses profile enumeration (not base-dir-only check) — a machine with only `NativeMessagingHosts` in the Brave base dir produces an empty section rather than a spurious NOTE
   5. `COMPONENT_DENYLIST` is defined in `chromium.py` and re-exported from `chrome.py` (`from maccat.collectors.chromium import COMPONENT_DENYLIST`) — no existing import paths break; the section-title uniqueness test (added in Phase 27) continues to pass across all 21 section titles
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 28-01-PLAN.md — ChromiumBaseCollector + chrome.py thin subclass + test_chrome.py patch migration (Chrome byte-parity gate)
+- [ ] 28-02-PLAN.md — EdgeCollector + BraveCollector + registry update + test_edge/brave + 21-title uniqueness test
 
 ### Phase 29: Safari Extensions
 **Goal**: The catalog captures Safari user-installed extensions via pluginkit and plistlib
