@@ -310,6 +310,85 @@ class TestSafariNameResolution:
         assert item.startswith("Bitwarden ")
         assert "com.bitwarden.desktop.safari" not in item.split("[", 1)[0]
 
+    def test_parent_app_display_name_fallback(self, tmp_path: Path) -> None:
+        """Realistic …/SomeApp.app/Contents/PlugIns/x.appex layout: appex lacks
+        DisplayName and a usable Name, parent app Info.plist supplies
+        CFBundleDisplayName → parent name is used (WR-02)."""
+        app = tmp_path / "SomeApp.app"
+        app_contents = app / "Contents"
+        plugins = app_contents / "PlugIns"
+        appex = plugins / "safari.appex"
+        appex_contents = appex / "Contents"
+        appex_contents.mkdir(parents=True)
+        # Parent app Info.plist with CFBundleDisplayName.
+        (app_contents / "Info.plist").write_bytes(
+            plistlib.dumps(
+                {"CFBundleDisplayName": "SomeApp"}, fmt=plistlib.FMT_XML
+            )
+        )
+        # Appex plist: no DisplayName, CFBundleName is the rejected "safari".
+        (appex_contents / "Info.plist").write_bytes(
+            plistlib.dumps(
+                {
+                    "CFBundleIdentifier": "com.someapp.safari",
+                    "CFBundleShortVersionString": "1.2.3",
+                    "CFBundleName": "safari",
+                },
+                fmt=plistlib.FMT_XML,
+            )
+        )
+        fixture = f"            Path = {appex}\n"
+        fake_pluginkit = tmp_path / "pluginkit"
+        fake_pluginkit.touch()
+        mock_r: MagicMock = MagicMock()
+        mock_r.returncode = 0
+        mock_r.stdout = fixture
+        with (
+            patch.object(safari_mod, "_PLUGINKIT", fake_pluginkit),
+            patch("subprocess.run", return_value=mock_r),
+        ):
+            result = SafariCollector().collect()
+        assert len(result.sections[0].items) == 1
+        assert result.sections[0].items[0].startswith("SomeApp ")
+
+    def test_parent_app_bundle_name_fallback(self, tmp_path: Path) -> None:
+        """Same layout, but parent app supplies only a non-'safari'
+        CFBundleName (no DisplayName) → parent CFBundleName is used (WR-02)."""
+        app = tmp_path / "SomeApp.app"
+        app_contents = app / "Contents"
+        plugins = app_contents / "PlugIns"
+        appex = plugins / "safari.appex"
+        appex_contents = appex / "Contents"
+        appex_contents.mkdir(parents=True)
+        (app_contents / "Info.plist").write_bytes(
+            plistlib.dumps(
+                {"CFBundleName": "SomeApp"}, fmt=plistlib.FMT_XML
+            )
+        )
+        (appex_contents / "Info.plist").write_bytes(
+            plistlib.dumps(
+                {
+                    "CFBundleIdentifier": "com.someapp.safari",
+                    "CFBundleShortVersionString": "1.2.3",
+                    "CFBundleName": "safari",
+                },
+                fmt=plistlib.FMT_XML,
+            )
+        )
+        fixture = f"            Path = {appex}\n"
+        fake_pluginkit = tmp_path / "pluginkit"
+        fake_pluginkit.touch()
+        mock_r: MagicMock = MagicMock()
+        mock_r.returncode = 0
+        mock_r.stdout = fixture
+        with (
+            patch.object(safari_mod, "_PLUGINKIT", fake_pluginkit),
+            patch("subprocess.run", return_value=mock_r),
+        ):
+            result = SafariCollector().collect()
+        assert len(result.sections[0].items) == 1
+        assert result.sections[0].items[0].startswith("SomeApp ")
+
     def test_identifier_fallback(self, tmp_path: Path) -> None:
         """When no display name is available, CFBundleIdentifier is used as name."""
         appex_path = tmp_path / "ext.appex"
