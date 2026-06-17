@@ -112,7 +112,7 @@ Full phase details archived in [milestones/v2.0.0-ROADMAP.md](milestones/v2.0.0-
 
 ### v2.2.0 Broader Coverage (Phases 27-29)
 
-- [ ] **Phase 27: Codex Plugins + Zed Extensions** — New "Codex Plugins" section on CodexCollector; new ZedCollector; section-title uniqueness test
+- [x] **Phase 27: Codex Plugins + Zed Extensions** — New "Codex Plugins" section on CodexCollector; new ZedCollector; section-title uniqueness test (completed 2026-06-17)
 - [ ] **Phase 28: Chromium Refactor + Edge + Brave** — Extract ChromiumBaseCollector; Chrome becomes thin subclass (output byte-unchanged); Edge + Brave thin subclasses
 - [ ] **Phase 29: Safari Extensions** — SafariCollector via pluginkit + plistlib; CFBundleDisplayName; never-raising per-extension chain
 
@@ -135,7 +135,7 @@ Full phase details archived in [milestones/v2.0.0-ROADMAP.md](milestones/v2.0.0-
 
 Plans:
 - [x] 27-01-PLAN.md — Extend CodexCollector: _collect_mcp() + _collect_plugins() + CDX-02 tests
-- [ ] 27-02-PLAN.md — ZedCollector + registry update + section-title uniqueness test + reinstall passthrough
+- [x] 27-02-PLAN.md — ZedCollector + registry update + section-title uniqueness test + reinstall passthrough
 
 ### Phase 28: Chromium Refactor + Edge + Brave
 **Goal**: Chrome, Edge, and Brave all share a single `ChromiumBaseCollector`; Edge and Brave extensions are cataloged; Chrome output is byte-unchanged
@@ -194,6 +194,6 @@ v2.2.0 phases execute in numeric order: 27 → 28 → 29 (phases 24–26 shipped
 | 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 2/2 | Complete    | 2026-06-16 |
 | 25. Script Emitter | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
 | 26. Picker + CLI Wiring + Integration | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
-| 27. Codex Plugins + Zed Extensions | v2.2.0 | 1/2 | In Progress|  |
+| 27. Codex Plugins + Zed Extensions | v2.2.0 | 2/2 | Complete   | 2026-06-17 |
 | 28. Chromium Refactor + Edge + Brave | v2.2.0 | 0/TBD | Not started | - |
 | 29. Safari Extensions | v2.2.0 | 0/TBD | Not started | - |
