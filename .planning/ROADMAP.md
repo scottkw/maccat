@@ -163,7 +163,10 @@ Plans:
   3. The `_parse_pluginkit_output` function is validated against real `pluginkit -v -m -A -p com.apple.Safari.web-extension` output before the phase is closed — the smoke test confirms the tab-separated path field is correctly extracted
   4. The "Safari Extensions" section appears last in the registry (after Firefox), matching the specified section order; the section-title uniqueness test passes across all 22 section titles
   5. All new code is stdlib-only (`subprocess`, `plistlib`, `re`); zero changes to the reinstall pipeline; Safari extensions appear in the reinstall manual checklist only
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 29-01-PLAN.md — SafariCollector + tests + registry + 22-title uniqueness bump
 
 ## Progress
 
@@ -200,4 +203,4 @@ v2.2.0 phases execute in numeric order: 27 → 28 → 29 (phases 24–26 shipped
 | 26. Picker + CLI Wiring + Integration | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
 | 27. Codex Plugins + Zed Extensions | v2.2.0 | 2/2 | Complete    | 2026-06-17 |
 | 28. Chromium Refactor + Edge + Brave | v2.2.0 | 2/2 | Complete    | 2026-06-17 |
-| 29. Safari Extensions | v2.2.0 | 0/TBD | Not started | - |
+| 29. Safari Extensions | v2.2.0 | 0/1 | Not started | - |
