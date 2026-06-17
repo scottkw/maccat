@@ -1,6 +1,6 @@
-"""CodexCollector — 2-section collector (MCP Servers + Plugins) at byte-parity with update-list.sh:1748.
+"""CodexCollector — 2-section collector (MCP Servers + Plugins).
 
-Zsh analog: collect_codex_mcp lines 1748–1790.
+Byte-parity with update-list.sh:1748. Zsh analog: collect_codex_mcp lines 1748–1790.
 
 CAT-05: CLI paths read identity fields only (.name, .type, .pluginId); TOML fallbacks read
 section-header lines only — never tomllib, never value lines, never .mcp.json bundle files.
