@@ -2,13 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.2.0
 milestone_name: Broader Coverage
-status: active
-last_updated: "2026-06-17T00:00:00.000Z"
-last_activity: 2026-06-17
+status: executing
+stopped_at: Roadmap created for v2.2.0 (Phases 27-29)
+last_updated: "2026-06-17T15:18:16.884Z"
+last_activity: 2026-06-17 -- Phase 27 execution started
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
   percent: 0
 ---
@@ -20,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 27 — Codex Plugins + Zed Extensions
+**Current focus:** Phase 27 — codex-plugins-zed-extensions
 
 ## Current Position
 
-Phase: 27 — Codex Plugins + Zed Extensions
-Plan: —
-Status: Ready to plan
-Last activity: 2026-06-17 — Roadmap created for v2.2.0 (Phases 27-29)
+Phase: 27 (codex-plugins-zed-extensions) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 27
+Last activity: 2026-06-17 -- Phase 27 execution started
 
 ```
 Progress: [                    ] 0% (0/3 phases)

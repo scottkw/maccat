@@ -134,7 +134,7 @@ Full phase details archived in [milestones/v2.0.0-ROADMAP.md](milestones/v2.0.0-
 **Plans**: 2 plans
 
 Plans:
-- [ ] 27-01-PLAN.md — Extend CodexCollector: _collect_mcp() + _collect_plugins() + CDX-02 tests
+- [x] 27-01-PLAN.md — Extend CodexCollector: _collect_mcp() + _collect_plugins() + CDX-02 tests
 - [ ] 27-02-PLAN.md — ZedCollector + registry update + section-title uniqueness test + reinstall passthrough
 
 ### Phase 28: Chromium Refactor + Edge + Brave
@@ -194,6 +194,6 @@ v2.2.0 phases execute in numeric order: 27 → 28 → 29 (phases 24–26 shipped
 | 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 2/2 | Complete    | 2026-06-16 |
 | 25. Script Emitter | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
 | 26. Picker + CLI Wiring + Integration | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
-| 27. Codex Plugins + Zed Extensions | v2.2.0 | 0/2 | Not started | - |
+| 27. Codex Plugins + Zed Extensions | v2.2.0 | 1/2 | In Progress|  |
 | 28. Chromium Refactor + Edge + Brave | v2.2.0 | 0/TBD | Not started | - |
 | 29. Safari Extensions | v2.2.0 | 0/TBD | Not started | - |
