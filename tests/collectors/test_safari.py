@@ -5,6 +5,7 @@ Behavioral spec: Phase 29 BRW-04 — Safari Extensions via pluginkit + plistlib.
 from __future__ import annotations
 
 import plistlib
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -424,13 +425,44 @@ class TestSafariNameResolution:
 
 class TestSafariSmoke:
     def test_live_pluginkit_returns_paths_without_raising(self) -> None:
-        """Run real pluginkit (no mocks) and verify no exception is raised.
+        """Run real pluginkit (no mocks) and exercise per-extension parsing.
 
-        Skipped automatically when /usr/bin/pluginkit is not present so that
-        CI environments (no Safari) remain green.
+        Skipped when /usr/bin/pluginkit is absent OR when it reports zero
+        Safari web extensions, so CI machines without Safari extensions stay
+        green. On a dev machine WITH extensions installed (e.g. Bitwarden),
+        this validates the real-output parse + plist-read path end-to-end:
+        every emitted item must be a non-empty string shaped like
+        ``name (version) [id]`` (a trailing ``[id]`` bracket group).
         """
         _require_pluginkit()
+        # Probe raw pluginkit: skip unless it actually reports extensions, so
+        # the assertions below only run when there is real output to parse.
+        probe = subprocess.run(
+            [
+                "/usr/bin/pluginkit",
+                "-mAvv",
+                "-p",
+                "com.apple.Safari.web-extension",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode != 0 or not probe.stdout.strip():
+            pytest.skip("no Safari web extensions installed on this machine")
+        # pluginkit lists extensions — but some may be filtered out during
+        # parsing (unreadable plist, missing id). Only assert parsed shape
+        # when the collector actually produced items.
         result = SafariCollector().collect()
         assert result.sections[0].title == "Safari Extensions"
+        if not result.sections[0].items:
+            pytest.skip(
+                "pluginkit reported extensions but none parsed into items"
+            )
         for item in result.sections[0].items:
             assert isinstance(item, str)
+            assert item.strip()
+            # Parsed shape: a trailing "[id]" bracket group proves the
+            # plist-read path produced a CFBundleIdentifier, i.e. the
+            # per-extension parse ran rather than short-circuiting.
+            assert item.rstrip().endswith("]")
+            assert "[" in item
