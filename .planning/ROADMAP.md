@@ -131,7 +131,11 @@ Full phase details archived in [milestones/v2.0.0-ROADMAP.md](milestones/v2.0.0-
   3. Both new sections appear in the reinstall output exclusively as manual-checklist items (no auto-install commands generated) — zero changes to `reinstall/parser.py` or `reinstall/emitter.py` are required
   4. A section-title uniqueness test asserts all `_TITLE` constants across every collector module form a set with no duplicates — this test is added in this phase and must pass for all 19 section titles (17 existing + 2 new)
   5. All new sections honor FMT-01 (`name (version) [id]` with graceful degradation), FMT-03 (identity-only for Codex — never reads plugin bundle `.mcp.json` files), and FMT-04 (deterministic stable sort); stdlib-only (`json`, `tomllib`, `re`, `subprocess`)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 27-01-PLAN.md — Extend CodexCollector: _collect_mcp() + _collect_plugins() + CDX-02 tests
+- [ ] 27-02-PLAN.md — ZedCollector + registry update + section-title uniqueness test + reinstall passthrough
 
 ### Phase 28: Chromium Refactor + Edge + Brave
 **Goal**: Chrome, Edge, and Brave all share a single `ChromiumBaseCollector`; Edge and Brave extensions are cataloged; Chrome output is byte-unchanged
@@ -190,6 +194,6 @@ v2.2.0 phases execute in numeric order: 27 → 28 → 29 (phases 24–26 shipped
 | 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 2/2 | Complete    | 2026-06-16 |
 | 25. Script Emitter | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
 | 26. Picker + CLI Wiring + Integration | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
-| 27. Codex Plugins + Zed Extensions | v2.2.0 | 0/TBD | Not started | - |
+| 27. Codex Plugins + Zed Extensions | v2.2.0 | 0/2 | Not started | - |
 | 28. Chromium Refactor + Edge + Brave | v2.2.0 | 0/TBD | Not started | - |
 | 29. Safari Extensions | v2.2.0 | 0/TBD | Not started | - |
