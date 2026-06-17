@@ -1,5 +1,40 @@
 # Milestones
 
+## v2.2.0 Broader Coverage (Shipped: 2026-06-17)
+
+**Phases completed:** 3 phases (27-29), 5 plans
+
+**Delivered:** Extended the catalog from 17 to 22 sections — adding Codex plugins, Zed extensions,
+Microsoft Edge / Brave / Safari browser extensions — so a single snapshot captures more of a
+machine's real tooling. All additive; existing sections + the reinstall pipeline unchanged.
+
+**Key accomplishments:**
+
+- **Phase 27 (CDX-02, BRW-03):** `CodexCollector` gained a second "Codex Plugins" section
+  (identity-only, FMT-03; CLI-then-config.toml-header detection; `(none found)` on the installed
+  plugin-less Codex v0.46.0). New `ZedCollector` reads `~/Library/Application Support/Zed/extensions/index.json`
+  (`name (version) [id]`, dev-filtered). Added a section-title uniqueness test (reused by 28/29).
+- **Phase 28 (BRW-01, BRW-02):** extracted `ChromiumBaseCollector` (3 real Chromium browsers justify
+  it) — Chrome became a thin subclass with **byte-identical** output; Edge + Brave are thin subclasses
+  (Brave's 20-ID denylist; Edge baseline + documented gap). Profile-enumeration presence detection
+  (no spurious section from a NativeMessagingHosts-only base dir).
+- **Phase 29 (BRW-04):** new `SafariCollector` via `pluginkit -mAvv -p com.apple.Safari.web-extension`
+  + per-`.appex` `Info.plist` (`CFBundleDisplayName` / `CFBundleShortVersionString` /
+  `CFBundleIdentifier`), per-extension never-raising; live-gated smoke test validates real output.
+- **Quality:** code-review + auto-fix loop on every phase (fixed never-raising gaps in codex/zed and
+  the Safari name-fallback chain); 628 tests pass, ruff + mypy --strict clean; reinstall pipeline
+  needed ZERO changes (all 5 new sections → manual checklist automatically); audit PASSED (5/5).
+
+**Notable (process):** mid-run `gsd-sdk` npx-cache eviction recovered (reinstalled GSD 1.42.3); a
+Phase 29 executor worktree forked from a pre-27/28 base and would have clobbered canonical files on
+merge — caught during merge inspection and reconstructed surgically on main (628 tests green).
+
+**Known deferred items at close:** 1 — stale quick task `260614-ckx-fix-interactive-machine-label-ux`
+(status missing, predates v2.0.0, out of scope; re-acknowledged — see STATE.md Deferred Items).
+Plus the documented Edge component-denylist gap (no authoritative Microsoft list).
+
+---
+
 ## v2.1.0 Reinstall from Catalog (Shipped: 2026-06-16)
 
 **Phases completed:** 3 phases (24-26), 4 plans

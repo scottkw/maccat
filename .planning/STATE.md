@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.2.0
 milestone_name: Broader Coverage
-status: milestone_complete
-stopped_at: Milestone complete (Phase 29 was final phase)
-last_updated: 2026-06-17T21:17:48.325Z
-last_activity: 2026-06-17 -- Phase 29 execution started
+status: Awaiting next milestone
+stopped_at: context exhaustion at 75% (2026-06-17)
+last_updated: "2026-06-17T21:22:23.022Z"
+last_activity: 2026-06-17 — Milestone v2.2.0 completed and archived
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
   completed_plans: 5
-  percent: 67
+  percent: 100
 ---
 
 # Project State
@@ -25,14 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-16)
 
 ## Current Position
 
-Phase: 29
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-06-17
-
-```
-Progress: [                    ] 0% (0/3 phases)
-```
+Phase: Milestone v2.2.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-17 — Milestone v2.2.0 completed and archived
 
 ## Performance Metrics
 
@@ -91,10 +87,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-17
-Stopped at: Roadmap created for v2.2.0 (Phases 27-29)
+Last session: 2026-06-17T21:22:23.015Z
+Stopped at: context exhaustion at 75% (2026-06-17)
 Resume file: None
 
 ## Operator Next Steps
 
-- Run `/gsd:plan-phase 27` to plan Phase 27 (Codex Plugins + Zed Extensions)
+- Start the next milestone with /gsd-new-milestone
