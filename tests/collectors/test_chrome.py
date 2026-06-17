@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 import pytest  # noqa: F401  (used via pytest test runner; required import for CI)
 
-import maccat.collectors.chrome as chrome_mod
 from maccat.collectors.chrome import COMPONENT_DENYLIST, ChromeCollector
 
 # ---------------------------------------------------------------------------
@@ -40,7 +39,7 @@ class TestChromeCollect:
         ext_dir = base / "Default" / "Extensions"
         ext_dir.mkdir(parents=True)
         _make_ext(ext_dir, "abcdefghijklmnopabcdefghijklmnop", "1.0.0_0", "My Extension")
-        with patch.object(chrome_mod, "_BASE", base):
+        with patch.object(ChromeCollector, "_base", new=base):
             result = ChromeCollector().collect()
         assert len(result.sections) == 1
         assert any("My Extension" in item for item in result.sections[0].items)
@@ -54,7 +53,7 @@ class TestChromeCollect:
         profile1_ext = base / "Profile 1" / "Extensions"
         profile1_ext.mkdir(parents=True)
         _make_ext(profile1_ext, "eeeeffff0000111122223333444455556666", "2.0.0_0", "Profile1 Ext")
-        with patch.object(chrome_mod, "_BASE", base):
+        with patch.object(ChromeCollector, "_base", new=base):
             result = ChromeCollector().collect()
         all_items = result.sections[0].items
         assert any("Default Ext" in item for item in all_items)
@@ -64,7 +63,7 @@ class TestChromeCollect:
         """Section title is exactly 'Google Chrome Extensions'."""
         base = tmp_path / "Chrome"
         base.mkdir()
-        with patch.object(chrome_mod, "_BASE", base):
+        with patch.object(ChromeCollector, "_base", new=base):
             result = ChromeCollector().collect()
         assert result.sections[0].title == "Google Chrome Extensions"
 
@@ -72,7 +71,7 @@ class TestChromeCollect:
         """Section.raw is False — flush_section by Phase 16 orchestrator."""
         base = tmp_path / "Chrome"
         base.mkdir()
-        with patch.object(chrome_mod, "_BASE", base):
+        with patch.object(ChromeCollector, "_base", new=base):
             result = ChromeCollector().collect()
         assert result.sections[0].raw is False
 
@@ -93,7 +92,7 @@ class TestChromeExclusions:
         _make_ext(ext_dir, denied_id, "1.0.0_0", "Component Ext")
         # Also add a non-denied extension to prove the profile is visited
         _make_ext(ext_dir, "aaaabbbbccccddddaaaabbbbccccdddd", "1.0.0_0", "Real Ext")
-        with patch.object(chrome_mod, "_BASE", base):
+        with patch.object(ChromeCollector, "_base", new=base):
             result = ChromeCollector().collect()
         items = result.sections[0].items
         assert not any("Component Ext" in item for item in items)
@@ -105,7 +104,7 @@ class TestChromeExclusions:
         ext_dir = base / "Default" / "Extensions"
         ext_dir.mkdir(parents=True)
         _make_ext(ext_dir, "Temp", "1.0.0_0", "Temp Ext")
-        with patch.object(chrome_mod, "_BASE", base):
+        with patch.object(ChromeCollector, "_base", new=base):
             result = ChromeCollector().collect()
         assert not any("Temp Ext" in item for item in result.sections[0].items)
 
@@ -115,7 +114,7 @@ class TestChromeExclusions:
         ext_dir = base / "Default" / "Extensions"
         ext_dir.mkdir(parents=True)
         _make_ext(ext_dir, "_metadata", "1.0.0_0", "Meta Ext")
-        with patch.object(chrome_mod, "_BASE", base):
+        with patch.object(ChromeCollector, "_base", new=base):
             result = ChromeCollector().collect()
         assert not any("Meta Ext" in item for item in result.sections[0].items)
 
@@ -138,7 +137,7 @@ class TestChromeExclusions:
             json.dumps({"name": "New Version", "version": "2.0.0"}),
             encoding="utf-8",
         )
-        with patch.object(chrome_mod, "_BASE", base):
+        with patch.object(ChromeCollector, "_base", new=base):
             result = ChromeCollector().collect()
         items = result.sections[0].items
         # Must pick the higher version (2.0.0_0), not the lower (1.0.0_0)
@@ -157,7 +156,7 @@ class TestChromeDegradation:
     def test_chrome_not_installed(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """When _BASE does not exist, NOTE is printed to stderr and items is []."""
         missing_base = tmp_path / "NoChrome"
-        with patch.object(chrome_mod, "_BASE", missing_base):
+        with patch.object(ChromeCollector, "_base", new=missing_base):
             result = ChromeCollector().collect()
         assert result.sections[0].items == []
         captured = capsys.readouterr()
