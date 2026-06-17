@@ -7,9 +7,11 @@ Two tests in one file:
 """
 from __future__ import annotations
 
+import maccat.collectors.brave as brave_mod
 import maccat.collectors.chrome as chrome_mod
 import maccat.collectors.claude as claude_mod  # noqa: F401 — used via ClaudeCollector class
 import maccat.collectors.codex as codex_mod
+import maccat.collectors.edge as edge_mod
 import maccat.collectors.firefox as ff_mod
 import maccat.collectors.gemini as gemini_mod
 import maccat.collectors.homebrew as hb_mod
@@ -27,7 +29,7 @@ from maccat.reinstall.parser import ParsedCatalog, ParsedItem, ParsedSection
 
 
 def test_all_section_titles_are_unique() -> None:
-    """All 19 collector section title constants must be unique.
+    """All 21 collector section title constants must be unique.
 
     Prevents reinstall routing bugs where two collectors share a title, causing
     one to silently shadow the other in SECTION_SOURCE_MAP lookups.
@@ -51,6 +53,8 @@ def test_all_section_titles_are_unique() -> None:
       CursorCollector.TITLE          — "Cursor Extensions"
       zed_mod._TITLE                 — "Zed Extensions"       (Phase 27 Plan 02)
       chrome_mod._TITLE              — "Google Chrome Extensions"
+      edge_mod._TITLE                — "Microsoft Edge Extensions"
+      brave_mod._TITLE               — "Brave Browser Extensions"
       ff_mod._TITLE                  — "Firefox Extensions"
     """
     titles = [
@@ -72,9 +76,11 @@ def test_all_section_titles_are_unique() -> None:
         CursorCollector.TITLE,           # "Cursor Extensions"
         zed_mod._TITLE,                  # "Zed Extensions"
         chrome_mod._TITLE,               # "Google Chrome Extensions"
+        edge_mod._TITLE,                 # "Microsoft Edge Extensions"
+        brave_mod._TITLE,                # "Brave Browser Extensions"
         ff_mod._TITLE,                   # "Firefox Extensions"
     ]
-    assert len(titles) == 19, f"Expected 19 titles, got {len(titles)}"
+    assert len(titles) == 21, f"Expected 21 titles, got {len(titles)}"
     assert len(titles) == len(set(titles)), (
         f"Duplicate section titles found: {[t for t in titles if titles.count(t) > 1]}"
     )

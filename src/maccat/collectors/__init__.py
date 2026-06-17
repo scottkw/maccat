@@ -18,7 +18,7 @@ def get_registry() -> list[Collector]:
     This enables incremental per-plan development: each collector module can be imported
     and unit-tested independently without all 12 siblings being present.
 
-    Section order (19 sections from 13 collectors):
+    Section order (21 sections from 15 collectors):
       1.  Homebrew Packages             (raw)
       2.  App Store Applications        (raw)
       3.  Setapp Applications            (raw)
@@ -37,14 +37,18 @@ def get_registry() -> list[Collector]:
       16. Cursor Extensions
       17. Zed Extensions
       18. Google Chrome Extensions
-      19. Firefox Extensions
+      19. Microsoft Edge Extensions
+      20. Brave Browser Extensions
+      21. Firefox Extensions
     """
     # Imports are inside the function body — safe to call get_registry() only when
-    # all 13 collector modules exist (Phase 16 + beyond).
+    # all 15 collector modules exist (Phase 16 + beyond).
+    from maccat.collectors.brave import BraveCollector
     from maccat.collectors.chrome import ChromeCollector
     from maccat.collectors.claude import ClaudeCollector
     from maccat.collectors.codex import CodexCollector
     from maccat.collectors.cursor import CursorCollector
+    from maccat.collectors.edge import EdgeCollector
     from maccat.collectors.firefox import FirefoxCollector
     from maccat.collectors.gemini import GeminiCollector
     from maccat.collectors.homebrew import HomebrewCollector
@@ -70,5 +74,7 @@ def get_registry() -> list[Collector]:
         CursorCollector(),
         ZedCollector(),         # yields 1 section: Zed Extensions
         ChromeCollector(),
+        EdgeCollector(),        # NEW — BRW-01
+        BraveCollector(),       # NEW — BRW-02
         FirefoxCollector(),
     ]
