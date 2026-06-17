@@ -25,7 +25,7 @@ runs diff-empty (FMT-04). All implementation is stdlib-only (no new pip dependen
 - [x] **BRW-03**: Catalog **Zed** installed extensions from
   `~/Library/Application Support/Zed/extensions/index.json` (canonical id + name + version), with
   local/`dev` extensions filtered out. Degrades to `(none found)` when Zed or the file is absent.
-- [ ] **BRW-04**: Catalog **Safari** user-installed extensions via
+- [x] **BRW-04**: Catalog **Safari** user-installed extensions via
   `pluginkit -p com.apple.Safari.web-extension`, reading each `.appex` `Info.plist` for
   `CFBundleDisplayName` (name), `CFBundleShortVersionString` (version), and `CFBundleIdentifier`
   (id). Apple's built-in extensions are excluded by the plugin-point filter. Each step is
@@ -76,7 +76,7 @@ Explicitly excluded from v2.2.0.
 | BRW-01 | Phase 28 | Complete |
 | BRW-02 | Phase 28 | Complete |
 | BRW-03 | Phase 27 | Complete |
-| BRW-04 | Phase 29 | Pending |
+| BRW-04 | Phase 29 | Complete |
 | CDX-02 | Phase 27 | Complete |
 
 **Coverage:**

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.2.0
 milestone_name: Broader Coverage
-status: executing
-stopped_at: Roadmap created for v2.2.0 (Phases 27-29)
-last_updated: "2026-06-17T20:54:37.501Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 29 was final phase)
+last_updated: 2026-06-17T21:17:48.325Z
 last_activity: 2026-06-17 -- Phase 29 execution started
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
   percent: 67
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 29 — safari-extensions
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 29 (safari-extensions) — EXECUTING
-Plan: 1 of 1
-Status: Executing Phase 29
-Last activity: 2026-06-17 -- Phase 29 execution started
+Phase: 29
+Plan: Not started
+Status: Milestone complete
+Last activity: 2026-06-17
 
 ```
 Progress: [                    ] 0% (0/3 phases)
@@ -38,7 +38,7 @@ Progress: [                    ] 0% (0/3 phases)
 
 **Velocity:**
 
-- Total plans completed: 37 (prior milestones)
+- Total plans completed: 38 (prior milestones)
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -51,6 +51,7 @@ Progress: [                    ] 0% (0/3 phases)
 | 29. Safari Extensions | 0/TBD | - | - |
 | 27 | 2 | - | - |
 | 28 | 2 | - | - |
+| 29 | 1 | - | - |
 
 *Updated after each plan completion*
 

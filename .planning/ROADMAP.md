@@ -203,4 +203,4 @@ v2.2.0 phases execute in numeric order: 27 → 28 → 29 (phases 24–26 shipped
 | 26. Picker + CLI Wiring + Integration | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
 | 27. Codex Plugins + Zed Extensions | v2.2.0 | 2/2 | Complete    | 2026-06-17 |
 | 28. Chromium Refactor + Edge + Brave | v2.2.0 | 2/2 | Complete    | 2026-06-17 |
-| 29. Safari Extensions | v2.2.0 | 1/1 | Complete   | 2026-06-17 |
+| 29. Safari Extensions | v2.2.0 | 1/1 | Complete    | 2026-06-17 |
