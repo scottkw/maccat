@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v2.2.0
 milestone_name: Broader Coverage
-status: planning
-last_updated: "2026-06-16T23:49:38.366Z"
-last_activity: 2026-06-16
+status: active
+last_updated: "2026-06-17T00:00:00.000Z"
+last_activity: 2026-06-17
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Milestone complete
+**Current focus:** Phase 27 — Codex Plugins + Zed Extensions
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 27 — Codex Plugins + Zed Extensions
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-16 — Milestone v2.2.0 started
+Status: Ready to plan
+Last activity: 2026-06-17 — Roadmap created for v2.2.0 (Phases 27-29)
+
+```
+Progress: [                    ] 0% (0/3 phases)
+```
 
 ## Performance Metrics
 
@@ -41,12 +45,9 @@ Last activity: 2026-06-16 — Milestone v2.2.0 started
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 24. Catalog Format Fix + Parser Foundation | 0/TBD | - | - |
-| 25. Script Emitter | 0/TBD | - | - |
-| 26. Picker + CLI Wiring + Integration | 0/TBD | - | - |
-| 24 | 2 | - | - |
-| 25 | 1 | - | - |
-| 26 | 1 | - | - |
+| 27. Codex Plugins + Zed Extensions | 0/TBD | - | - |
+| 28. Chromium Refactor + Edge + Brave | 0/TBD | - | - |
+| 29. Safari Extensions | 0/TBD | - | - |
 
 *Updated after each plan completion*
 
@@ -57,12 +58,11 @@ Last activity: 2026-06-16 — Milestone v2.2.0 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- **Roadmap (2026-06-16):** 3 phases (coarse), Phases 24-26. Order: catalog format fix + parser first (MAS-01 is a hard prerequisite — mas ID must exist in catalog before emitter can use it; parser built against final line shapes), then emitter (all 5 render/safety requirements), then picker + CLI wiring last (protect the 13-step catalog-gen invariant in cli.py).
-- **Phase 24 scope:** `MasCollector` changed to extract all three `mas list` columns and call `emit_item(name, version, id_)`; update collector tests. New `reinstall/` subpackage: `__init__.py`, `parser.py` with `ParsedItem`/`ParsedSection`/`ParsedCatalog` dataclasses, right-anchored regexes, section-boundary state machine. Round-trip contract test in `tests/reinstall/test_parser_contract.py`.
-- **Phase 25 scope:** `reinstall/emitter.py` with `emit_reinstall_script()`, per-source renderers (`_brew_block`, `_editor_ext_block`, `_manual_checklist_block`), static `SECTION_SOURCE_MAP` (17 section titles), `shlex.quote()` via a `quote_for_script()` wrapper as the sole shell-interpolation path. File written at 0o644; zero subprocess calls.
-- **Phase 26 scope:** `reinstall/picker.py` (`resolve_catalog_path`), `reinstall/cli.py` (`run_reinstall`), and wiring of `reinstall` subparser + one-liner dispatch into root `cli.py` after `validate_catalog_repo` and before the `--rename` short-circuit. Integration smoke test verifying `--rename` guard does not fire on reinstall args.
-- **Key constraint:** `catalog/format.py:emit_item()` must NOT be changed except for the deliberate MAS-01 change (`MasCollector` now passes the numeric ID as the third argument). The parser inverts exactly the four line shapes `emit_item` already produces.
-- **mas version de-parens:** `mas list` column 3 already wraps the version in parens (e.g., `(14.0)`). `MasCollector` must strip those parens before passing to `emit_item()` to avoid `AppName ((14.0)) [id]`.
+- **Roadmap (2026-06-17):** 3 phases (coarse granularity), Phases 27-29. Order: independent low-risk sources first (Codex plugins + Zed), then the Chromium refactor + Edge + Brave (refactor must land before subclasses), then Safari last (highest failure modes — undocumented pluginkit subprocess + chained plist reads; isolated so it can be deferred without blocking prior phases).
+- **Phase 27 scope:** Extend `CodexCollector.collect()` to return 2 sections (mirror `ClaudeCollector` multi-section pattern); text-grep `~/.codex/config.toml` headers only (FMT-03 — never read plugin bundle `.mcp.json`); degrades to `(none found)` on v0.46.0 (no plugin system). New `ZedCollector` parsing `~/Library/Application Support/Zed/extensions/index.json`; filter `"dev": true` entries; `data.get("extensions", {})` (never `data["extensions"]`). Add section-title uniqueness test for all 19 titles in this phase.
+- **Phase 28 scope:** Extract `ChromiumBaseCollector` to `collectors/chromium.py` (shared `_collect_profile()`, `collect()`, base `COMPONENT_DENYLIST`); `chrome.py` becomes thin subclass; re-export `COMPONENT_DENYLIST` from `chrome.py` for backward compat. Update `test_chrome.py` patches to `patch.object(ChromeCollector, "_base", new=tmp_path)`. `BraveCollector`: 20-ID `BRAVE_COMPONENT_DENYLIST` (confirmed from Brave wiki). `EdgeCollector`: Chrome-baseline denylist + documented gap (verify during implementation). Presence detection: base-dir check triggers NOTE only; profile loop handles NativeMessagingHosts-only case silently.
+- **Phase 29 scope:** `SafariCollector` shells to `pluginkit -v -m -A -p com.apple.Safari.web-extension`; reads each `.appex` `Info.plist` via `plistlib`; name = `CFBundleDisplayName` (NOT `CFBundleName` = `"safari"`); version = `CFBundleShortVersionString` (NOT pluginkit parenthetical — can be `(null)`); id = `CFBundleIdentifier`. Every plist read individually wrapped in try/except. Validate `_parse_pluginkit_output` against real pluginkit output before closing the phase. Smoke test with Bitwarden (`com.bitwarden.desktop.safari`).
+- **Cross-cutting:** All new sections: stdlib-only (no new pip deps); FMT-01/FMT-03/FMT-04; reinstall pipeline zero changes (new section titles fall through to manual checklist by design); `__init__.py` registry updated to 22-section order (Homebrew → mas → Setapp → WebApps → Claude x3 → Codex MCP Servers + Codex Plugins → OpenCode x3 → Gemini x2 → VS Code → Cursor → Zed → Chrome → Edge → Brave → Safari → Firefox).
 
 ### Pending Todos
 
@@ -70,24 +70,27 @@ None.
 
 ### Blockers/Concerns
 
-None currently.
+- **Edge denylist gap:** No single authoritative Microsoft source for Edge component extension IDs. Ship with Chrome baseline; verify against a real Edge install during Phase 28 implementation; document as known gap in `EDGE_COMPONENT_DENYLIST` constant comment.
+- **Safari pluginkit format:** Undocumented internal tool; output format may vary across macOS versions. Mitigated by per-extension individual try/except and a live smoke test requirement before Phase 29 close.
+- **Codex v0.46.0:** Plugin system not present until v0.117.0. The "Codex Plugins" section will emit `(none found)` on the current machine — this is the expected behavior, not a bug.
 
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | Browser state | CHR-02 / FF-02 — extension enabled/disabled state | v2+ | 2026-06-12 |
-| Future tooling | CDX-02 — Codex plugins (arrived after v0.46.0) | v2+ | 2026-06-12 |
 | Distribution | PKG-04 — pipx/PyPI as second distribution channel | future | 2026-06-14 |
 | Stale artifact | Quick task `260614-ckx-fix-interactive-machine-label-ux` (status: missing) — predates v2.0.0, not in scope; acknowledged at v2.0.0 close | deferred | 2026-06-16 |
 | Code hygiene | ~88 stale `update-list.sh:NNNN` code-comment cross-refs (out of ZSH-04 scope) — future comment-cleanup pass | deferred | 2026-06-16 |
+| Edge denylist | Complete Edge component ID denylist (beyond Chrome baseline) — requires real Edge install | v2+ | 2026-06-17 |
+| Safari content blockers | SAF-02 — `com.apple.Safari.content-blocker` plugin point | v2+ | 2026-06-17 |
 
 ## Session Continuity
 
-Last session: 2026-06-16
-Stopped at: Roadmap created for v2.1.0 (Phases 24-26)
+Last session: 2026-06-17
+Stopped at: Roadmap created for v2.2.0 (Phases 27-29)
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Run `/gsd:plan-phase 27` to plan Phase 27 (Codex Plugins + Zed Extensions)

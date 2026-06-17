@@ -71,20 +71,19 @@ Explicitly excluded from v2.2.0.
 
 ## Traceability
 
-Filled during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BRW-01 | TBD | Pending |
-| BRW-02 | TBD | Pending |
-| BRW-03 | TBD | Pending |
-| BRW-04 | TBD | Pending |
-| CDX-02 | TBD | Pending |
+| BRW-01 | Phase 28 | Pending |
+| BRW-02 | Phase 28 | Pending |
+| BRW-03 | Phase 27 | Pending |
+| BRW-04 | Phase 29 | Pending |
+| CDX-02 | Phase 27 | Pending |
 
 **Coverage:**
 - v1 requirements: 5 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 5
+- Mapped to phases: 5
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-17*
+*Traceability filled: 2026-06-17*
