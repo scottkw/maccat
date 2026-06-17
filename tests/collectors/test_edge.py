@@ -51,7 +51,9 @@ class TestEdgeCollect:
         _make_ext(default_ext, "aaaabbbbccccddddaaaabbbbccccdddd", "1.0.0_0", "Default Edge Ext")
         profile1_ext = base / "Profile 1" / "Extensions"
         profile1_ext.mkdir(parents=True)
-        _make_ext(profile1_ext, "eeeeffff0000111122223333444455556666", "2.0.0_0", "Profile1 Edge Ext")
+        _make_ext(
+            profile1_ext, "eeeeffff0000111122223333444455556666", "2.0.0_0", "Profile1 Edge Ext"
+        )
         with patch.object(EdgeCollector, "_base", new=base):
             result = EdgeCollector().collect()
         all_items = result.sections[0].items
