@@ -17,6 +17,7 @@ import maccat.collectors.gemini as gemini_mod
 import maccat.collectors.homebrew as hb_mod
 import maccat.collectors.mas as mas_mod
 import maccat.collectors.opencode as oc_mod
+import maccat.collectors.safari as safari_mod
 import maccat.collectors.setapp as setapp_mod
 import maccat.collectors.vscode as vscode_mod  # noqa: F401 — used via VSCodeCollector class
 import maccat.collectors.webapps as webapps_mod
@@ -29,7 +30,7 @@ from maccat.reinstall.parser import ParsedCatalog, ParsedItem, ParsedSection
 
 
 def test_all_section_titles_are_unique() -> None:
-    """All 21 collector section title constants must be unique.
+    """All 22 collector section title constants must be unique.
 
     Prevents reinstall routing bugs where two collectors share a title, causing
     one to silently shadow the other in SECTION_SOURCE_MAP lookups.
@@ -56,6 +57,7 @@ def test_all_section_titles_are_unique() -> None:
       edge_mod._TITLE                — "Microsoft Edge Extensions"
       brave_mod._TITLE               — "Brave Browser Extensions"
       ff_mod._TITLE                  — "Firefox Extensions"
+      safari_mod._TITLE              — "Safari Extensions"     (Phase 29)
     """
     titles = [
         hb_mod.TITLE,                    # "Homebrew Packages"
@@ -79,8 +81,9 @@ def test_all_section_titles_are_unique() -> None:
         edge_mod._TITLE,                 # "Microsoft Edge Extensions"
         brave_mod._TITLE,                # "Brave Browser Extensions"
         ff_mod._TITLE,                   # "Firefox Extensions"
+        safari_mod._TITLE,               # "Safari Extensions"
     ]
-    assert len(titles) == 21, f"Expected 21 titles, got {len(titles)}"
+    assert len(titles) == 22, f"Expected 22 titles, got {len(titles)}"
     assert len(titles) == len(set(titles)), (
         f"Duplicate section titles found: {[t for t in titles if titles.count(t) > 1]}"
     )

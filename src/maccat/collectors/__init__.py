@@ -54,6 +54,7 @@ def get_registry() -> list[Collector]:
     from maccat.collectors.homebrew import HomebrewCollector
     from maccat.collectors.mas import MasCollector
     from maccat.collectors.opencode import OpenCodeCollector
+    from maccat.collectors.safari import SafariCollector
     from maccat.collectors.setapp import SetappCollector
     from maccat.collectors.vscode import VSCodeCollector
     from maccat.collectors.webapps import WebAppsCollector
@@ -77,4 +78,5 @@ def get_registry() -> list[Collector]:
         EdgeCollector(),        # NEW — BRW-01
         BraveCollector(),       # NEW — BRW-02
         FirefoxCollector(),
+        SafariCollector(),      # NEW — BRW-04
     ]
