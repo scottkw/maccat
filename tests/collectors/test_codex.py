@@ -220,6 +220,36 @@ class TestCodexDegradation:
             result = CodexCollector().collect()
         assert result.sections[0].items == []
 
+    def test_cli_oserror_falls_through_to_toml(self, tmp_path: Path) -> None:
+        """WR-01: subprocess.run raising OSError (TOCTOU/exec failure) does not crash;
+        MCP collector degrades to the TOML fallback path."""
+        config_toml = tmp_path / "config.toml"
+        config_toml.write_text("[mcp_servers.toml-srv]\n", encoding="utf-8")
+        with (
+            patch("shutil.which", return_value="/usr/bin/codex"),
+            patch("subprocess.run", side_effect=OSError("exec failed")),
+            patch.object(codex_mod, "_TOML_PATH", config_toml),
+        ):
+            result = CodexCollector().collect()  # must not raise
+        assert len(result.sections) == 2
+        full_output = "\n".join(result.sections[0].items)
+        assert "toml-srv" in full_output
+
+    def test_plugins_cli_oserror_falls_through_to_toml(self, tmp_path: Path) -> None:
+        """WR-01: subprocess.run raising OSError does not crash the plugins path;
+        it degrades to the [plugins.*] TOML fallback."""
+        config_toml = tmp_path / "config.toml"
+        config_toml.write_text("[plugins.toml-plug]\n", encoding="utf-8")
+        with (
+            patch("shutil.which", return_value="/usr/bin/codex"),
+            patch("subprocess.run", side_effect=OSError("exec failed")),
+            patch.object(codex_mod, "_TOML_PATH", config_toml),
+        ):
+            result = CodexCollector().collect()  # must not raise
+        assert len(result.sections) == 2
+        plugins_output = "\n".join(result.sections[1].items)
+        assert "toml-plug" in plugins_output
+
     def test_codex_section_title(self, tmp_path: Path) -> None:
         """Section title is exactly 'Codex MCP Servers'."""
         missing_toml = tmp_path / "config.toml"

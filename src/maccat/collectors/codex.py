@@ -57,12 +57,17 @@ class CodexCollector(Collector):
         CAT-05: reads ONLY .name and .type — never .command, .env, .args, .url, .headers.
         Returns [] on non-zero exit, empty stdout, empty array, or JSON decode error.
         """
-        result = subprocess.run(
-            ["codex", "mcp", "list", "--json"],
-            capture_output=True,
-            text=True,
-            shell=False,
-        )
+        try:
+            result = subprocess.run(
+                ["codex", "mcp", "list", "--json"],
+                capture_output=True,
+                text=True,
+                shell=False,
+            )
+        except OSError:
+            # TOCTOU / broken symlink / exec failure: warn-and-continue per the
+            # project's graceful-degradation constraint instead of crashing the CLI.
+            return []
         if result.returncode != 0 or not result.stdout.strip():
             return []
         try:
@@ -138,12 +143,17 @@ class CodexCollector(Collector):
         CAT-05 / FMT-03: reads ONLY .name and .pluginId — never .command, .env, .args, .url.
         Returns [] on non-zero exit, empty stdout, empty array, or JSON decode error.
         """
-        result = subprocess.run(
-            ["codex", "plugin", "list", "--json"],
-            capture_output=True,
-            text=True,
-            shell=False,
-        )
+        try:
+            result = subprocess.run(
+                ["codex", "plugin", "list", "--json"],
+                capture_output=True,
+                text=True,
+                shell=False,
+            )
+        except OSError:
+            # TOCTOU / broken symlink / exec failure: warn-and-continue per the
+            # project's graceful-degradation constraint instead of crashing the CLI.
+            return []
         if result.returncode != 0 or not result.stdout.strip():
             return []
         try:
