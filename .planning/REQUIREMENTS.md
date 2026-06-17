@@ -22,7 +22,7 @@ runs diff-empty (FMT-04). All implementation is stdlib-only (no new pip dependen
 - [ ] **BRW-02**: Catalog **Brave** user-installed extensions across all profiles —
   `~/Library/Application Support/BraveSoftware/Brave-Browser/<Profile>/Extensions/...`, same shared
   Chromium collector, Brave's confirmed component-ID denylist applied, built-ins excluded.
-- [ ] **BRW-03**: Catalog **Zed** installed extensions from
+- [x] **BRW-03**: Catalog **Zed** installed extensions from
   `~/Library/Application Support/Zed/extensions/index.json` (canonical id + name + version), with
   local/`dev` extensions filtered out. Degrades to `(none found)` when Zed or the file is absent.
 - [ ] **BRW-04**: Catalog **Safari** user-installed extensions via
@@ -33,7 +33,7 @@ runs diff-empty (FMT-04). All implementation is stdlib-only (no new pip dependen
 
 ### AI-CLI Coverage
 
-- [ ] **CDX-02**: Catalog **Codex plugins** as a new "Codex Plugins" section alongside the existing
+- [x] **CDX-02**: Catalog **Codex plugins** as a new "Codex Plugins" section alongside the existing
   "Codex MCP Servers" section. Detect plugins where the installed Codex supports them (prefer a
   `codex plugin list` CLI if present, else read `[plugins."…"]` headers from `~/.codex/config.toml`),
   emitting **identity-only** entries (name + id; version where available) and **never** reading
@@ -75,9 +75,9 @@ Explicitly excluded from v2.2.0.
 |-------------|-------|--------|
 | BRW-01 | Phase 28 | Pending |
 | BRW-02 | Phase 28 | Pending |
-| BRW-03 | Phase 27 | Pending |
+| BRW-03 | Phase 27 | Complete |
 | BRW-04 | Phase 29 | Pending |
-| CDX-02 | Phase 27 | Pending |
+| CDX-02 | Phase 27 | Complete |
 
 **Coverage:**
 - v1 requirements: 5 total

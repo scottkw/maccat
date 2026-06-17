@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.2.0
 milestone_name: Broader Coverage
-status: executing
-stopped_at: Roadmap created for v2.2.0 (Phases 27-29)
-last_updated: "2026-06-17T15:18:16.884Z"
+status: ready_to_plan
+stopped_at: Phase 27 complete (2/2) — ready to discuss Phase 28
+last_updated: 2026-06-17T16:01:56.132Z
 last_activity: 2026-06-17 -- Phase 27 execution started
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 2
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-16)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 27 — codex-plugins-zed-extensions
+**Current focus:** Phase 28 — chromium refactor + edge + brave
 
 ## Current Position
 
-Phase: 27 (codex-plugins-zed-extensions) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 27
-Last activity: 2026-06-17 -- Phase 27 execution started
+Phase: 28
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-06-17
 
 ```
 Progress: [                    ] 0% (0/3 phases)
@@ -38,7 +38,7 @@ Progress: [                    ] 0% (0/3 phases)
 
 **Velocity:**
 
-- Total plans completed: 33 (prior milestones)
+- Total plans completed: 35 (prior milestones)
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -49,6 +49,7 @@ Progress: [                    ] 0% (0/3 phases)
 | 27. Codex Plugins + Zed Extensions | 0/TBD | - | - |
 | 28. Chromium Refactor + Edge + Brave | 0/TBD | - | - |
 | 29. Safari Extensions | 0/TBD | - | - |
+| 27 | 2 | - | - |
 
 *Updated after each plan completion*
 

@@ -194,6 +194,6 @@ v2.2.0 phases execute in numeric order: 27 → 28 → 29 (phases 24–26 shipped
 | 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 2/2 | Complete    | 2026-06-16 |
 | 25. Script Emitter | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
 | 26. Picker + CLI Wiring + Integration | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
-| 27. Codex Plugins + Zed Extensions | v2.2.0 | 2/2 | Complete   | 2026-06-17 |
+| 27. Codex Plugins + Zed Extensions | v2.2.0 | 2/2 | Complete    | 2026-06-17 |
 | 28. Chromium Refactor + Edge + Brave | v2.2.0 | 0/TBD | Not started | - |
 | 29. Safari Extensions | v2.2.0 | 0/TBD | Not started | - |
