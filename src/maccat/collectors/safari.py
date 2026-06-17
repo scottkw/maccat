@@ -20,6 +20,8 @@ _PLUGINKIT = Path("/usr/bin/pluginkit")
 _PLUGIN_POINT = "com.apple.Safari.web-extension"
 _PATH_RE = re.compile(r"^\s*Path\s*=\s*(.+\.appex)\s*$")
 
+__all__ = ["SafariCollector"]
+
 
 def _parse_pluginkit_output(stdout: str) -> list[Path]:
     """Extract .appex bundle paths from pluginkit -mAvv verbose output.
@@ -40,9 +42,10 @@ def _read_appex_name(appex_path: Path, bundle_id: str) -> str:
 
     Resolution chain (per 29-CONTEXT.md §Entry fields):
       1. CFBundleDisplayName from the appex's own Info.plist
-      2. CFBundleDisplayName from the parent app's Info.plist (three levels up)
-      3. CFBundleName from the parent app's Info.plist — ONLY if != "safari"
-      4. bundle_id as final fallback (name is never empty, never "safari")
+      2. CFBundleName from the appex's own Info.plist — ONLY if != "safari"
+      3. CFBundleDisplayName from the parent app's Info.plist (three levels up)
+      4. CFBundleName from the parent app's Info.plist — ONLY if != "safari"
+      5. bundle_id as final fallback (name is never empty, never "safari")
 
     Never raises — returns bundle_id on any failure so the caller always
     gets a usable name string.
@@ -62,6 +65,15 @@ def _read_appex_name(appex_path: Path, bundle_id: str) -> str:
             name = ""
         if name:
             return name
+        # Fallback: the appex's OWN CFBundleName (rejecting the generic
+        # binary name "safari") before walking up to the parent app.
+        own_name = plist_data.get("CFBundleName", "")
+        if (
+            isinstance(own_name, str)
+            and own_name.strip()
+            and own_name.strip().lower() != "safari"
+        ):
+            return own_name.strip()
         # Fallback: parent app plist (appex → PlugIns → Contents → app bundle)
         parent_plist_path = (
             appex_path.parent.parent.parent / "Contents" / "Info.plist"
