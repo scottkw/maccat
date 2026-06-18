@@ -126,7 +126,7 @@ and the data they collect are unchanged.
 
 - [x] **Phase 30: Markdown Emitter & `.md` Plumbing** - Generation emits `.md` (frontmatter + per-section tables); retention/filename/git all move `.txt` → `.md` (completed 2026-06-18)
 - [x] **Phase 31: Markdown-Only Reinstall Parser** - `reinstall/parser.py` parses the markdown tables; round-trip re-locked against the emitter; legacy `.txt` fails with a convert directive (completed 2026-06-18)
-- [ ] **Phase 32: Convert Command** - `maccat convert --from PATH` reads a legacy `.txt` via the retained text parser and rewrites it as `.md`, replacing + committing in one commit
+- [x] **Phase 32: Convert Command** - `maccat convert --from PATH` reads a legacy `.txt` via the retained text parser and rewrites it as `.md`, replacing + committing in one commit (completed 2026-06-18)
 
 ## Phase Details
 
@@ -173,8 +173,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 32-01-PLAN.md — convert.py orchestrator + git_commit_convert in gitops.py
-- [ ] 32-02-PLAN.md — cli.py wiring + tests/test_convert.py
+- [x] 32-01-PLAN.md — convert.py orchestrator + git_commit_convert in gitops.py
+- [x] 32-02-PLAN.md — cli.py wiring + tests/test_convert.py
 
 ## Progress
 
@@ -215,4 +215,4 @@ reinstall parser round-trip in 31 and the convert rewrite in 32).
 | 29. Safari Extensions | v2.2.0 | 1/1 | Complete | 2026-06-17 |
 | 30. Markdown Emitter & `.md` Plumbing | v3.0.0 | 3/3 | Complete   | 2026-06-18 |
 | 31. Markdown-Only Reinstall Parser | v3.0.0 | 2/2 | Complete   | 2026-06-18 |
-| 32. Convert Command | v3.0.0 | 0/2 | Not started | - |
+| 32. Convert Command | v3.0.0 | 2/2 | Complete   | 2026-06-18 |
