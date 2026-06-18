@@ -46,7 +46,7 @@ class TestFindNewestCatalog:
     def test_returns_path_for_single_valid_file(self, tmp_path: Path) -> None:
         from maccat.reinstall.picker import _find_newest_catalog  # type: ignore[attr-defined]
 
-        f = tmp_path / "mac-software-list-[TestMac]-20260601120000.txt"
+        f = tmp_path / "mac-software-list-[TestMac]-20260601120000.md"
         f.write_text("content", encoding="utf-8")
         result = _find_newest_catalog(tmp_path)
         assert result == f
@@ -54,8 +54,8 @@ class TestFindNewestCatalog:
     def test_returns_newest_by_timestamp(self, tmp_path: Path) -> None:
         from maccat.reinstall.picker import _find_newest_catalog  # type: ignore[attr-defined]
 
-        older = tmp_path / "mac-software-list-[TestMac]-20260601120000.txt"
-        newer = tmp_path / "mac-software-list-[TestMac]-20260616120000.txt"
+        older = tmp_path / "mac-software-list-[TestMac]-20260601120000.md"
+        newer = tmp_path / "mac-software-list-[TestMac]-20260616120000.md"
         older.write_text("old", encoding="utf-8")
         newer.write_text("new", encoding="utf-8")
         result = _find_newest_catalog(tmp_path)
@@ -72,7 +72,7 @@ class TestFindNewestCatalog:
         from maccat.reinstall.picker import _find_newest_catalog  # type: ignore[attr-defined]
 
         # A directory that matches the glob pattern should be skipped
-        d = tmp_path / "mac-software-list-[TestMac]-20260601120000.txt"
+        d = tmp_path / "mac-software-list-[TestMac]-20260601120000.md"
         d.mkdir()
         assert _find_newest_catalog(tmp_path) is None
 

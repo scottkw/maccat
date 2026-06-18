@@ -28,7 +28,7 @@ from maccat.naming import parse_catalog_filename
 def _find_newest_catalog(folder: Path) -> Path | None:
     """Return the catalog file with the greatest filename timestamp, or None.
 
-    Scans *folder* for files matching ``mac-software-list-*.txt``.  Parses
+    Scans *folder* for files matching ``mac-software-list-*.md``.  Parses
     each filename via :func:`~maccat.naming.parse_catalog_filename` and
     selects the entry whose 14-digit YYYYMMDDHHMMSS timestamp is
     lexicographically greatest.  Lexicographic comparison is correct for this
@@ -43,7 +43,7 @@ def _find_newest_catalog(folder: Path) -> Path | None:
     """
     best_ts: str | None = None
     best_path: Path | None = None
-    for f in folder.glob("mac-software-list-*.txt"):
+    for f in folder.glob("mac-software-list-*.md"):
         if not f.is_file():
             continue
         cf = parse_catalog_filename(f.name)
