@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.2.0
-milestone_name: Broader Coverage
-status: Awaiting next milestone
-stopped_at: v2.2.0 close doc-polish + cleanup complete; only user-gated push remains (2026-06-18)
-last_updated: "2026-06-18T00:00:00.000Z"
-last_activity: 2026-06-18 — v2.2.0 close finished (PROJECT/RETROSPECTIVE evolved, phase dirs archived)
+milestone: v3.0.0
+milestone_name: Markdown Catalog Format
+status: planning
+last_updated: "2026-06-18T18:26:52.819Z"
+last_activity: 2026-06-18
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-16)
 
 ## Current Position
 
-Phase: Milestone v2.2.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-17 — Milestone v2.2.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-18 — Milestone v3.0.0 started
 
 ## Performance Metrics
 

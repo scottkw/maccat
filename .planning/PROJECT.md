@@ -10,6 +10,23 @@ user-configured external catalog repo. It's a personal tool for keeping a restor
 history of a machine's full software + tooling state. (Originally a Zsh script, ported to Python
 in v1.0.0; the zsh reference was retired in v2.0.0.)
 
+## Current Milestone: v3.0.0 Markdown Catalog Format
+
+**Goal:** Replace the plain-text catalog format with rendered markdown (`.md`), and add a
+`convert` command to upgrade legacy `.txt` catalogs to the new format.
+
+**Target features:**
+- **Markdown catalog output** — generation emits a `.md` file: YAML frontmatter (computer,
+  hostname, generated timestamp, maccat version) + `#` title + one `##` section per source,
+  each rendering items as a uniform **Name | Version | ID** table. Stays deterministic and
+  stably-sorted; degrades gracefully (blank cells, `(none found)`). Breaking format change.
+- **`.md` plumbing** — retention globs, the `[computer]-TS` filename pattern, and git
+  add/commit discovery all move from `.txt` → `.md`.
+- **`convert --from PATH`** — parses one legacy `.txt` catalog and rewrites it as the new
+  `.md`, deletes the old `.txt`, and stages both in a single commit (honoring `--no-commit`).
+- **Markdown-only reinstall** — `reinstall/parser.py` is updated to parse the new markdown
+  tables (round-trip-locked against the new emitter); legacy catalogs must be `convert`ed first.
+
 ## Shipped Milestones
 
 - **v0.46.0 Extension Cataloging** (2026-06-13) — added 13 catalog sections for AI-CLI / editor /
@@ -91,9 +108,10 @@ in v1.0.0; the zsh reference was retired in v2.0.0.)
 
 ## Current State
 
-No active milestone. v2.2.0 shipped and archived 2026-06-17; the tool now catalogs 22 sections
-across applications, AI-CLI tooling, editors, and five browsers, with a catalog→reinstall loop.
-Next milestone selection is open — see Next Candidate Milestones.
+Active milestone: **v3.0.0 Markdown Catalog Format** (started 2026-06-18) — reformatting the
+plain-text catalog into rendered markdown (`.md`) and adding a `convert` command for legacy
+`.txt` catalogs. v2.2.0 shipped and archived 2026-06-17; the tool catalogs 22 sections across
+applications, AI-CLI tooling, editors, and five browsers, with a catalog→reinstall loop.
 
 ## Next Candidate Milestones
 
@@ -172,8 +190,10 @@ when any source isn't installed.
 
 ### Active
 
-_No active milestone. v2.2.0 shipped 2026-06-17. The next milestone's requirements will be defined
-fresh in REQUIREMENTS.md when one is started (`/gsd-new-milestone`)._
+**v3.0.0 Markdown Catalog Format** (started 2026-06-18). Requirements defined fresh in
+REQUIREMENTS.md. Scope: markdown catalog generation (`.md`, YAML frontmatter + per-section
+Name|Version|ID tables), `.md` retention/filename/git plumbing, a `convert --from PATH`
+command for legacy `.txt` catalogs (replace + commit), and a markdown-only reinstall parser.
 
 Candidate future milestones: catalog diffing/change reports (DIFF-01), PKG-04 pipx/PyPI
 distribution, RST-03 brew-tap capture/restore, RST-04 best-effort AI-CLI tooling restore, browser
@@ -295,4 +315,7 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-17 — shipped & archived milestone v2.2.0 Broader Coverage: Edge / Brave / Zed / Safari extension cataloging (BRW-01..04) and a Codex Plugins section (CDX-02). Catalog now emits 22 sections from 16 collectors; existing sections + reinstall pipeline unchanged. No active milestone.*
+*Last updated: 2026-06-18 — started milestone v3.0.0 Markdown Catalog Format: catalog output moves
+from plain-text `.txt` to rendered markdown `.md` (YAML frontmatter + per-section Name|Version|ID
+tables), with a `convert --from PATH` command for legacy catalogs and a markdown-only reinstall
+parser. Breaking format change (precedent: v2.0.0). Phases continue from Phase 30.*
