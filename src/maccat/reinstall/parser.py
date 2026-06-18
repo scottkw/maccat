@@ -315,8 +315,10 @@ def parse_markdown_catalog(path: Path) -> ParsedCatalog:
     text = path.read_text(encoding="utf-8")
     lines = text.split("\n")
 
-    # Validate opening frontmatter fence
-    if not lines or lines[0] != "---":
+    # Validate opening frontmatter fence.
+    # text.split("\n") always yields a non-empty list (even "" -> [""]), so an
+    # empty-file guard is unnecessary — lines[0] is always safe to index here.
+    if lines[0] != "---":
         raise ValueError(
             f"{path} is missing valid YAML frontmatter (no opening '---' fence). "
             f"It may be a legacy .txt catalog renamed to .md. "
@@ -345,7 +347,13 @@ def parse_markdown_catalog(path: Path) -> ParsedCatalog:
                 catalog.sections.append(current_section)
             current_section = ParsedSection(title=line[3:])
         elif line == MD_NONE_FOUND:
-            # Empty/degraded section sentinel — items=[] and degraded=False already set
+            # Empty/degraded section sentinel — items=[] and degraded=False already set.
+            # NOTE: the markdown emitter renders BOTH empty and degraded sections as
+            # "(none found)", so the degraded flag is not recoverable from the markdown
+            # round-trip (unlike the legacy plain-text parser, which preserves it). This
+            # is lossless for the reinstall emitter — _should_skip() drops a section when
+            # items == [] regardless of the degraded flag — but downstream consumers that
+            # need degraded must not rely on it being set here.
             pass
         elif line.startswith("| ") and line.endswith(" |"):
             # Skip header row and separator row; parse all other table rows
