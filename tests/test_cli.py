@@ -229,7 +229,7 @@ class TestNoCommit:
         disposable_catalog_repo: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """With --no-commit, the catalog .txt file must be written to computer/."""
+        """With --no-commit, the catalog .md file must be written to computer/."""
         _patch_run_dependencies(monkeypatch, disposable_catalog_repo)
         monkeypatch.setattr(sys, "argv", ["maccat", "--computer", "MyMac", "--no-commit"])
 
@@ -238,8 +238,8 @@ class TestNoCommit:
         run()
 
         mymac_dir = disposable_catalog_repo / "MyMac"
-        txt_files = list(mymac_dir.glob("mac-software-list-*.txt"))
-        assert len(txt_files) >= 1, (
+        md_files = list(mymac_dir.glob("mac-software-list-*.md"))
+        assert len(md_files) >= 1, (
             f"Expected at least one catalog file in {mymac_dir}, found none"
         )
 
@@ -287,12 +287,12 @@ class TestGenerateThenSweep:
         run()
 
         mymac_dir = disposable_catalog_repo / "MyMac"
-        txt_files = list(mymac_dir.glob("mac-software-list-*.txt"))
-        assert len(txt_files) >= 1, "Catalog file should have been written"
+        md_files = list(mymac_dir.glob("mac-software-list-*.md"))
+        assert len(md_files) >= 1, "Catalog file should have been written"
 
         archive_dir = mymac_dir / "archive"
         if archive_dir.exists():
-            archived = list(archive_dir.glob("mac-software-list-*.txt"))
+            archived = list(archive_dir.glob("mac-software-list-*.md"))
             assert len(archived) == 0, (
                 f"Just-written catalog should not be in archive/; found: {archived}"
             )
@@ -331,8 +331,8 @@ class TestGenerateThenSweep:
         assert "git_pull" in call_order
 
         # Catalog file was written after git_pull (exists on disk now)
-        txt_files = list(mymac_dir.glob("mac-software-list-*.txt"))
-        assert len(txt_files) >= 1, "Catalog file should exist after run"
+        md_files = list(mymac_dir.glob("mac-software-list-*.md"))
+        assert len(md_files) >= 1, "Catalog file should exist after run"
 
 
 # ---------------------------------------------------------------------------
@@ -466,7 +466,7 @@ class TestSelectComputerQuit:
         # No catalog file written
         for d in disposable_catalog_repo.iterdir():
             if d.is_dir() and d.name not in (".git",):
-                txt_files = list(d.glob("mac-software-list-*.txt"))
-                assert len(txt_files) == 0, (
-                    f"No catalog should be written when user quits: {txt_files}"
+                md_files = list(d.glob("mac-software-list-*.md"))
+                assert len(md_files) == 0, (
+                    f"No catalog should be written when user quits: {md_files}"
                 )
