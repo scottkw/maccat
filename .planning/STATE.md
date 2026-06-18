@@ -2,13 +2,14 @@
 gsd_state_version: 1.0
 milestone: v3.0.0
 milestone_name: Markdown Catalog Format
-status: roadmapped
-last_updated: "2026-06-18T18:26:52.819Z"
-last_activity: 2026-06-18
+status: executing
+stopped_at: v3.0.0 ROADMAP created — 3 phases (30-32), coarse granularity, 12/12 requirements
+last_updated: "2026-06-18T19:17:38.918Z"
+last_activity: 2026-06-18 -- Phase 30 execution started
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -20,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** v3.0.0 Markdown Catalog Format — roadmapped (Phases 30-32). Next: `/gsd:plan-phase 30`.
+**Current focus:** Phase 30 — markdown-emitter-md-plumbing
 
 ## Current Position
 
-Phase: 30 — Markdown Emitter & `.md` Plumbing (Not started)
-Plan: —
-Status: Roadmap created — awaiting phase planning
-Last activity: 2026-06-18 — Roadmap for v3.0.0 created (3 phases, 12/12 requirements mapped)
+Phase: 30 (markdown-emitter-md-plumbing) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 30
+Last activity: 2026-06-18 -- Phase 30 execution started
 
 ## Performance Metrics
 
@@ -59,6 +60,7 @@ Recent decisions affecting current work:
   the reinstall parser and convert depend on it; then the markdown-only reinstall parser (Phase 31)
   which re-locks the parser↔emitter round-trip; then the convert command (Phase 32) which reuses the
   emitter and the retained legacy text parser.
+
 - **Phase 30 (MD-01..05, FILE-01, FILE-02):** Shared markdown emitter in `catalog/format.py` —
   YAML frontmatter (computer / hostname / generated timestamp / maccat version) + `#` title + one
   `##` section per source rendering a uniform `Name | Version | ID` table; empty cell for missing
@@ -67,17 +69,20 @@ Recent decisions affecting current work:
   filename pattern, newest-per-computer retention glob, archive prune glob, and git add/commit
   discovery from `.txt` → `.md` (replace the glob, don't duplicate). Format-only: 22 sections + their
   collected data are UNCHANGED. Breaking format change (precedent: v2.0.0).
+
 - **Phase 31 (RIN-01, RIN-02):** `reinstall/parser.py` parses the new markdown (frontmatter +
   per-section tables) into the typed `ParsedCatalog`; the parser↔emitter round-trip contract test is
   re-locked against the markdown emitter (replaces, not duplicates, the v2.1.0 plain-text lock).
   `maccat reinstall` consumes markdown only; a legacy `.txt` fails with a clear "convert it first"
   message — no silent partial parse, nothing executed.
+
 - **Phase 32 (CONV-01..03):** `maccat convert --from PATH` reads ONE legacy `.txt` via the RETAINED
   legacy text parser (the existing `parse_catalog` stays as the legacy reader for convert input),
   rewrites the full contents through the Phase 30 markdown emitter, writes the `.md`, removes the old
   `.txt`, and stages both in a single commit (`--no-commit` does the file ops without git). Degrades
   gracefully on malformed/partial input (warn + skip, never abort or fabricate), never executes
   anything. Single-file only (bulk convert deferred → CONV-bulk).
+
 - **Cross-cutting:** stdlib-only (no new pip deps), ruff + mypy --strict clean, output byte-stable
   across repeated runs. The shared markdown emitter is the SINGLE source of both catalog generation
   (MD-*) and convert output (CONV-*); RIN round-trips against that same emitter — keep the three in
@@ -93,9 +98,11 @@ None.
   `reinstall/parser.py` must stay lossless against each other across all 22 sections + all
   `emit_item` line shapes. Re-lock the contract test in Phase 31; do not let convert (Phase 32) or
   generation (Phase 30) drift the emitter without updating the parser.
+
 - **Two parsers coexist after this milestone:** the LEGACY plain-text `parse_catalog` (read-only,
   used by `convert` to read old `.txt`) and the NEW markdown parser (used by `reinstall`). Don't
   conflate them — reinstall must NOT accept `.txt`.
+
 - **Breaking change:** existing `.txt` catalogs on disk become non-reinstallable until `convert`ed.
   FILE-01 retention now targets `.md` — a stray legacy `.txt` must be left untouched, not pruned.
 
@@ -126,6 +133,7 @@ Resume file: None.
 
 1. **Plan Phase 30** — `/gsd:plan-phase 30` (Markdown Emitter & `.md` Plumbing). This is the keystone
    phase; the emitter it produces anchors the round-trip for Phases 31 and 32.
+
 2. Then execute 30 → 31 → 32 in numeric order.
 
 **Note (carried from v2.2.0):** tag `v2.2.0` push status — confirm whether v2.2.0 was published

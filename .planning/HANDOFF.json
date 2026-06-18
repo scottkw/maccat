@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-06-18T19:31:43.887Z",
+  "phase": "30",
+  "phase_name": "Markdown Emitter & .md Plumbing",
+  "phase_dir": ".planning/phases/30-markdown-emitter-md-plumbing",
+  "plan": "30-03",
+  "task": 0,
+  "total_tasks": 2,
+  "status": "paused",
+  "milestone": "v3.0.0 Markdown Catalog Format",
+  "completed_tasks": [
+    {"id": "30-01", "name": "Markdown emitter module (catalog/markdown.py) + CatalogWriter.write_raw + 52 unit tests", "status": "done", "commit": "34efe78 (merge)"},
+    {"id": "30-02", "name": ".txt->.md in naming.py + retention.py (x3) + identity.py (x2) + test updates", "status": "done", "commit": "15d532c (merge)"},
+    {"id": "fix-30-picker", "name": "Reinstall picker catalog glob .txt->.md (FILE-01 site missed by RESEARCH)", "status": "done", "commit": "9e90e96"}
+  ],
+  "remaining_tasks": [
+    {"id": "30-03", "name": "Wire render_markdown_catalog into cli.py generate loop; fix 5 test_cli.py glob assertions (.txt->.md)", "status": "not_started"},
+    {"id": "phase-30-finish", "name": "Post-merge gate (pip install -e . FIRST, then full suite green) -> ROADMAP plan progress for 30-01/02/03 -> gsd-verifier phase 30", "status": "not_started"},
+    {"id": "phase-31", "name": "Markdown-Only Reinstall Parser (RIN-01, RIN-02) — discuss -> plan -> execute", "status": "not_started"},
+    {"id": "phase-32", "name": "Convert Command (CONV-01/02/03) — discuss -> plan -> execute", "status": "not_started"},
+    {"id": "milestone-lifecycle", "name": "audit-milestone -> complete-milestone v3.0.0 -> cleanup", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "Worktree editable-install pollution: after a worktree executor is removed, `from maccat ...` raises ModuleNotFoundError on main because pip's editable install repointed to the (now deleted) worktree path. The post-merge test suite collection-errors on EVERY test until fixed.", "type": "technical", "workaround": "Run `./venv/bin/pip install -e .` on main BEFORE running `./venv/bin/pytest tests/` after any worktree merge."}
+  ],
+  "human_actions_pending": [],
+  "decisions": [
+    {"decision": "Markdown format: ---fenced YAML frontmatter (snake_case keys computer/hostname/generated/maccat_version, generated double-quoted ISO-8601), title stays '# Installed Mac Software List', 3-col Name|Version|ID tables with empty cells + \\| escaping, raw Homebrew/mas sections rendered in the SAME table via a duplicated ITEM_RE, (none found) line for empty sources, LC_ALL=C sort -f -u preserved.", "rationale": "Locked in 30-CONTEXT.md smart-discuss; byte-deterministic + round-trippable for Phase 31 parser.", "phase": "30"},
+    {"decision": "Fixed the reinstall picker glob (picker.py:46) as part of Phase 30 even though no plan covered it.", "rationale": "RESEARCH's file-change inventory missed it; after make_catalog_filename/parse_catalog_filename moved to .md, the picker found zero catalogs. Completes FILE-01 ('the .txt glob is replaced, not duplicated'). Does NOT conflict with Phase 31 (which adds the parser + .txt-refusal in the parse step, not the glob).", "phase": "30"},
+    {"decision": "Did NOT bump __version__ (still 2.1.0) in Phase 30; deferred to a release step after Phase 32.", "rationale": "Per 30-RESEARCH resolved open question; version bump is orthogonal to the format change.", "phase": "30"}
+  ],
+  "uncommitted_files": [".planning/STATE.md (state.begin-phase write, committed with this handoff)"],
+  "next_action": "Re-dispatch wave 2 plan 30-03 as a gsd-executor in an isolated worktree (isolation=worktree) based at the current HEAD; on completion merge the branch, run `./venv/bin/pip install -e .`, then `./venv/bin/pytest tests/` (expect fully green — the only currently-failing tests are the 3 transitional test_cli.py glob assertions that 30-03 fixes). Then update ROADMAP plan progress for 30-01/30-02/30-03 and run gsd-verifier for phase 30.",
+  "context_notes": "Autonomous milestone run (/gsd-autonomous, all 3 phases). Phase 30 wave 1 (30-01, 30-02) merged cleanly + picker gap fixed; suite is green except the 3 known test_cli.py assertions 30-03 owns. Wave 2 (30-03) was dispatched but killed mid-investigation (no commits) when the user paused — its worktree was discarded, so re-dispatch from scratch. After Phase 30 verifies, continue autonomously through Phase 31 (reinstall markdown parser) and Phase 32 (convert command), then the milestone lifecycle (audit -> complete -> cleanup). NOTE: the root + repo CLAUDE.md describe a STALE Zsh script; the real tool is the stdlib-only Python `maccat` package under src/maccat/. Trust .planning/PROJECT.md."
+}
