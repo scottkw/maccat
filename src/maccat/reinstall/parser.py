@@ -51,6 +51,10 @@ DEGRADATION_LINES: frozenset[str] = frozenset(
     }
 )
 
+# Markdown format sentinel for empty/degraded sections — NO leading spaces.
+# Distinct from NONE_FOUND_SENTINEL (two leading spaces, legacy format).
+MD_NONE_FOUND = "(none found)"
+
 # Right-anchored alternation regex that inverts all six emit_item output shapes.
 # Three branches with distinct named groups across alternation (Python re forbids
 # duplicate group names in alternation — Pitfall 6 in RESEARCH.md).
@@ -230,5 +234,131 @@ def parse_catalog(path: Path) -> ParsedCatalog:
                 degraded=current_degraded,
             )
         )
+
+    return catalog
+
+
+# ---------------------------------------------------------------------------
+# Markdown catalog parser — inverts render_markdown_catalog() from
+# catalog/markdown.py. Added in Phase 31; legacy parse_catalog above is
+# retained unchanged for Phase 32 convert.
+# ---------------------------------------------------------------------------
+
+
+def _unescape_cell(value: str) -> str:
+    """Inverse of catalog/markdown.py::_escape_cell. Strip whitespace, then unescape.
+
+    _escape_cell escapes in order: backslash first (\\), then pipe (|).
+    The inverse unescaping can be applied in either order; by convention this
+    function unescapes pipe first (\\| → |), then backslash (\\\\ → \\).
+    Both orders are mathematically correct for this escape scheme.
+
+    Never raises.
+    """
+    s = value.strip()
+    # Unescape \\| → | first, then \\\\ → \\.
+    return s.replace("\\|", "|").replace("\\\\", "\\")
+
+
+def _parse_markdown_row(row: str) -> ParsedItem | None:
+    """Parse a markdown table data row into a ParsedItem. Never raises.
+
+    Expects a row of the form '| name | ver | id |' where the row already
+    satisfies row.startswith('| ') and row.endswith(' |').
+
+    On structural mismatch (not exactly 3 columns after splitting the inner
+    content on ' | '), returns a name-only ParsedItem with raw_line preserved.
+    """
+    # Strip leading '| ' (2 chars) and trailing ' |' (2 chars)
+    inner = row[2:-2]
+    cols = inner.split(" | ")
+    if len(cols) != 3:
+        # Structural mismatch: name-only fallback, raw_line preserved
+        name = _unescape_cell(inner)
+        return ParsedItem(name=name or row, version=None, id=None, raw_line=row)
+    name = _unescape_cell(cols[0])
+    version = _unescape_cell(cols[1]) or None  # empty cell → '' → None
+    id_ = _unescape_cell(cols[2]) or None
+    if not name:
+        # Completely empty name: lenient fallback
+        return ParsedItem(name=row, version=None, id=None, raw_line=row)
+    return ParsedItem(name=name, version=version, id=id_, raw_line=row)
+
+
+def parse_markdown_catalog(path: Path) -> ParsedCatalog:
+    """Parse a .md catalog file into ParsedCatalog. Raises ValueError for non-markdown input.
+
+    Inverts render_markdown_catalog() from catalog/markdown.py. Reads the YAML
+    frontmatter fences (validate + skip), iterates ## section headings, and
+    converts | Name | Version | ID | table rows into ParsedItems.
+
+    State machine states (implicit):
+      IN_FRONTMATTER  — scanning lines[1:] for the closing '---' fence
+      BODY            — iterating lines after the frontmatter for sections + rows
+
+    Raises:
+        ValueError: If path does not have .md extension (extension check), or
+                    if the file lacks a valid opening '---' frontmatter fence
+                    (content-sniff check for renamed legacy catalogs), or
+                    if the frontmatter block is not closed with '---'.
+                    All ValueError messages contain 'maccat convert --from'.
+        OSError: If the file cannot be read (propagated from Path.read_text).
+    """
+    path = Path(path)
+
+    if path.suffix != ".md":
+        raise ValueError(
+            f"{path} is not a markdown catalog (.md extension required). "
+            f"Convert it first with: maccat convert --from {path}"
+        )
+
+    text = path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+
+    # Validate opening frontmatter fence
+    if not lines or lines[0] != "---":
+        raise ValueError(
+            f"{path} is missing valid YAML frontmatter (no opening '---' fence). "
+            f"It may be a legacy .txt catalog renamed to .md. "
+            f"Convert it first with: maccat convert --from {path}"
+        )
+
+    # Find the closing '---' fence (first occurrence after line 0)
+    fm_close = -1
+    for i, line in enumerate(lines[1:], 1):
+        if line == "---":
+            fm_close = i
+            break
+    if fm_close == -1:
+        raise ValueError(
+            f"{path}: frontmatter block is not closed with '---'. "
+            f"Convert it first with: maccat convert --from {path}"
+        )
+
+    catalog = ParsedCatalog(path=str(path))
+    current_section: ParsedSection | None = None
+
+    for line in lines[fm_close + 1 :]:
+        if line.startswith("## "):
+            # Flush the in-progress section before starting a new one
+            if current_section is not None:
+                catalog.sections.append(current_section)
+            current_section = ParsedSection(title=line[3:])
+        elif line == MD_NONE_FOUND:
+            # Empty/degraded section sentinel — items=[] and degraded=False already set
+            pass
+        elif line.startswith("| ") and line.endswith(" |"):
+            # Skip header row and separator row; parse all other table rows
+            if line in ("| Name | Version | ID |", "| --- | --- | --- |"):
+                continue
+            if current_section is not None:
+                item = _parse_markdown_row(line)
+                if item is not None:
+                    current_section.items.append(item)
+        # blank lines, H1 title line, other unrecognized lines: skip
+
+    # EOF flush: append the last in-progress section
+    if current_section is not None:
+        catalog.sections.append(current_section)
 
     return catalog
