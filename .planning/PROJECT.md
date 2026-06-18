@@ -72,34 +72,35 @@ in v1.0.0; the zsh reference was retired in v2.0.0.)
   untouched; writes `reinstall.sh` to cwd at 0o644 and prints its path, never executing it (RST-01,
   RST-02). Code review caught a real `set -Eeuo pipefail` BLOCKER (bare `mas install` aborting mid-run)
   and a broken `reinstall --computer NAME` flag, both fixed. 9/9 requirements; audit PASSED. 553 tests.
+- **v2.2.0 Broader Coverage** (2026-06-17) — extended the catalog from 17 to **22 sections (16
+  collectors)** with five new sources, all additive and stdlib-only. New `ChromiumBaseCollector`
+  (`collectors/chromium.py`) factors out the shared profile-walk + `__MSG_`/`_locales` name
+  resolution + component-denylist filter; `ChromeCollector` becomes a thin subclass (left
+  byte-identical) and `EdgeCollector` (BRW-01, Chrome-baseline denylist + documented gap) and
+  `BraveCollector` (BRW-02, 20-ID confirmed denylist) join it. `ZedCollector` (BRW-03) reads
+  `Zed/extensions/index.json` and filters `dev` entries; `SafariCollector` (BRW-04) shells to
+  `pluginkit -p com.apple.Safari.web-extension` and reads each `.appex` `Info.plist`
+  (`CFBundleDisplayName`/`CFBundleShortVersionString`/`CFBundleIdentifier`) with every step
+  never-raising; `CodexCollector` gains a second "Codex Plugins" section (CDX-02, identity-only,
+  never reads plugin bundles per FMT-03 — emits `(none found)` on the installed Codex v0.46.0, which
+  has no plugin system). All five fall through the **unchanged** reinstall pipeline to the manual
+  checklist (zero `reinstall/` changes). Code review fixed two never-raising gaps, a Safari
+  name-fallback chain, and test-coverage gaps; a live `pluginkit` smoke test (Bitwarden) validated
+  Safari end-to-end. Recovered from a Phase 29 stale-worktree near-clobber and a mid-run `gsd-sdk`
+  npx-cache eviction. 5/5 requirements; audit PASSED. 628 tests.
 
-## Current Milestone: v2.2.0 Broader Coverage
+## Current State
 
-**Goal:** Extend the catalog to more browsers, an additional editor, and Codex plugins —
-so a single snapshot captures more of a machine's real tooling.
-
-**Target features:**
-- **Microsoft Edge extensions** — Chromium-based; extend the existing Chrome/Chromium collector
-  (all profiles, built-in components excluded, `__MSG_` name resolution) rather than duplicate it.
-- **Brave extensions** — Chromium-based; same shared-collector reuse as Edge.
-- **Zed extensions** — new collector for Zed's own extension system (name + version + id where obtainable).
-- **Safari extensions** — sandboxed macOS app-extensions; needs a different enumeration mechanism
-  (research will settle `pluginkit` vs App Store vs container scan). Highest-risk; may degrade to
-  name-only / a documented partial if a clean version/id isn't obtainable.
-- **Codex plugins** — new "Codex Plugins" catalog section alongside the existing "Codex MCP Servers".
-
-**Key context:**
-- All new sections follow the established `name (version) [id]` format (FMT-01) with graceful
-  degradation, deterministic stable sort (FMT-04), and FMT-03 secret-safety where applicable.
-- Edge + Brave + Chrome = 3 real Chromium examples, justifying a shared Chromium collector abstraction.
-- Additive only — no changes to existing sections, the catalog/archive/git flow, or the reinstall pipeline.
+No active milestone. v2.2.0 shipped and archived 2026-06-17; the tool now catalogs 22 sections
+across applications, AI-CLI tooling, editors, and five browsers, with a catalog→reinstall loop.
+Next milestone selection is open — see Next Candidate Milestones.
 
 ## Next Candidate Milestones
 
-After v2.2.0 (Broader Coverage, active): catalog diffing / change reports (DIFF-01), PKG-04
-(pipx/PyPI as a second distribution channel), RST-03 (capture/restore brew taps), RST-04
-(best-effort AI-CLI tooling restore beyond a checklist), and the deferred browser-extension
-enabled/disabled state (CHR-02/FF-02).
+Catalog diffing / change reports (DIFF-01), PKG-04 (pipx/PyPI as a second distribution channel),
+RST-03 (capture/restore brew taps), RST-04 (best-effort AI-CLI tooling restore beyond a checklist),
+the deferred browser-extension enabled/disabled state (CHR-02/FF-02/EDGE-state/BRAVE-state), and
+Safari content blockers (SAF-02).
 
 ## Core Value
 
@@ -163,16 +164,20 @@ when any source isn't installed.
 - ✓ Setapp/web/browser/AI-CLI sources emitted as a manual checklist only — no fabricated installs (MAN-01) — v2.1.0
 - ✓ `maccat reinstall` generates `reinstall.sh`, prints its path, never auto-executes (0644) (RST-01) — v2.1.0
 - ✓ `--from PATH` selects an explicit catalog; else the computer-picker uses the newest catalog (`--computer` flows through) (RST-02) — v2.1.0
+- ✓ Catalog Microsoft Edge user-installed extensions across all profiles (shared Chromium collector, `__MSG_`/`_locales` resolved, components excluded; Chrome-baseline denylist + documented gap) (BRW-01) — v2.2.0
+- ✓ Catalog Brave user-installed extensions across all profiles (shared Chromium collector, confirmed 20-ID Brave denylist) (BRW-02) — v2.2.0
+- ✓ Catalog Zed installed extensions from `Zed/extensions/index.json` (id + name + version; `dev` entries filtered) (BRW-03) — v2.2.0
+- ✓ Catalog Safari user-installed extensions via `pluginkit` + per-`.appex` `Info.plist` (display name / short version / bundle id), every step never-raising (BRW-04) — v2.2.0
+- ✓ Catalog Codex plugins as a new "Codex Plugins" section — identity-only, never reads plugin bundles (FMT-03); `(none found)` on Codex without a plugin system (CDX-02) — v2.2.0
 
 ### Active
 
-_v2.2.0 Broader Coverage is active (started 2026-06-16). Requirements are being defined fresh in
-REQUIREMENTS.md: Edge / Brave / Zed / Safari extension cataloging (BRW-01) and a Codex Plugins
-section (CDX-02)._
+_No active milestone. v2.2.0 shipped 2026-06-17. The next milestone's requirements will be defined
+fresh in REQUIREMENTS.md when one is started (`/gsd-new-milestone`)._
 
-Candidate future milestones: catalog diffing/change reports (DIFF-01), additional browsers/editors
-(BRW-01), PKG-04 pipx/PyPI distribution, RST-03 brew-tap capture/restore, RST-04 best-effort AI-CLI
-tooling restore, and v2 items CHR-02/FF-02 enabled-state + CDX-02 Codex plugins when that subsystem ships.
+Candidate future milestones: catalog diffing/change reports (DIFF-01), PKG-04 pipx/PyPI
+distribution, RST-03 brew-tap capture/restore, RST-04 best-effort AI-CLI tooling restore, browser
+enabled/disabled state (CHR-02/FF-02/EDGE-state/BRAVE-state), and Safari content blockers (SAF-02).
 
 ### Out of Scope
 
@@ -182,7 +187,8 @@ tooling restore, and v2 items CHR-02/FF-02 enabled-state + CDX-02 Codex plugins 
 - Rewriting the script's architecture (e.g. fixing globals-as-parameters) — bolt new sources
   onto existing conventions rather than refactor
 - JSON/HTML output formats — output stays plain-text sectioned to keep one restorable snapshot
-- Browsers/editors beyond those listed (Safari, Edge, Brave, Zed, etc.) — not requested
+- Browsers/editors beyond those now covered (Chrome, Edge, Brave, Safari, Firefox, VS Code, Cursor,
+  Zed) — not requested
 
 ## Context
 
@@ -265,6 +271,10 @@ tooling restore, and v2 items CHR-02/FF-02 enabled-state + CDX-02 Codex plugins 
 | Install latest, record the cataloged version as a comment (not version-pinned) | Pinning is unreliable across brew/mas/extensions (no versioned formulae variants, no mas version pin); the cataloged version stays as a reviewable reference | ✓ Good — v2.1.0 |
 | The catalog `.txt` is the reinstall source of truth (parse it back), not a live system scan | Reinstall is about restoring a captured snapshot to a new/wiped machine; parsing the emitted plain-text sections closes the catalog→restore loop | ✓ Good — v2.1.0 |
 | Preserve the mas App Store ID in the catalog (`AppName (version) [id]`) so mas can be auto-installed | `mas install` needs the numeric ID, which the collector currently discards; without it mas auto-install is impossible. Go-forward only (old catalogs lack it → checklist fallback). No parity suite to break (retired v2.0.0) | ✓ Good — v2.1.0 |
+| Extract a shared `ChromiumBaseCollector`; Chrome/Edge/Brave become thin subclasses | Edge + Brave + Chrome = 3 real Chromium examples (the rule-of-three for abstraction); one profile-walk + name-resolution + denylist path instead of three copies, with per-browser denylists as the only override | ✓ Good — v2.2.0 (Chrome left byte-identical; `test_chrome.py` patches retargeted to the base) |
+| Edge component-ID denylist ships as the Chrome baseline + a documented gap | Microsoft publishes no canonical Edge component-ID list; the Chrome baseline covers the shared components, and a real-Edge verification is deferred rather than blocking the milestone | ✓ Accepted gap — v2.2.0 (documented in `EDGE_COMPONENT_DENYLIST`) |
+| Safari extensions enumerated via `pluginkit` + per-`.appex` `Info.plist`, each step never-raising | `pluginkit` is the only enumeration path for sandboxed Safari web-extensions; it's undocumented and output varies, so each plist read is individually wrapped and a live smoke test gates the phase | ✓ Good — v2.2.0 (validated against real output; Bitwarden smoke test) |
+| Codex Plugins is identity-only and never reads plugin bundle files (e.g. `.mcp.json`) | FMT-03 secret-safety — plugin bundles can carry credentials; emit name + id only, degrading to `(none found)` on Codex versions without a plugin system | ✓ Good — v2.2.0 (text-grep `config.toml` headers only; `(none found)` on v0.46.0) |
 
 ## Evolution
 
@@ -285,4 +295,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-16 — started milestone v2.2.0 Broader Coverage: catalog Edge / Brave / Zed / Safari extensions (BRW-01) and a Codex Plugins section (CDX-02). Additive coverage; existing sections + reinstall pipeline unchanged.*
+*Last updated: 2026-06-17 — shipped & archived milestone v2.2.0 Broader Coverage: Edge / Brave / Zed / Safari extension cataloging (BRW-01..04) and a Codex Plugins section (CDX-02). Catalog now emits 22 sections from 16 collectors; existing sections + reinstall pipeline unchanged. No active milestone.*

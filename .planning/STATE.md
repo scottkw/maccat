@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.2.0
 milestone_name: Broader Coverage
 status: Awaiting next milestone
-stopped_at: context exhaustion at 75% (2026-06-17)
-last_updated: "2026-06-17T21:22:23.022Z"
-last_activity: 2026-06-17 — Milestone v2.2.0 completed and archived
+stopped_at: v2.2.0 close doc-polish + cleanup complete; only user-gated push remains (2026-06-18)
+last_updated: "2026-06-18T00:00:00.000Z"
+last_activity: 2026-06-18 — v2.2.0 close finished (PROJECT/RETROSPECTIVE evolved, phase dirs archived)
 progress:
   total_phases: 3
   completed_phases: 3
@@ -87,29 +87,19 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-17
-Stopped at: v2.2.0 SHIPPED — milestone audit PASSED (5/5), complete-milestone done (archived,
-  REQUIREMENTS.md removed, tag v2.2.0 created local), tree clean, 628 tests green. Paused before
-  finishing doc-polish (context limit). Cleared context here.
-Resume file: None — resume checklist is below under "Operator Next Steps".
+Last session: 2026-06-18
+Stopped at: v2.2.0 SHIPPED — milestone audit PASSED (5/5), complete-milestone done. Doc-polish now
+  COMPLETE: PROJECT.md evolved (v2.2.0 → Shipped Milestones + Current State; BRW-01..04 + CDX-02 →
+  Validated; key decisions logged), RETROSPECTIVE.md v2.2.0 section + trends row added, phase dirs
+  27/28/29 archived → milestones/v2.2.0-phases/. Tag v2.2.0 still LOCAL ONLY. 628 tests green.
+Resume file: None — only the user-gated push remains (see Operator Next Steps).
 
 ## Operator Next Steps
 
-**Resume v2.2.0 close — remaining DOC-POLISH only (no code/git-consistency work left):**
+**Doc-polish + cleanup DONE (2026-06-18). Only the outward-facing push remains:**
 
-1. **Evolve PROJECT.md** — it still lists "## Current Milestone: v2.2.0 Broader Coverage" as ACTIVE.
-   Flip it: add a v2.2.0 bullet to "## Shipped Milestones", replace the Current Milestone section
-   with a "## Current State" (no active milestone), move BRW-01/BRW-02/BRW-03/BRW-04 + CDX-02 from
-   Active → Validated (`- ✓ … — v2.2.0`), drop the now-shipped items from "Next Candidate Milestones",
-   and update the footer. (Mirror exactly how v2.1.0 was evolved in PROJECT.md.)
-2. **RETROSPECTIVE.md** — append a "## Milestone: v2.2.0 — Broader Coverage" section (what built /
-   worked / inefficient / patterns / lessons) before "## Cross-Milestone Trends"; add a v2.2.0 row to
-   the trends table. (Note the two process incidents: gsd-sdk npx-cache eviction; the Phase 29
-   stale-worktree near-clobber.)
-3. **Phase-dir cleanup** — run /gsd-cleanup to archive .planning/phases/27,28,29 →
-   milestones/v2.2.0-phases/ (it dry-runs + asks before moving). All earlier milestones already archived.
-4. **Push (user-gated, outward-facing)** — tag `v2.2.0` is LOCAL ONLY. `git push && git push origin
-   v2.2.0` publishes the GitHub Release; the FIXED release.yml now stamps __version__/pyproject from
+1. **Push (user-gated, outward-facing)** — tag `v2.2.0` is LOCAL ONLY. `git push && git push origin
+   v2.2.0` publishes the GitHub Release; the FIXED release.yml stamps __version__/pyproject from
    the tag, so the released maccat.pyz will report `maccat 2.2.0` (no manual bump needed). Do NOT push
    without the user; pushing the tag triggers the public release.
 

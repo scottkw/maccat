@@ -267,6 +267,64 @@ via a surgical two-point dispatch that leaves the 13-step gen path untouched (RS
   self-correction); one venv-pollution diagnosis cycle; zero human interventions beyond grey-area
   acceptance.
 
+## Milestone: v2.2.0 — Broader Coverage
+
+**Shipped:** 2026-06-17
+**Phases:** 3 (27-29) | **Plans:** 5
+
+### What Was Built
+Five new catalog sections, all additive and stdlib-only, taking the catalog from 17 to 22 sections
+(16 collectors). A new `ChromiumBaseCollector` (`collectors/chromium.py`) factors out the shared
+profile-walk, `__MSG_`/`_locales` name resolution, and component-denylist filter; `ChromeCollector`
+becomes a thin subclass (left byte-identical), and `EdgeCollector` (BRW-01) + `BraveCollector`
+(BRW-02) join it with per-browser denylists. `ZedCollector` (BRW-03) reads `Zed/extensions/index.json`
+filtering `dev` entries; `SafariCollector` (BRW-04) shells to `pluginkit -p com.apple.Safari.web-extension`
+and reads each `.appex` `Info.plist`, every step never-raising; `CodexCollector` gains a second
+identity-only "Codex Plugins" section (CDX-02). All five fall through the unchanged reinstall pipeline
+to the manual checklist (zero `reinstall/` changes).
+
+### What Worked
+- The rule-of-three paid off: with Chrome + Edge + Brave as three real Chromium examples, extracting
+  `ChromiumBaseCollector` was a clean abstraction rather than speculation, and retargeting the existing
+  `test_chrome.py` patches to the base proved Chrome stayed byte-identical.
+- Coarse phase ordering by risk (independent low-risk Codex/Zed first, the shared-collector refactor
+  in the middle, highest-failure-mode Safari last and isolated) meant the riskiest work could have
+  been deferred without blocking anything before it.
+- The live `pluginkit` smoke test (Bitwarden) gated the Safari phase against an undocumented tool whose
+  output format isn't guaranteed stable — static review alone would not have validated the parse.
+- The code-review + auto-fix loop again earned its cost: caught two never-raising gaps (codex subprocess
+  `OSError`, Zed non-object JSON) and a wrong Safari name-fallback chain.
+
+### What Was Inefficient
+- A Phase 29 executor worktree forked from a base predating Phases 27/28 and would have clobbered the
+  canonical 27/28 files on merge; caught only during merge inspection, and the Safari work had to be
+  reconstructed surgically on main. The recurring worktree-staleness failure mode (see v2.1.0) bit again
+  in a more dangerous form — near data-loss rather than just a venv repoint.
+- A mid-run `gsd-sdk` npx-cache eviction interrupted the flow and required reinstalling GSD (1.42.3)
+  before continuing — external-toolchain fragility, not a project defect, but a real cost.
+
+### Patterns Established
+- **Rule-of-three abstraction with byte-parity proof** — extract a base only when a third real example
+  exists, and prove the incumbent subclass is unchanged by retargeting its existing tests at the base.
+- **Live smoke test as a phase gate for undocumented external tools** — when output format isn't
+  contractually stable (`pluginkit`), validate against real output before closing the phase.
+- **Identity-only collection for secret-bearing sources** — Codex plugins emit name + id only and never
+  read plugin bundle files, extending the FMT-03 discipline to a new source.
+
+### Key Lessons
+- Worktree base-staleness is now a repeat offender across two milestones; merge inspection caught a
+  near-clobber this time, but the pattern needs a guard (verify the worktree base is current before
+  trusting a merge), not just vigilance.
+- A shared-collector refactor is only safe to call "no behavior change" when the incumbent's own tests
+  run green against the refactored base — assertion, not assumption.
+
+### Cost Observations
+- Model mix: Opus orchestration; Sonnet subagents throughout. Largely autonomous discuss→plan→execute
+  per phase.
+- Notable: 3 per-phase code-review auto-fix loops (converged clean); one stale-worktree near-clobber
+  recovery (surgical reconstruction on main); one `gsd-sdk` npx-cache reinstall. 628 tests green;
+  ruff + mypy --strict clean.
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Verification | Notable |
@@ -279,3 +337,4 @@ via a surgical two-point dispatch that leaves the 13-step gen path untouched (RS
 | v1.1.0 | 3 | 6 | 3/3 passed | Extracted code to a public repo from fresh history; CI `.pyz` build + tag-Release; human checkpoint caught a private-host leak the plan missed |
 | v2.0.0 | 3 | 8 | 3/3 passed | Single `--computer` flag; versioned catalog; retired the zsh reference + parity gate; plan-checker killed a false-premise plan; review caught a Critical never-raises bug; recovered from an executor API crash |
 | v2.1.0 | 3 | 4 | 3/3 passed | `maccat reinstall` (catalog→reviewable reinstall.sh); review caught a real `set -Eeuo pipefail` BLOCKER unit tests missed + a broken `--computer` flag; runtime-execution tests + two-point dispatch established; worktree editable-`.pth` pollution diagnosed & captured |
+| v2.2.0 | 3 | 5 | 3/3 passed | 5 new sections (Edge/Brave/Zed/Safari + Codex plugins), 17→22 sections; rule-of-three `ChromiumBaseCollector` extraction with Chrome byte-parity; live `pluginkit` smoke test gated Safari; stale-worktree near-clobber caught at merge & reconstructed on main; `gsd-sdk` npx-cache eviction recovered |
