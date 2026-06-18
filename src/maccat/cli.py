@@ -37,6 +37,7 @@ def _build_parser() -> argparse.ArgumentParser:
       config init      Interactive first-run setup.
       config show      Print effective config with source annotation.
       reinstall        Generate reinstall.sh from a catalog.
+      convert          Convert a legacy .txt catalog to .md format.
     """
     from maccat import __version__
 
@@ -140,6 +141,30 @@ def _build_parser() -> argparse.ArgumentParser:
             "`maccat --computer NAME reinstall`; the value after the "
             "subcommand takes precedence if both are given)"
         ),
+    )
+
+    convert_parser = subparsers.add_parser(
+        "convert",
+        help="Convert a legacy .txt catalog to .md format",
+    )
+    convert_parser.add_argument(
+        "--from",
+        metavar="PATH",
+        dest="from_path",
+        required=True,
+        help="Legacy .txt catalog file to convert",
+    )
+    # WR-03: default=argparse.SUPPRESS on --no-commit prevents the subparser's
+    # False from unconditionally clobbering a top-level --no-commit True set
+    # before the subcommand token (e.g. `maccat --no-commit convert --from ...`).
+    # SUPPRESS makes the subparser leave the attribute untouched unless --no-commit
+    # is actually supplied after the subcommand token.
+    convert_parser.add_argument(
+        "--no-commit",
+        action="store_true",
+        dest="no_commit",
+        default=argparse.SUPPRESS,
+        help="Perform file operations without git commit",
     )
 
     return parser
@@ -252,6 +277,15 @@ def run() -> None:
             sys.exit("ERROR: --rename cannot be combined with the 'reinstall' subcommand.")
         from maccat.reinstall.cli import run_reinstall
         run_reinstall(args)
+        return
+
+    # ------------------------------------------------------------------
+    # 4b-ii. Convert dispatch (early exit — repo-agnostic, like reinstall --from)
+    #        Must run before resolve_catalog_repo.
+    # ------------------------------------------------------------------
+    if args.subcommand == "convert":
+        from maccat.convert import run_convert
+        run_convert(args)
         return
 
     # ------------------------------------------------------------------
