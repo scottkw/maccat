@@ -11,6 +11,7 @@
 - ✅ **v2.0.0 Standalone maccat — CLI Cleanup & Versioned Catalog** — Phases 21-23 (shipped 2026-06-16) — [archive](milestones/v2.0.0-ROADMAP.md)
 - ✅ **v2.1.0 Reinstall from Catalog** — Phases 24-26 (shipped 2026-06-16) — [archive](milestones/v2.1.0-ROADMAP.md)
 - ✅ **v2.2.0 Broader Coverage** — Phases 27-29 (shipped 2026-06-17) — [archive](milestones/v2.2.0-ROADMAP.md)
+- 🚧 **v3.0.0 Markdown Catalog Format** — Phases 30-32 (in progress)
 
 ## Phases
 
@@ -83,13 +84,13 @@ Full details: [milestones/v0.49.0-ROADMAP.md](milestones/v0.49.0-ROADMAP.md)
 <details>
 <summary>✅ v1.0.0 Python Port & Distribution (Phases 13-17) — SHIPPED 2026-06-14</summary>
 
-Full phase detail: [milestones/v1.0.0-ROADMAP.md](milestones/v1.0.0-ROADMAP.md)
-
 - [x] Phase 13: Package Foundation + Output Format (3/3 plans) — completed 2026-06-14
 - [x] Phase 14: Config, Identity & Retention (4/4 plans) — completed 2026-06-14
 - [x] Phase 15: Collectors (8/8 plans) — completed 2026-06-15
 - [x] Phase 16: Git, CLI & Distribution (3/3 plans) — completed 2026-06-15
 - [x] Phase 17: Parity & Safety Tests (3/3 plans) — completed 2026-06-15
+
+Full details: [milestones/v1.0.0-ROADMAP.md](milestones/v1.0.0-ROADMAP.md)
 
 </details>
 
@@ -107,36 +108,66 @@ Full details: [milestones/v1.1.0-ROADMAP.md](milestones/v1.1.0-ROADMAP.md)
 <details>
 <summary>✅ v2.0.0 Standalone maccat — CLI Cleanup & Versioned Catalog (Phases 21-23) — SHIPPED 2026-06-16</summary>
 
-Full phase details archived in [milestones/v2.0.0-ROADMAP.md](milestones/v2.0.0-ROADMAP.md).
-
 - [x] Phase 21: CLI Cleanup (2/2 plans) — completed 2026-06-16
 - [x] Phase 22: Versioned Catalog (3/3 plans) — completed 2026-06-16
 - [x] Phase 23: Retire the zsh Reference (3/3 plans) — completed 2026-06-16
 
+Full details: [milestones/v2.0.0-ROADMAP.md](milestones/v2.0.0-ROADMAP.md)
+
 </details>
 
-### v2.1.0 Reinstall from Catalog (Phases 24-26)
+### 🚧 v3.0.0 Markdown Catalog Format (Phases 30-32)
 
-- [x] **Phase 24: Catalog Format Fix + Parser Foundation** — MasCollector emits App Store ID; reverse parser with round-trip contract test (completed 2026-06-16)
-- [x] **Phase 25: Script Emitter** — All auto-install renderers (brew/mas/extensions) + manual checklist + script structure + injection safety (completed 2026-06-16)
-- [x] **Phase 26: Picker + CLI Wiring + Integration** — `--from`/interactive picker + `maccat reinstall` subcommand wired into `cli.py` (completed 2026-06-16)
+**Milestone Goal:** Replace the plain-text catalog format with rendered markdown (`.md`) — YAML
+frontmatter + per-section `Name | Version | ID` tables — re-lock the catalog→reinstall round-trip
+against the new markdown format, and add a `convert --from PATH` command to upgrade legacy `.txt`
+catalogs in place. Breaking format change (precedent: v2.0.0). Format-only: the 22 catalog sections
+and the data they collect are unchanged.
 
-### v2.2.0 Broader Coverage (Phases 27-29)
-
-- [x] **Phase 27: Codex Plugins + Zed Extensions** — New "Codex Plugins" section on CodexCollector; new ZedCollector; section-title uniqueness test (completed 2026-06-17)
-- [x] **Phase 28: Chromium Refactor + Edge + Brave** — Extract ChromiumBaseCollector; Chrome becomes thin subclass (output byte-unchanged); Edge + Brave thin subclasses (completed 2026-06-17)
-- [x] **Phase 29: Safari Extensions** — SafariCollector via pluginkit + plistlib; CFBundleDisplayName; never-raising per-extension chain (completed 2026-06-17)
+- [ ] **Phase 30: Markdown Emitter & `.md` Plumbing** - Generation emits `.md` (frontmatter + per-section tables); retention/filename/git all move `.txt` → `.md`
+- [ ] **Phase 31: Markdown-Only Reinstall Parser** - `reinstall/parser.py` parses the markdown tables; round-trip re-locked against the emitter; legacy `.txt` fails with a convert directive
+- [ ] **Phase 32: Convert Command** - `maccat convert --from PATH` reads a legacy `.txt` via the retained text parser and rewrites it as `.md`, replacing + committing in one commit
 
 ## Phase Details
 
-> All shipped phases are complete — full details in the per-milestone archives:
-> [v2.1.0](milestones/v2.1.0-ROADMAP.md) (Phases 24–26) and
-> [v2.2.0](milestones/v2.2.0-ROADMAP.md) (Phases 27–29). No active milestone.
+### Phase 30: Markdown Emitter & `.md` Plumbing
+**Goal**: Catalog generation produces a rendered markdown `.md` snapshot — YAML frontmatter provenance, a `#` title, and one `##` per-source section rendering items as a uniform `Name | Version | ID` table — and every `.txt`-keyed file behavior (filename pattern, newest-per-computer retention, archive pruning, git staging) moves to `.md`.
+**Depends on**: Nothing (first phase of milestone; builds on the existing `catalog/format.py` emitter and 16 collectors, unchanged data)
+**Requirements**: MD-01, MD-02, MD-03, MD-04, MD-05, FILE-01, FILE-02
+**Success Criteria** (what must be TRUE):
+  1. A catalog run writes `mac-software-list-[computer]-YYYYMMDDHHMMSS.md` (not `.txt`); the file opens with a YAML frontmatter block carrying computer, hostname, generated timestamp, and maccat version, followed by a `#` title.
+  2. Every one of the 22 sources renders as a `##` heading with a three-column `Name | Version | ID` markdown table; a missing version or ID renders an empty cell, and a source with no items renders `(none found)` under its heading.
+  3. Two consecutive runs produce byte-identical `.md` output (deterministic, stably sorted), and a secret-scan of the output finds zero MCP/AI-CLI credentials — entries stay identity-only (FMT-01 / FMT-03 / FMT-04 upheld).
+  4. Newest-per-computer retention and age-based archive pruning operate on `.md` catalogs only — the `.txt` glob is replaced, not duplicated — and a stray legacy `.txt` is left untouched by retention.
+  5. The git pull → generate → commit/push cycle stages `.md` additions, archive moves, and deletions in one commit, and `--no-commit` performs all file operations while skipping git.
+**Plans**: TBD
+
+### Phase 31: Markdown-Only Reinstall Parser
+**Goal**: `reinstall/parser.py` reads the new markdown format (frontmatter + per-section tables) back into the typed `ParsedCatalog`, with the parser ↔ markdown-emitter round-trip re-locked by the contract test; `maccat reinstall` consumes markdown only and refuses legacy `.txt` with a clear convert directive.
+**Depends on**: Phase 30 (the markdown emitter is the round-trip anchor the parser inverts)
+**Requirements**: RIN-01, RIN-02
+**Success Criteria** (what must be TRUE):
+  1. `reinstall/parser.py` parses a markdown catalog's frontmatter + per-section `Name | Version | ID` tables into the typed `ParsedCatalog`, preserving each item's name / version / ID across the 22 sections.
+  2. A round-trip contract test asserts emitter → parser is lossless against the markdown emitter from Phase 30 (the v2.1.0 plain-text round-trip lock is replaced, not duplicated).
+  3. `maccat reinstall` against a `.md` catalog generates the same reviewable `reinstall.sh` as before (deterministic auto-install lines + manual checklist), never auto-executed.
+  4. `maccat reinstall` handed a legacy `.txt` catalog fails with a clear message directing the user to `convert` it first — no silent partial parse and nothing executed.
+**Plans**: TBD
+
+### Phase 32: Convert Command
+**Goal**: `maccat convert --from PATH` upgrades a single legacy plain-text `.txt` catalog to the new markdown `.md` format — reading it via the retained legacy text parser, rewriting its full contents through the Phase 30 markdown emitter, replacing the original in place, and staging both changes in one commit.
+**Depends on**: Phase 30 (reuses the markdown emitter) and Phase 31 (markdown format and the retained legacy text parser are both stable)
+**Requirements**: CONV-01, CONV-02, CONV-03
+**Success Criteria** (what must be TRUE):
+  1. `maccat convert --from PATH` reads a legacy `.txt` catalog via the retained text parser and writes a `.md` whose every section and every item's name / version / ID matches the source — round-trip-equivalent to a freshly generated markdown catalog.
+  2. convert replaces the original in place: it writes the `.md`, removes the old `.txt`, and stages both changes in a single commit; `--no-commit` performs the file operations without touching git.
+  3. convert degrades gracefully on malformed or partial legacy input — it warns and skips unparseable content rather than aborting or fabricating data — and never executes anything.
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-v2.2.0 phases execute in numeric order: 27 → 28 → 29 (phases 24–26 shipped in v2.1.0)
+v3.0.0 phases execute in numeric order: 30 → 31 → 32 (the markdown emitter in 30 anchors both the
+reinstall parser round-trip in 31 and the convert rewrite in 32).
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -163,9 +194,12 @@ v2.2.0 phases execute in numeric order: 27 → 28 → 29 (phases 24–26 shipped
 | 21. CLI Cleanup | v2.0.0 | 2/2 | Complete | 2026-06-16 |
 | 22. Versioned Catalog | v2.0.0 | 3/3 | Complete | 2026-06-16 |
 | 23. Retire the zsh Reference | v2.0.0 | 3/3 | Complete | 2026-06-16 |
-| 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 2/2 | Complete    | 2026-06-16 |
-| 25. Script Emitter | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
-| 26. Picker + CLI Wiring + Integration | v2.1.0 | 1/1 | Complete    | 2026-06-16 |
-| 27. Codex Plugins + Zed Extensions | v2.2.0 | 2/2 | Complete    | 2026-06-17 |
-| 28. Chromium Refactor + Edge + Brave | v2.2.0 | 2/2 | Complete    | 2026-06-17 |
-| 29. Safari Extensions | v2.2.0 | 1/1 | Complete    | 2026-06-17 |
+| 24. Catalog Format Fix + Parser Foundation | v2.1.0 | 2/2 | Complete | 2026-06-16 |
+| 25. Script Emitter | v2.1.0 | 1/1 | Complete | 2026-06-16 |
+| 26. Picker + CLI Wiring + Integration | v2.1.0 | 1/1 | Complete | 2026-06-16 |
+| 27. Codex Plugins + Zed Extensions | v2.2.0 | 2/2 | Complete | 2026-06-17 |
+| 28. Chromium Refactor + Edge + Brave | v2.2.0 | 2/2 | Complete | 2026-06-17 |
+| 29. Safari Extensions | v2.2.0 | 1/1 | Complete | 2026-06-17 |
+| 30. Markdown Emitter & `.md` Plumbing | v3.0.0 | 0/TBD | Not started | - |
+| 31. Markdown-Only Reinstall Parser | v3.0.0 | 0/TBD | Not started | - |
+| 32. Convert Command | v3.0.0 | 0/TBD | Not started | - |

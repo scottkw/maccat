@@ -78,28 +78,28 @@ Explicitly excluded for v3.0.0. Documented to prevent scope creep.
 
 ## Traceability
 
-Populated during roadmap creation.
+Mapped during roadmap creation (Phases 30-32; coarse granularity).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MD-01 | TBD | Pending |
-| MD-02 | TBD | Pending |
-| MD-03 | TBD | Pending |
-| MD-04 | TBD | Pending |
-| MD-05 | TBD | Pending |
-| FILE-01 | TBD | Pending |
-| FILE-02 | TBD | Pending |
-| CONV-01 | TBD | Pending |
-| CONV-02 | TBD | Pending |
-| CONV-03 | TBD | Pending |
-| RIN-01 | TBD | Pending |
-| RIN-02 | TBD | Pending |
+| MD-01 | Phase 30 | Pending |
+| MD-02 | Phase 30 | Pending |
+| MD-03 | Phase 30 | Pending |
+| MD-04 | Phase 30 | Pending |
+| MD-05 | Phase 30 | Pending |
+| FILE-01 | Phase 30 | Pending |
+| FILE-02 | Phase 30 | Pending |
+| RIN-01 | Phase 31 | Pending |
+| RIN-02 | Phase 31 | Pending |
+| CONV-01 | Phase 32 | Pending |
+| CONV-02 | Phase 32 | Pending |
+| CONV-03 | Phase 32 | Pending |
 
 **Coverage:**
 - v1 requirements: 12 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 12 ⚠️ (resolved by roadmapper)
+- Mapped to phases: 12 (Phase 30: 7, Phase 31: 2, Phase 32: 3)
+- Unmapped: 0 ✓ — 100% coverage, no orphans, no duplicates
 
 ---
 *Requirements defined: 2026-06-18*
-*Last updated: 2026-06-18 after initial definition*
+*Last updated: 2026-06-18 — traceability populated by roadmapper (Phases 30-32)*
