@@ -141,7 +141,7 @@ def discover_computer_folders(catalog_repo: Path) -> list[str]:
 
     Two sources, merged (update-list.sh lines 344–394, 644–686):
     a) Top-level dirs in catalog_repo that contain at least one
-       ``mac-software-list-*.txt`` file.
+       ``mac-software-list-*.md`` file.
     b) machine column values from machine-labels.tsv (skips comment lines,
        blank lines, and lines without a TAB separator).
 
@@ -155,7 +155,7 @@ def discover_computer_folders(catalog_repo: Path) -> list[str]:
     for d in sorted(catalog_repo.iterdir()):
         if not d.is_dir():
             continue
-        if any(d.glob("mac-software-list-*.txt")):
+        if any(d.glob("mac-software-list-*.md")):
             if d.name not in seen:
                 computers.append(d.name)
                 seen.add(d.name)
@@ -546,7 +546,7 @@ def rename_machine(catalog_repo: Path, *, auto_commit: bool = False) -> None:
         for rewrite_dir in rewrite_dirs:
             if not rewrite_dir.is_dir():
                 continue
-            for file_path in rewrite_dir.glob("mac-software-list-*.txt"):
+            for file_path in rewrite_dir.glob("mac-software-list-*.md"):
                 if not file_path.is_file():
                     continue
                 cf = parse_catalog_filename(file_path.name)

@@ -41,14 +41,14 @@ def _touch_catalog(directory: Path, machine: str, timestamp: str) -> Path:
 def test_prune_skips_unparseable_filename(tmp_path: Path) -> None:
     """INVARIANT (a): prune_old_archives NEVER deletes files with unparseable timestamps.
 
-    WR-03: the filename MUST match the ``mac-software-list-*.txt`` glob
+    WR-03: the filename MUST match the ``mac-software-list-*.md`` glob
     (retention.py:118) but fail ``parse_catalog_filename`` so the ``cf is None``
     safety-skip branch (retention.py:122-125) actually runs. The previous fixture
     name ``old-notes.txt`` did not match the glob at all, so it survived because it
     was invisible to prune — NOT because the safety skip fired. That made the
     invariant assertion vacuous.
 
-    ``mac-software-list-[alpha]-2026.txt`` matches the glob (prefix + ``.txt``)
+    ``mac-software-list-[alpha]-2026.md`` matches the glob (prefix + ``.md``)
     but its timestamp is only 4 digits, so the 14-digit-timestamp regex in
     parse_catalog_filename returns None — exercising the real skip branch.
 
@@ -57,7 +57,7 @@ def test_prune_skips_unparseable_filename(tmp_path: Path) -> None:
     archive = tmp_path / "archive"
     archive.mkdir()
     # Matches the prune glob but has an unparseable (non-14-digit) timestamp.
-    weird = archive / "mac-software-list-[alpha]-2026.txt"
+    weird = archive / "mac-software-list-[alpha]-2026.md"
     weird.write_text("important notes", encoding="utf-8")
 
     with patch("maccat.retention.cutoff_yyyymmdd", return_value="20260601"):
