@@ -172,17 +172,23 @@ class TestRunReinstall:
 
     @pytest.fixture()
     def fixture_catalog(self, tmp_path: Path) -> Path:
-        """Minimal valid catalog file in tmp_path."""
+        """Minimal valid markdown catalog file in tmp_path."""
         content = (
-            "Installed Mac Software List\n"
-            "------------------------------------\n"
-            "\n"
-            "Homebrew Packages\n"
-            "------------------------------------\n"
-            "wget (1.21.3)\n"
-            "\n"
+            '---\n'
+            'computer: "TestMac"\n'
+            'hostname: "test-mac.local"\n'
+            'generated: "2026-06-18T12:34:56"\n'
+            'maccat_version: "2.1.0"\n'
+            '---\n'
+            '# Installed Mac Software List\n'
+            '\n'
+            '## Homebrew Packages\n'
+            '| Name | Version | ID |\n'
+            '| --- | --- | --- |\n'
+            '| wget | 1.21.3 |   |\n'
+            '\n'
         )
-        catalog = tmp_path / "mac-software-list-[TestMac]-20260616120000.txt"
+        catalog = tmp_path / "mac-software-list-[TestMac]-20260616120000.md"
         catalog.write_text(content, encoding="utf-8")
         return catalog
 
