@@ -1,6 +1,8 @@
 """Tests for maccat.catalog.markdown — locks render_markdown_catalog correctness."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from maccat.catalog.markdown import render_markdown_catalog
@@ -322,9 +324,7 @@ class TestDeterminism:
 
 
 class TestWriteRaw:
-    def test_write_raw_writes_content(self, tmp_path: "Path") -> None:  # type: ignore[name-defined]
-        from pathlib import Path
-
+    def test_write_raw_writes_content(self, tmp_path: Path) -> None:
         from maccat.catalog.writer import CatalogWriter
 
         output = tmp_path / "catalog.md"
@@ -333,17 +333,15 @@ class TestWriteRaw:
             w.write_raw(content)
         assert output.read_text(encoding="utf-8") == content
 
-    def test_write_raw_assert_guard(self, tmp_path: "Path") -> None:  # type: ignore[name-defined]
+    def test_write_raw_assert_guard(self, tmp_path: Path) -> None:
         from maccat.catalog.writer import CatalogWriter
 
         w = CatalogWriter(tmp_path / "catalog.md")
         with pytest.raises(AssertionError, match="write_raw called outside context manager"):
             w.write_raw("content")
 
-    def test_write_raw_atomic(self, tmp_path: "Path") -> None:  # type: ignore[name-defined]
+    def test_write_raw_atomic(self, tmp_path: Path) -> None:
         """On exception, write_raw must not leave a partial file."""
-        from pathlib import Path
-
         from maccat.catalog.writer import CatalogWriter
 
         output = tmp_path / "catalog.md"
