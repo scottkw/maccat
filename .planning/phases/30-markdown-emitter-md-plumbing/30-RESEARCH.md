@@ -686,17 +686,19 @@ dependencies. The Package Legitimacy Gate protocol does not apply.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **`__version__` bump timing**
+1. **`__version__` bump timing** — RESOLVED
    - What we know: `__init__.py` currently reads `2.1.0`; v3.0.0 is the milestone.
    - What's unclear: Does the version bump (`2.1.0` → `3.0.0`) happen in Phase 30, Phase 32 (after all three phases complete), or as a separate release step?
    - Recommendation: Leave `__version__` at `2.1.0` during Phase 30. The planner should create a separate task for the version bump — it belongs in a release phase after all three phases are verified, not woven into the format change.
+   - **RESOLVED:** Plans do NOT bump `__version__` in Phase 30; the version bump is deferred to a release step after Phase 32. The markdown frontmatter's `maccat_version` simply reflects whatever `__version__` is at run time.
 
-2. **`test_safety_invariants.py` glob update**
+2. **`test_safety_invariants.py` glob update** — RESOLVED
    - What we know: `test_safety_invariants.py` uses `make_catalog_filename()` (auto-inherits `.md`) and `prune_old_archives()` (inherits `.md` via `retention.py` change).
    - What's unclear: Line 60 in `test_safety_invariants.py` creates a file named `mac-software-list-[alpha]-2026.txt` literally (not via `make_catalog_filename`) specifically to test that the `.txt` file passes the glob but fails the timestamp parse. After the change to `.md`, this file name would NOT match the `.md` glob — the test's premise changes.
    - Recommendation: The planner should include a task to update `test_safety_invariants.py::test_prune_skips_unparseable_filename` to use `mac-software-list-[alpha]-2026.md` as the malformed file (4-digit timestamp, matches glob but fails `parse_catalog_filename`).
+   - **RESOLVED:** Plan 30-02 Task 2 updates the literal filename at line 60 to `mac-software-list-[alpha]-2026.md` so the glob-matching-but-unparseable invariant still fires.
 
 ---
 
