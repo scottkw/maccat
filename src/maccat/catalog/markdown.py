@@ -74,12 +74,13 @@ def _yaml_quote(value: str) -> str:
 
 
 def _escape_cell(value: str) -> str:
-    """Escape literal pipe characters in a table cell value.
+    """Escape backslashes and pipe characters in a table cell value.
 
+    Backslash must be escaped first so that the newly introduced backslashes
+    from pipe-escaping are not double-escaped on a second pass.
     A bare "|" in a cell breaks the markdown table column structure.
-    Every "|" is replaced with "\\|" so the table renders correctly.
     """
-    return value.replace("|", r"\|")
+    return value.replace("\\", "\\\\").replace("|", r"\|")
 
 
 def _parse_columns(line: str) -> tuple[str, str, str]:

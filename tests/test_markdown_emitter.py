@@ -183,6 +183,38 @@ class TestPipeEscaping:
         assert data_rows[0].startswith("| ")
         assert data_rows[0].endswith(" |")
 
+    def test_backslash_in_cell_is_escaped(self) -> None:
+        """Regression for WR-01: a literal backslash in a cell value must be escaped.
+
+        Without escaping backslash first, a cell value like 'a\\|b' would become
+        'a\\\\|b' after pipe-escaping — the '\\\\' renders as a literal backslash and
+        the following '|' becomes a bare column delimiter, breaking the table.
+        """
+        section = Section("Test", ["a\\b (1.0)"], raw=True)
+        result = _render(section)
+        # The backslash must be doubled in the rendered cell
+        assert r"a\\b" in result
+
+    def test_backslash_pipe_in_cell_does_not_split_column(self) -> None:
+        """Regression for WR-01: a literal '\\|' sequence must not act as a column delimiter.
+
+        The correct output escapes backslash first ('\\\\') then the pipe ('\\|'),
+        yielding '\\\\\\|' — which CommonMark renders as a literal backslash followed
+        by a literal pipe character, with no column split.
+        """
+        # A cell value that is exactly backslash + pipe
+        section = Section("Test", ["a\\|b (1.0)"], raw=True)
+        result = _render(section)
+        lines = result.splitlines()
+        data_rows = [ln for ln in lines if ln.startswith("| ") and "a" in ln and "b" in ln]
+        # There must be exactly one data row — no phantom column split
+        assert len(data_rows) == 1, (
+            f"Expected 1 data row, got {len(data_rows)}: {data_rows}"
+        )
+        # The row must start and end with | (table structure intact)
+        assert data_rows[0].startswith("| ")
+        assert data_rows[0].endswith(" |")
+
 
 # ---------------------------------------------------------------------------
 # TestEmptySections
