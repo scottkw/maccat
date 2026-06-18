@@ -1,6 +1,6 @@
 """Catalog filename parse and generate utilities.
 
-Filename convention: mac-software-list-[{machine}]-{timestamp}.txt
+Filename convention: mac-software-list-[{machine}]-{timestamp}.md
   - machine: the computer-folder label (no brackets, no /, no tab/newline)
   - timestamp: 14-digit YYYYMMDDHHMMSS string
 
@@ -8,7 +8,7 @@ The regex is the exact Python equivalent of the zsh parameter expansion used
 in update-list.sh lines 964–965 and 982–983 to extract host and timestamp:
     local tmp="${filename#*[}"
     local host="${tmp%]-*}"
-    local ts=$(echo "$filename" | grep -oE '[0-9]{14}\\.txt$' | cut -c1-14)
+    local ts=$(echo "$filename" | grep -oE '[0-9]{14}\\.md$' | cut -c1-14)
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass
 
 _FILENAME_RE = re.compile(
-    r"^mac-software-list-\[(?P<machine>[^\[\]]+)\]-(?P<ts>\d{14})\.txt$"
+    r"^mac-software-list-\[(?P<machine>[^\[\]]+)\]-(?P<ts>\d{14})\.md$"
 )
 
 
@@ -66,6 +66,6 @@ def make_catalog_filename(machine: str, timestamp: str) -> str:
         timestamp: 14-digit YYYYMMDDHHMMSS string.
 
     Returns:
-        Catalog filename string, e.g. 'mac-software-list-[MyMac]-20260614120000.txt'.
+        Catalog filename string, e.g. 'mac-software-list-[MyMac]-20260614120000.md'.
     """
-    return f"mac-software-list-[{machine}]-{timestamp}.txt"
+    return f"mac-software-list-[{machine}]-{timestamp}.md"

@@ -38,7 +38,7 @@ def retain_newest_per_host(target_dir: Path) -> None:
     """Move all but the newest catalog(s) per host to target_dir/archive/.
 
     Two-pass algorithm (mirrors update-list.sh lines 942–1004):
-      Pass 1: Glob mac-software-list-*.txt in target_dir (NOT archive/).
+      Pass 1: Glob mac-software-list-*.md in target_dir (NOT archive/).
               For each file, parse via parse_catalog_filename.
               Unparseable → print warning and continue (never touch the file).
               Build newest: dict[machine, str] = max timestamp per machine.
@@ -61,7 +61,7 @@ def retain_newest_per_host(target_dir: Path) -> None:
 
     # Pass 1: determine newest timestamp per machine label
     newest: dict[str, str] = {}
-    for f in target_dir.glob("mac-software-list-*.txt"):
+    for f in target_dir.glob("mac-software-list-*.md"):
         if not f.is_file():
             continue
         cf = parse_catalog_filename(f.name)
@@ -72,7 +72,7 @@ def retain_newest_per_host(target_dir: Path) -> None:
             newest[cf.machine] = cf.timestamp
 
     # Pass 2: archive non-newest files; keep all tied-newest
-    for f in target_dir.glob("mac-software-list-*.txt"):
+    for f in target_dir.glob("mac-software-list-*.md"):
         if not f.is_file():
             continue
         cf = parse_catalog_filename(f.name)
@@ -93,7 +93,7 @@ def prune_old_archives(archive_dir: Path, archive_days: int) -> None:
     Prune algorithm (mirrors update-list.sh lines 1022–1064):
       Early return if archive_dir does not exist.
       Cutoff = cutoff_yyyymmdd(archive_days).
-      For each mac-software-list-*.txt in archive_dir:
+      For each mac-software-list-*.md in archive_dir:
         - Parse via parse_catalog_filename.
         - If None: print warning and continue — NEVER delete unparseable files.
         - Extract first 8 chars of timestamp (YYYYMMDD).
@@ -115,7 +115,7 @@ def prune_old_archives(archive_dir: Path, archive_days: int) -> None:
         return
 
     cutoff = cutoff_yyyymmdd(archive_days)
-    for f in archive_dir.glob("mac-software-list-*.txt"):
+    for f in archive_dir.glob("mac-software-list-*.md"):
         if not f.is_file():
             continue
         cf = parse_catalog_filename(f.name)
