@@ -156,7 +156,11 @@ Plans:
   2. A round-trip contract test asserts emitter → parser is lossless against the markdown emitter from Phase 30 (the v2.1.0 plain-text round-trip lock is replaced, not duplicated).
   3. `maccat reinstall` against a `.md` catalog generates the same reviewable `reinstall.sh` as before (deterministic auto-install lines + manual checklist), never auto-executed.
   4. `maccat reinstall` handed a legacy `.txt` catalog fails with a clear message directing the user to `convert` it first — no silent partial parse and nothing executed.
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 31-01-PLAN.md — parse_markdown_catalog + helpers in parser.py + TestMarkdownRoundTrip + TestMarkdownParserRefusal
+- [ ] 31-02-PLAN.md — Wire cli.py to parse_markdown_catalog + update .txt→.md fixtures in test_reinstall_cli.py + test_picker_and_reinstall_cli.py
 
 ### Phase 32: Convert Command
 **Goal**: `maccat convert --from PATH` upgrades a single legacy plain-text `.txt` catalog to the new markdown `.md` format — reading it via the retained legacy text parser, rewriting its full contents through the Phase 30 markdown emitter, replacing the original in place, and staging both changes in one commit.
@@ -165,7 +169,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. `maccat convert --from PATH` reads a legacy `.txt` catalog via the retained text parser and writes a `.md` whose every section and every item's name / version / ID matches the source — round-trip-equivalent to a freshly generated markdown catalog.
   2. convert replaces the original in place: it writes the `.md`, removes the old `.txt`, and stages both changes in a single commit; `--no-commit` performs the file operations without touching git.
-  3. convert degrades gracefully on malformed or partial legacy input — it warns and skips unparseable content rather than aborting or fabricating data — and never executes anything.
+  3. convert degrades gracefully on malformed or partial legacy input — it warns and skips unparseable content rather than aborting or fabricating data, and never executes anything.
 **Plans**: TBD
 
 ## Progress
@@ -206,5 +210,5 @@ reinstall parser round-trip in 31 and the convert rewrite in 32).
 | 28. Chromium Refactor + Edge + Brave | v2.2.0 | 2/2 | Complete | 2026-06-17 |
 | 29. Safari Extensions | v2.2.0 | 1/1 | Complete | 2026-06-17 |
 | 30. Markdown Emitter & `.md` Plumbing | v3.0.0 | 3/3 | Complete   | 2026-06-18 |
-| 31. Markdown-Only Reinstall Parser | v3.0.0 | 0/TBD | Not started | - |
+| 31. Markdown-Only Reinstall Parser | v3.0.0 | 0/2 | Not started | - |
 | 32. Convert Command | v3.0.0 | 0/TBD | Not started | - |
