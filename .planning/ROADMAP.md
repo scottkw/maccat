@@ -140,7 +140,12 @@ and the data they collect are unchanged.
   3. Two consecutive runs produce byte-identical `.md` output (deterministic, stably sorted), and a secret-scan of the output finds zero MCP/AI-CLI credentials — entries stay identity-only (FMT-01 / FMT-03 / FMT-04 upheld).
   4. Newest-per-computer retention and age-based archive pruning operate on `.md` catalogs only — the `.txt` glob is replaced, not duplicated — and a stray legacy `.txt` is left untouched by retention.
   5. The git pull → generate → commit/push cycle stages `.md` additions, archive moves, and deletions in one commit, and `--no-commit` performs all file operations while skipping git.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 30-01-PLAN.md — Markdown emitter module (catalog/markdown.py + write_raw + tests)
+- [ ] 30-02-PLAN.md — Glob/filename plumbing (naming.py + retention.py + identity.py + test updates)
+- [ ] 30-03-PLAN.md — CLI generate loop wiring + test_cli.py glob fixes
 
 ### Phase 31: Markdown-Only Reinstall Parser
 **Goal**: `reinstall/parser.py` reads the new markdown format (frontmatter + per-section tables) back into the typed `ParsedCatalog`, with the parser ↔ markdown-emitter round-trip re-locked by the contract test; `maccat reinstall` consumes markdown only and refuses legacy `.txt` with a clear convert directive.
@@ -200,6 +205,6 @@ reinstall parser round-trip in 31 and the convert rewrite in 32).
 | 27. Codex Plugins + Zed Extensions | v2.2.0 | 2/2 | Complete | 2026-06-17 |
 | 28. Chromium Refactor + Edge + Brave | v2.2.0 | 2/2 | Complete | 2026-06-17 |
 | 29. Safari Extensions | v2.2.0 | 1/1 | Complete | 2026-06-17 |
-| 30. Markdown Emitter & `.md` Plumbing | v3.0.0 | 0/TBD | Not started | - |
+| 30. Markdown Emitter & `.md` Plumbing | v3.0.0 | 0/3 | Planned | - |
 | 31. Markdown-Only Reinstall Parser | v3.0.0 | 0/TBD | Not started | - |
 | 32. Convert Command | v3.0.0 | 0/TBD | Not started | - |
