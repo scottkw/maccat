@@ -81,8 +81,15 @@ def run_convert(args: argparse.Namespace) -> None:
             f"Remove it first, then re-run: maccat convert --from {txt_path}"
         )
 
-    # 5. Parse the legacy .txt (never raises -- CONV-03: graceful degradation)
-    parsed = parse_catalog(txt_path)
+    # 5. Parse the legacy .txt. parse_catalog degrades gracefully on structural
+    # anomalies (name-only fallback; never raises on malformed lines -- CONV-03),
+    # but Path.read_text(encoding="utf-8") inside it still raises UnicodeDecodeError
+    # for non-UTF-8 bytes (e.g. a catalog written under a non-UTF-8 locale). Convert
+    # that into the clean ERROR convention instead of leaking a raw traceback.
+    try:
+        parsed = parse_catalog(txt_path)
+    except UnicodeDecodeError as exc:
+        sys.exit(f"ERROR: {txt_path} is not valid UTF-8 and cannot be converted: {exc}")
 
     # 6. Bridge: ParsedCatalog -> list[Section], skip header section.
     # The emitter writes "# Installed Mac Software List" as its own H1
@@ -117,8 +124,18 @@ def run_convert(args: argparse.Namespace) -> None:
     # 9. Write .md -- atomicity gate: .txt is NOT touched until this succeeds
     md_path.write_text(content, encoding="utf-8")
 
-    # 10. Remove .txt (ONLY after .md write succeeded -- CONV-03 invariant)
-    txt_path.unlink()
+    # 10. Remove .txt (ONLY after .md write succeeded -- CONV-03 invariant).
+    # If unlink fails (read-only fs, concurrent deletion), the .md is already a
+    # complete, correct conversion -- surface a targeted recovery message rather
+    # than a raw traceback. Do NOT skip the git step decision below by exiting
+    # non-zero silently: tell the user the .md is valid and the .txt remains.
+    try:
+        txt_path.unlink()
+    except OSError as exc:
+        sys.exit(
+            f"ERROR: wrote {md_path.name} but could not remove {txt_path.name}: {exc}\n"
+            f"The .md is a valid conversion; delete the .txt manually to finish."
+        )
 
     print(f"Converted: {txt_path.name} -> {md_path.name}")
 

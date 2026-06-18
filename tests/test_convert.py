@@ -220,6 +220,73 @@ class TestConvertErrorPaths:
         finally:
             os.chmod(f, 0o644)
 
+    def test_non_utf8_file_exits_nonzero(self, tmp_path: Path) -> None:
+        """WR-01: a non-UTF-8 legacy .txt exits cleanly, not via raw traceback."""
+        from maccat.convert import run_convert
+
+        f = tmp_path / "mac-software-list-[TestMac]-20260101120000.txt"
+        # 0xFF is never valid UTF-8 — read_text(encoding="utf-8") raises UnicodeDecodeError
+        f.write_bytes(b"Homebrew Packages\n----\ngit (\xff)\n")
+        args = _make_convert_args(from_path=str(f))
+        with pytest.raises(SystemExit) as exc:
+            run_convert(args)
+        assert exc.value.code != 0
+        assert "UTF-8" in str(exc.value.code)
+        # The .txt must NOT be deleted on this abort path
+        assert f.exists()
+
+    def test_unlink_failure_exits_nonzero_after_md_written(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """WR-02: if unlink fails after a successful .md write, exit cleanly and keep the .md."""
+        from maccat import convert as convert_mod
+
+        f = tmp_path / "mac-software-list-[TestMac]-20260101120000.txt"
+        f.write_text(
+            "Homebrew Packages\n------------------------------------\ngit (2.44.0)\n",
+            encoding="utf-8",
+        )
+
+        orig_unlink = Path.unlink
+
+        def boom(self: Path, *a: object, **k: object) -> None:
+            if self.suffix == ".txt":
+                raise OSError("read-only filesystem")
+            orig_unlink(self, *a, **k)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(Path, "unlink", boom)
+        args = _make_convert_args(from_path=str(f), no_commit=True)
+        with pytest.raises(SystemExit) as exc:
+            convert_mod.run_convert(args)
+        assert exc.value.code != 0
+        # .md was written before the failed unlink — must still exist
+        assert f.with_suffix(".md").exists()
+
+    def test_rename_flag_rejected_for_convert(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """WR-03: --rename combined with the convert subcommand is rejected."""
+        f = tmp_path / "mac-software-list-[TestMac]-20260101120000.txt"
+        f.write_text(
+            "Homebrew Packages\n------------------------------------\ngit (2.44.0)\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            sys, "argv", ["maccat", "--rename", "convert", "--from", str(f)]
+        )
+        from maccat.cli import run
+
+        with pytest.raises(SystemExit) as exc:
+            run()
+        assert exc.value.code != 0
+        # convert must NOT have run — .txt untouched, no .md produced
+        assert f.exists()
+        assert not f.with_suffix(".md").exists()
+
 
 # ---------------------------------------------------------------------------
 # TestConvertGitStaging — git_commit_convert called with correct args

@@ -284,6 +284,8 @@ def run() -> None:
     #        Must run before resolve_catalog_repo.
     # ------------------------------------------------------------------
     if args.subcommand == "convert":
+        if args.rename:
+            sys.exit("ERROR: --rename cannot be combined with the 'convert' subcommand.")
         from maccat.convert import run_convert
         run_convert(args)
         return
