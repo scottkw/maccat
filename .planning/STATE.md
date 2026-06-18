@@ -4,14 +4,14 @@ milestone: v3.0.0
 milestone_name: Markdown Catalog Format
 status: executing
 stopped_at: v3.0.0 ROADMAP created — 3 phases (30-32), coarse granularity, 12/12 requirements
-last_updated: "2026-06-18T19:41:45.647Z"
-last_activity: 2026-06-18 -- Phase 30 execution started
+last_updated: "2026-06-18T21:44:10.277Z"
+last_activity: 2026-06-18 -- Phase 31 execution started
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_phases: 1
+  total_plans: 5
+  completed_plans: 3
+  percent: 33
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 30 — markdown-emitter-md-plumbing
+**Current focus:** Phase 31 — markdown-only-reinstall-parser
 
 ## Current Position
 
-Phase: 30 (markdown-emitter-md-plumbing) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 30
-Last activity: 2026-06-18 -- Phase 30 execution started
+Phase: 31 (markdown-only-reinstall-parser) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 31
+Last activity: 2026-06-18 -- Phase 31 execution started
 
 ## Performance Metrics
 

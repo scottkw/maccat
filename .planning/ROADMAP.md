@@ -125,7 +125,7 @@ catalogs in place. Breaking format change (precedent: v2.0.0). Format-only: the 
 and the data they collect are unchanged.
 
 - [x] **Phase 30: Markdown Emitter & `.md` Plumbing** - Generation emits `.md` (frontmatter + per-section tables); retention/filename/git all move `.txt` → `.md` (completed 2026-06-18)
-- [ ] **Phase 31: Markdown-Only Reinstall Parser** - `reinstall/parser.py` parses the markdown tables; round-trip re-locked against the emitter; legacy `.txt` fails with a convert directive
+- [x] **Phase 31: Markdown-Only Reinstall Parser** - `reinstall/parser.py` parses the markdown tables; round-trip re-locked against the emitter; legacy `.txt` fails with a convert directive (completed 2026-06-18)
 - [ ] **Phase 32: Convert Command** - `maccat convert --from PATH` reads a legacy `.txt` via the retained text parser and rewrites it as `.md`, replacing + committing in one commit
 
 ## Phase Details
@@ -159,8 +159,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 31-01-PLAN.md — parse_markdown_catalog + helpers in parser.py + TestMarkdownRoundTrip + TestMarkdownParserRefusal
-- [ ] 31-02-PLAN.md — Wire cli.py to parse_markdown_catalog + update .txt→.md fixtures in test_reinstall_cli.py + test_picker_and_reinstall_cli.py
+- [x] 31-01-PLAN.md — parse_markdown_catalog + helpers in parser.py + TestMarkdownRoundTrip + TestMarkdownParserRefusal
+- [x] 31-02-PLAN.md — Wire cli.py to parse_markdown_catalog + update .txt→.md fixtures in test_reinstall_cli.py + test_picker_and_reinstall_cli.py
 
 ### Phase 32: Convert Command
 **Goal**: `maccat convert --from PATH` upgrades a single legacy plain-text `.txt` catalog to the new markdown `.md` format — reading it via the retained legacy text parser, rewriting its full contents through the Phase 30 markdown emitter, replacing the original in place, and staging both changes in one commit.
@@ -210,5 +210,5 @@ reinstall parser round-trip in 31 and the convert rewrite in 32).
 | 28. Chromium Refactor + Edge + Brave | v2.2.0 | 2/2 | Complete | 2026-06-17 |
 | 29. Safari Extensions | v2.2.0 | 1/1 | Complete | 2026-06-17 |
 | 30. Markdown Emitter & `.md` Plumbing | v3.0.0 | 3/3 | Complete   | 2026-06-18 |
-| 31. Markdown-Only Reinstall Parser | v3.0.0 | 0/2 | Not started | - |
+| 31. Markdown-Only Reinstall Parser | v3.0.0 | 2/2 | Complete   | 2026-06-18 |
 | 32. Convert Command | v3.0.0 | 0/TBD | Not started | - |
