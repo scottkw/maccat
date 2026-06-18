@@ -6,10 +6,10 @@ caller (cli.py) writes the string to disk via CatalogWriter.write_raw().
 
 Format contract:
   ---
-  computer: <computer>
-  hostname: <hostname>
+  computer: "<computer>"
+  hostname: "<hostname>"
   generated: "<generated>"    # double-quoted to prevent YAML 1.1 datetime auto-cast
-  maccat_version: <maccat_version>
+  maccat_version: "<maccat_version>"
   ---
   # Installed Mac Software List
 
@@ -62,6 +62,15 @@ _ITEM_RE = re.compile(
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _yaml_quote(value: str) -> str:
+    """Wrap value in double quotes, escaping embedded backslashes and double-quotes.
+
+    Produces a YAML double-quoted scalar that is valid for any string content,
+    including values containing colons (which would produce invalid bare scalars).
+    """
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def _escape_cell(value: str) -> str:
@@ -120,15 +129,17 @@ def render_frontmatter(
     Keys are in fixed order (computer / hostname / generated / maccat_version)
     for byte-deterministic output across repeated runs.
 
-    The generated value is double-quoted to prevent YAML 1.1 parsers (e.g. PyYAML
-    safe_load) from auto-casting it to a datetime object.
+    All scalar values are double-quoted so that colons, special characters, and
+    YAML 1.1 datetime-like strings in any value cannot produce structurally invalid
+    YAML.  Embedded backslashes and double-quotes within values are escaped per the
+    YAML double-quoted scalar rules.
     """
     return (
         "---\n"
-        f"computer: {computer}\n"
-        f"hostname: {hostname}\n"
-        f'generated: "{generated}"\n'
-        f"maccat_version: {maccat_version}\n"
+        f"computer: {_yaml_quote(computer)}\n"
+        f"hostname: {_yaml_quote(hostname)}\n"
+        f"generated: {_yaml_quote(generated)}\n"
+        f"maccat_version: {_yaml_quote(maccat_version)}\n"
         "---\n"
     )
 

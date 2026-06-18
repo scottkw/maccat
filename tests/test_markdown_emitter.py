@@ -52,11 +52,11 @@ class TestFrontmatter:
 
     def test_computer_value_present(self) -> None:
         result = _render(computer="TestMac")
-        assert "computer: TestMac\n" in result
+        assert 'computer: "TestMac"\n' in result
 
     def test_hostname_value_present(self) -> None:
         result = _render(hostname="test-host.local")
-        assert "hostname: test-host.local\n" in result
+        assert 'hostname: "test-host.local"\n' in result
 
     def test_generated_double_quoted(self) -> None:
         """generated must be double-quoted to prevent YAML 1.1 datetime auto-cast."""
@@ -69,10 +69,33 @@ class TestFrontmatter:
         # Must NOT appear as bare scalar
         assert "generated: 2026-06-18T12:34:56\n" not in result
 
-    def test_maccat_version_bare_scalar(self) -> None:
-        """maccat_version is a safe scalar — must NOT be double-quoted."""
+    def test_maccat_version_double_quoted(self) -> None:
+        """maccat_version is double-quoted for consistent safe YAML output."""
         result = _render(maccat_version="2.1.0")
-        assert "maccat_version: 2.1.0\n" in result
+        assert 'maccat_version: "2.1.0"\n' in result
+
+    def test_computer_with_colon_produces_valid_yaml(self) -> None:
+        """Regression for CR-01: a colon in computer name must not break YAML structure.
+
+        Before the fix, 'My: Work' produced 'computer: My: Work' which is structurally
+        invalid YAML (ScannerError: mapping values are not allowed here).  The fix
+        double-quotes all scalar values so the colon is safely enclosed.
+        """
+        result = _render(computer="My: Work")
+        assert 'computer: "My: Work"\n' in result
+        # The raw unquoted form must never appear — it would break the YAML parser
+        assert "computer: My: Work\n" not in result
+
+    def test_hostname_with_colon_produces_valid_yaml(self) -> None:
+        """Regression for CR-01: a colon in hostname must not break YAML structure."""
+        result = _render(hostname="my-host: 1")
+        assert 'hostname: "my-host: 1"\n' in result
+        assert "hostname: my-host: 1\n" not in result
+
+    def test_computer_embedded_double_quote_escaped(self) -> None:
+        """CR-01: an embedded double-quote in computer name must be backslash-escaped."""
+        result = _render(computer='My"Mac')
+        assert 'computer: "My\\"Mac"\n' in result
 
     def test_frontmatter_followed_by_title(self) -> None:
         result = _render()
