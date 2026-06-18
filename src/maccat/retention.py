@@ -111,8 +111,7 @@ def prune_old_archives(archive_dir: Path, archive_days: int) -> None:
         archive_days: Files older than this many days are deleted.
     """
     if not archive_dir.is_dir():
-        print("  No archive directory found — nothing to prune.")
-        return
+        return  # normal: no archives yet — not an error condition
 
     cutoff = cutoff_yyyymmdd(archive_days)
     for f in archive_dir.glob("mac-software-list-*.md"):
