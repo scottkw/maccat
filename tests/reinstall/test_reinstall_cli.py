@@ -20,13 +20,19 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _MINIMAL_CATALOG = (
-    "Installed Mac Software List\n"
-    "------------------------------------\n"
-    "\n"
-    "Homebrew Packages\n"
-    "------------------------------------\n"
-    "wget (1.21.3)\n"
-    "\n"
+    '---\n'
+    'computer: "TestMac"\n'
+    'hostname: "test-mac.local"\n'
+    'generated: "2026-06-18T12:34:56"\n'
+    'maccat_version: "2.1.0"\n'
+    '---\n'
+    '# Installed Mac Software List\n'
+    '\n'
+    '## Homebrew Packages\n'
+    '| Name | Version | ID |\n'
+    '| --- | --- | --- |\n'
+    '| wget | 1.21.3 |   |\n'
+    '\n'
 )
 
 
@@ -47,7 +53,7 @@ class TestReinstallSubcommand:
         Content includes a real Homebrew section so emit_reinstall_script
         produces a non-trivial script.
         """
-        catalog = tmp_path / "mac-software-list-[TestMac]-20260616120000.txt"
+        catalog = tmp_path / "mac-software-list-[TestMac]-20260616120000.md"
         catalog.write_text(_MINIMAL_CATALOG, encoding="utf-8")
         return catalog
 
@@ -152,9 +158,9 @@ class TestReinstallSubcommand:
 
         run()
 
-        txt_files = list(output_dir.glob("mac-software-list-*.txt"))
-        assert len(txt_files) == 0, (
-            f"No catalog .txt file should be written by reinstall; found: {txt_files}"
+        md_files = list(output_dir.glob("mac-software-list-*.md"))
+        assert len(md_files) == 0, (
+            f"No catalog .md file should be written by reinstall; found: {md_files}"
         )
         # reinstall.sh should still be there
         assert (output_dir / "reinstall.sh").exists()

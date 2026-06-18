@@ -33,7 +33,7 @@ def run_reinstall(
        catalog file from ``--from PATH`` or the interactive computer picker.
        Returns ``None`` when the user quits the picker; in that case this
        function returns cleanly without writing any file.
-    2. :func:`~maccat.reinstall.parser.parse_catalog` — parses the catalog.
+    2. :func:`~maccat.reinstall.parser.parse_markdown_catalog` — parses the markdown catalog.
     3. :func:`~maccat.reinstall.emitter.emit_reinstall_script` — renders the
        script string (starts with ``#!/usr/bin/env bash``, includes provenance
        header with source filename and generation date).
@@ -53,7 +53,7 @@ def run_reinstall(
     """
     # Deferred imports per PKG-03
     from maccat.reinstall.emitter import emit_reinstall_script
-    from maccat.reinstall.parser import parse_catalog
+    from maccat.reinstall.parser import parse_markdown_catalog
     from maccat.reinstall.picker import resolve_catalog_path
 
     catalog_path = resolve_catalog_path(args, catalog_repo=catalog_repo)
@@ -61,15 +61,14 @@ def run_reinstall(
         # User quit the interactive picker — no file written, exit cleanly
         return
 
-    # WR-01: parse_catalog -> Path.read_text can raise OSError (e.g. the file
-    # became unreadable after resolution, or a picker-resolved catalog is
-    # unreadable). Convert it to the project's clean ERROR convention instead
-    # of letting a raw traceback escape. The --from branch also probes
-    # readability up-front in resolve_catalog_path; this is the catch-all.
+    # RIN-02: parse_markdown_catalog raises ValueError for non-.md paths and
+    # malformed .md files (missing frontmatter), directing users to convert.
+    # Also catches OSError for unreadable files (WR-01 catch-all).
+    # ValueError.args[0] is already a self-contained actionable message.
     try:
-        catalog = parse_catalog(catalog_path)
-    except OSError as exc:
-        sys.exit(f"ERROR: Could not read catalog file {catalog_path}: {exc}")
+        catalog = parse_markdown_catalog(catalog_path)
+    except (OSError, ValueError) as exc:
+        sys.exit(f"ERROR: {exc}")
     script = emit_reinstall_script(
         catalog,
         source_name=catalog_path.name,

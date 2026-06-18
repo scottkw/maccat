@@ -9,9 +9,12 @@ from pathlib import Path
 import pytest
 
 from maccat.catalog.format import emit_item
+from maccat.catalog.markdown import render_markdown_catalog
+from maccat.collectors.base import Section
 from maccat.reinstall.parser import (
     _parse_item_line,
     parse_catalog,
+    parse_markdown_catalog,
 )
 
 # ---------------------------------------------------------------------------
@@ -342,3 +345,251 @@ class TestParseCatalog:
         assert result.sections[1].items[0].name == "git"
         assert len(result.sections[2].items) == 1
         assert result.sections[2].items[0].id == "1234567890"
+
+
+# ---------------------------------------------------------------------------
+# Minimal markdown catalog fixture string
+# ---------------------------------------------------------------------------
+
+_MINIMAL_MD_CATALOG = (
+    '---\n'
+    'computer: "TestMac"\n'
+    'hostname: "test-mac.local"\n'
+    'generated: "2026-06-18T12:34:56"\n'
+    'maccat_version: "2.1.0"\n'
+    '---\n'
+    '# Installed Mac Software List\n'
+    '\n'
+    '## Homebrew Packages\n'
+    '| Name | Version | ID |\n'
+    '| --- | --- | --- |\n'
+    '| wget | 1.21.3 |   |\n'
+    '\n'
+)
+
+
+# ---------------------------------------------------------------------------
+# TestMarkdownRoundTrip — RIN-01: render_markdown_catalog → parse_markdown_catalog
+# ---------------------------------------------------------------------------
+
+
+class TestMarkdownRoundTrip:
+    """RIN-01: render_markdown_catalog → parse_markdown_catalog preserves sections+items."""
+
+    @pytest.fixture()
+    def rendered_catalog(self, tmp_path: Path) -> tuple[list[Section], Path]:
+        """Build a multi-section catalog via render_markdown_catalog and write to disk.
+
+        Covers all item shapes: name+version+id, name+version only, name+id only,
+        name only, empty section.  Adversarial shapes (pipe/backslash in name) are
+        tested in dedicated methods below with their own mini-catalogs.
+        """
+        sections = [
+            Section("Homebrew Packages", ["git (2.44.0)", "node (18.0.0)"], raw=True),
+            Section(
+                "App Store Applications",
+                ["Final Cut Pro (10.7.1) [424389933]"],
+                raw=False,
+            ),
+            Section("Setapp Applications", [], raw=False),
+            Section("Web Applications", ["Figma [figma]"], raw=True),
+        ]
+        content = render_markdown_catalog(
+            sections,
+            computer="TestMac",
+            hostname="test.local",
+            generated="2026-06-18T12:34:56",
+            maccat_version="2.1.0",
+        )
+        p = tmp_path / "mac-software-list-[TestMac]-20260618123456.md"
+        p.write_text(content, encoding="utf-8")
+        return sections, p
+
+    def test_section_titles_preserved(
+        self, rendered_catalog: tuple[list[Section], Path]
+    ) -> None:
+        """Parsed section titles equal the input section titles."""
+        sections, path = rendered_catalog
+        result = parse_markdown_catalog(path)
+        assert [s.title for s in result.sections] == [s.title for s in sections]
+
+    def test_item_count_preserved(
+        self, rendered_catalog: tuple[list[Section], Path]
+    ) -> None:
+        """For each non-empty section, parsed item count matches expected item count."""
+        sections, path = rendered_catalog
+        result = parse_markdown_catalog(path)
+        # Homebrew: 2 items (raw=True, order preserved)
+        homebrew = next(s for s in result.sections if s.title == "Homebrew Packages")
+        assert len(homebrew.items) == 2
+        # App Store: 1 item (raw=False, sorted — single item so order unchanged)
+        appstore = next(s for s in result.sections if s.title == "App Store Applications")
+        assert len(appstore.items) == 1
+        # Web: 1 item (raw=True)
+        web = next(s for s in result.sections if s.title == "Web Applications")
+        assert len(web.items) == 1
+
+    def test_item_names_preserved(
+        self, rendered_catalog: tuple[list[Section], Path]
+    ) -> None:
+        """Item names in the first Homebrew item match the emitter input."""
+        sections, path = rendered_catalog
+        result = parse_markdown_catalog(path)
+        homebrew = next(s for s in result.sections if s.title == "Homebrew Packages")
+        # raw=True preserves order; first item is "git (2.44.0)"
+        assert homebrew.items[0].name == "git"
+
+    def test_version_and_id_preserved(
+        self, rendered_catalog: tuple[list[Section], Path]
+    ) -> None:
+        """Version and ID are preserved through the round-trip for App Store section."""
+        sections, path = rendered_catalog
+        result = parse_markdown_catalog(path)
+        appstore = next(s for s in result.sections if s.title == "App Store Applications")
+        assert len(appstore.items) == 1
+        item = appstore.items[0]
+        assert item.name == "Final Cut Pro"
+        assert item.version == "10.7.1"
+        assert item.id == "424389933"
+
+    def test_empty_section_parses_to_empty_items(
+        self, rendered_catalog: tuple[list[Section], Path]
+    ) -> None:
+        """Setapp section (empty input) → ParsedSection with items=[]."""
+        sections, path = rendered_catalog
+        result = parse_markdown_catalog(path)
+        setapp = next(s for s in result.sections if "Setapp" in s.title)
+        assert setapp.items == []
+
+    def test_pipe_in_name_round_trips(self, tmp_path: Path) -> None:
+        """A name containing '|' is escaped by the emitter and unescaped by the parser."""
+        # Build a minimal catalog with a section whose item name contains a literal pipe.
+        # Use raw=True so the item string is passed directly to _render_table.
+        # The item string "pipe|bar [id-x]" → name="pipe|bar", id="id-x"
+        # _escape_cell("pipe|bar") → "pipe\\|bar" in the table row.
+        # _unescape_cell("pipe\\|bar") → "pipe|bar" — round-trip complete.
+        sections = [Section("Extensions", ["pipe|bar [id-x]"], raw=True)]
+        content = render_markdown_catalog(
+            sections,
+            computer="TestMac",
+            hostname="test.local",
+            generated="2026-06-18T12:34:56",
+            maccat_version="2.1.0",
+        )
+        p = tmp_path / "catalog.md"
+        p.write_text(content, encoding="utf-8")
+        result = parse_markdown_catalog(p)
+        assert len(result.sections) == 1
+        ext = result.sections[0]
+        assert len(ext.items) == 1
+        assert "|" in ext.items[0].name, f"Expected '|' in name, got: {ext.items[0].name!r}"
+
+    def test_backslash_in_name_round_trips(self, tmp_path: Path) -> None:
+        """A name containing '\\' is escaped by the emitter and unescaped by the parser."""
+        # "back\\slash [id-y]" → name="back\\slash", id="id-y"
+        # _escape_cell("back\\slash") → "back\\\\slash" in the table row.
+        # _unescape_cell("back\\\\slash") → "back\\slash" — round-trip complete.
+        sections = [Section("Extensions", ["back\\slash [id-y]"], raw=True)]
+        content = render_markdown_catalog(
+            sections,
+            computer="TestMac",
+            hostname="test.local",
+            generated="2026-06-18T12:34:56",
+            maccat_version="2.1.0",
+        )
+        p = tmp_path / "catalog.md"
+        p.write_text(content, encoding="utf-8")
+        result = parse_markdown_catalog(p)
+        assert len(result.sections) == 1
+        ext = result.sections[0]
+        assert len(ext.items) == 1
+        assert "\\" in ext.items[0].name, (
+            f"Expected '\\' in name, got: {ext.items[0].name!r}"
+        )
+
+    def test_version_only_item_round_trips(self, tmp_path: Path) -> None:
+        """An item with version but no id: version is preserved, id is None after round-trip."""
+        sections = [Section("Homebrew", ["wget (1.21.3)"], raw=True)]
+        content = render_markdown_catalog(
+            sections,
+            computer="TestMac",
+            hostname="test.local",
+            generated="2026-06-18T12:34:56",
+            maccat_version="2.1.0",
+        )
+        p = tmp_path / "catalog.md"
+        p.write_text(content, encoding="utf-8")
+        result = parse_markdown_catalog(p)
+        item = result.sections[0].items[0]
+        assert item.name == "wget"
+        assert item.version == "1.21.3"
+        assert item.id is None
+
+    def test_id_only_item_round_trips(self, tmp_path: Path) -> None:
+        """An item with id but no version: id is preserved, version is None after round-trip."""
+        sections = [Section("Extensions", ["ms-python.python [ms-python.python]"], raw=True)]
+        content = render_markdown_catalog(
+            sections,
+            computer="TestMac",
+            hostname="test.local",
+            generated="2026-06-18T12:34:56",
+            maccat_version="2.1.0",
+        )
+        p = tmp_path / "catalog.md"
+        p.write_text(content, encoding="utf-8")
+        result = parse_markdown_catalog(p)
+        item = result.sections[0].items[0]
+        assert item.name == "ms-python.python"
+        assert item.version is None
+        assert item.id == "ms-python.python"
+
+
+# ---------------------------------------------------------------------------
+# TestMarkdownParserRefusal — RIN-02: parse_markdown_catalog refuses non-.md input
+# ---------------------------------------------------------------------------
+
+
+class TestMarkdownParserRefusal:
+    """RIN-02: parse_markdown_catalog refuses .txt and frontmatter-less .md with ValueError."""
+
+    def test_txt_extension_raises_value_error(self, tmp_path: Path) -> None:
+        """A .txt path raises ValueError containing 'maccat convert --from'."""
+        f = tmp_path / "catalog.txt"
+        f.write_text("content", encoding="utf-8")
+        with pytest.raises(ValueError, match="maccat convert --from"):
+            parse_markdown_catalog(f)
+
+    def test_md_without_frontmatter_raises_value_error(self, tmp_path: Path) -> None:
+        """A .md file with no opening '---' fence raises ValueError."""
+        f = tmp_path / "catalog.md"
+        f.write_text("# Installed Mac Software List\n\n## Homebrew\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="maccat convert --from"):
+            parse_markdown_catalog(f)
+
+    def test_md_with_unclosed_frontmatter_raises_value_error(self, tmp_path: Path) -> None:
+        """A .md file with opening '---' but no closing fence raises ValueError."""
+        f = tmp_path / "catalog.md"
+        f.write_text(
+            "---\ncomputer: TestMac\nhostname: test.local\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="maccat convert --from"):
+            parse_markdown_catalog(f)
+
+    def test_run_reinstall_exits_nonzero_on_txt(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """run_reinstall with a .txt path exits non-zero with a message about 'convert'."""
+        import argparse
+
+        f = tmp_path / "mac-software-list-[T]-20260618120000.txt"
+        f.write_text("content", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        args = argparse.Namespace(from_path=str(f), computer=None, rename=False)
+        from maccat.reinstall.cli import run_reinstall
+
+        with pytest.raises(SystemExit) as exc:
+            run_reinstall(args)
+        assert exc.value.code != 0
+        # The error message (embedded in sys.exit arg) must reference 'convert'
+        assert "convert" in str(exc.value).lower()
