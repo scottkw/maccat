@@ -170,7 +170,11 @@ Plans:
   1. `maccat convert --from PATH` reads a legacy `.txt` catalog via the retained text parser and writes a `.md` whose every section and every item's name / version / ID matches the source — round-trip-equivalent to a freshly generated markdown catalog.
   2. convert replaces the original in place: it writes the `.md`, removes the old `.txt`, and stages both changes in a single commit; `--no-commit` performs the file operations without touching git.
   3. convert degrades gracefully on malformed or partial legacy input — it warns and skips unparseable content rather than aborting or fabricating data, and never executes anything.
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 32-01-PLAN.md — convert.py orchestrator + git_commit_convert in gitops.py
+- [ ] 32-02-PLAN.md — cli.py wiring + tests/test_convert.py
 
 ## Progress
 
@@ -211,4 +215,4 @@ reinstall parser round-trip in 31 and the convert rewrite in 32).
 | 29. Safari Extensions | v2.2.0 | 1/1 | Complete | 2026-06-17 |
 | 30. Markdown Emitter & `.md` Plumbing | v3.0.0 | 3/3 | Complete   | 2026-06-18 |
 | 31. Markdown-Only Reinstall Parser | v3.0.0 | 2/2 | Complete   | 2026-06-18 |
-| 32. Convert Command | v3.0.0 | 0/TBD | Not started | - |
+| 32. Convert Command | v3.0.0 | 0/2 | Not started | - |
