@@ -76,3 +76,13 @@ class CatalogWriter:
         assert self._fh is not None, "write_lines called outside context manager"
         for line in lines:
             self._fh.write(line + "\n")
+
+    def write_raw(self, content: str) -> None:
+        """Write pre-rendered content (e.g. a full markdown catalog string) atomically.
+
+        The caller is responsible for encoding correctness and any trailing newline.
+        Content is written in a single call; partial writes cannot occur.
+        The file handle is opened as encoding="utf-8", newline="\\n".
+        """
+        assert self._fh is not None, "write_raw called outside context manager"
+        self._fh.write(content)
