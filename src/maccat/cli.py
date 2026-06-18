@@ -170,10 +170,13 @@ def run() -> None:
     # ------------------------------------------------------------------
     # Deferred imports (all maccat.* modules live here — PKG-03)
     # ------------------------------------------------------------------
-    from maccat import gitops
-    from maccat.catalog.format import flush_section
+    import socket
+
+    from maccat import __version__, gitops
+    from maccat.catalog.markdown import render_markdown_catalog
     from maccat.catalog.writer import CatalogWriter
     from maccat.collectors import get_registry
+    from maccat.collectors.base import Section
     from maccat.config import (
         config_init,
         config_show,
@@ -303,28 +306,32 @@ def run() -> None:
     #    The just-written catalog will always be newer than the cutoff from
     #    retain_newest_per_host, so it survives the sweep. (zsh:2469)
     # ------------------------------------------------------------------
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    now = datetime.now()
+    timestamp = now.strftime("%Y%m%d%H%M%S")
+    generated_iso = now.strftime("%Y-%m-%dT%H:%M:%S")
 
     # ------------------------------------------------------------------
     # 10. Generate catalog (zsh:2471-2490 generate_catalog)
     # ------------------------------------------------------------------
+    all_sections: list[Section] = []
+    for collector in get_registry():
+        result = collector.collect()
+        all_sections.extend(result.sections)
+
+    content = render_markdown_catalog(
+        all_sections,
+        computer=computer,
+        hostname=socket.gethostname(),
+        generated=generated_iso,
+        maccat_version=__version__,
+    )
+
     filename = make_catalog_filename(computer, timestamp)          # zsh:2471
     output_file = catalog_repo / computer / filename               # zsh:2474
     (catalog_repo / computer).mkdir(parents=True, exist_ok=True)  # zsh:2477
 
     with CatalogWriter(output_file) as w:                         # zsh:2480
-        # "Installed Mac Software List" header section (zsh:2226)
-        w.write_section("Installed Mac Software List")
-        for collector in get_registry():
-            result = collector.collect()
-            for section in result.sections:
-                w.write_section(section.title)
-                if section.raw:
-                    # Raw sections (Homebrew, mas) — verbatim, no sort
-                    w.write_lines(section.items)
-                else:
-                    # Non-raw sections — sort + dedup via LC_ALL=C sort -f -u
-                    w.write_lines(flush_section(section.items))
+        w.write_raw(content)
 
     # ------------------------------------------------------------------
     # 11. Retention sweep (zsh:2492)
