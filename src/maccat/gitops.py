@@ -249,3 +249,90 @@ def git_commit_rename(
         )
         print(f"    cd {catalog_repo} && git pull --rebase && git push")
         print()
+
+
+def git_commit_convert(
+    catalog_repo: Path,
+    md_path: Path,
+    txt_path: Path,
+) -> None:
+    """Stage the new .md and the deleted .txt, then commit and push.
+
+    Mirrors git_commit_rename pattern. Stages exactly two individual file
+    paths (new .md + deleted .txt) rather than directory paths.
+
+    - _git_available() + _is_git_repo() guards.
+    - relative_to() guard: if either path is outside catalog_repo, warn and return.
+    - Two git add -A -- <relpath> calls for the individual file paths.
+    - No-changes guard: skip commit when nothing staged.
+    - warn-and-continue on commit failure and push failure.
+
+    Args:
+        catalog_repo: Path to the catalog git repository (heuristic: txt_path.parent.parent).
+        md_path:      Absolute path of the newly-written .md file.
+        txt_path:     Absolute path of the removed .txt file.
+    """
+    if not _git_available():
+        return
+
+    if not _is_git_repo(catalog_repo):
+        return
+
+    # Compute relative paths — guard against file-outside-repo scenario (Pitfall 3)
+    try:
+        rel_md = md_path.relative_to(catalog_repo)
+        rel_txt = txt_path.relative_to(catalog_repo)
+    except ValueError:
+        print(
+            "  WARNING: Catalog file is outside the repo root. Skipping git operations."
+        )
+        return
+
+    # Stage the new .md (git add -A records the new file; '--' = leading-dash safety)
+    subprocess.run(
+        ["git", "add", "-A", "--", str(rel_md)],
+        cwd=catalog_repo,
+        capture_output=True,
+    )
+    # Stage the deleted .txt (git add -A records the deletion from the index)
+    subprocess.run(
+        ["git", "add", "-A", "--", str(rel_txt)],
+        cwd=catalog_repo,
+        capture_output=True,
+    )
+
+    # No-changes guard (mirrors git_commit_rename pattern)
+    diff = subprocess.run(
+        ["git", "diff", "--cached", "--quiet"],
+        cwd=catalog_repo,
+    )
+    if diff.returncode == 0:
+        print("  No changes staged.")
+        return
+
+    commit_msg = f"Convert catalog: {txt_path.name!r} -> {md_path.name!r}"
+    commit = subprocess.run(
+        ["git", "commit", "-m", commit_msg],
+        cwd=catalog_repo,
+        capture_output=True,
+        text=True,
+    )
+    if commit.returncode != 0:
+        print("  WARNING: Failed to create commit.")
+        return
+    print(f"  Committed: {commit_msg}")
+
+    push = subprocess.run(
+        ["git", "push"],
+        cwd=catalog_repo,
+        capture_output=True,
+        text=True,
+    )
+    if push.returncode == 0:
+        print("  Successfully pushed to remote.")
+    else:
+        print()
+        print("  WARNING: Failed to push to remote repository.")
+        print("  The commit has been saved locally. You can push manually later with:")
+        print(f"    cd {catalog_repo} && git push")
+        print()
