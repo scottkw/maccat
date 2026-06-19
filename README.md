@@ -2,11 +2,15 @@
 
 A Python tool that catalogs all software **and developer tooling** installed on your macOS machine — applications, plus the extensions, plugins, MCP servers, and skills/agents of your AI coding CLIs, editors, and browsers. Each catalog is named with a **friendly machine label** you choose, each run keeps only the newest catalog **per machine** in the main folder, archives the rest, auto-prunes the archive after a configurable number of days (default 30), and syncs every change via git.
 
-It can also work in reverse: `maccat reinstall` turns any catalog back into a reviewable [`reinstall.sh`](#reinstall-from-a-catalog) — a never-auto-executed script that reinstalls the deterministic sources (Homebrew, Mac App Store, VS Code/Cursor extensions) and lists everything else as a manual checklist.
+Catalogs are written as **rendered Markdown (`.md`)** — a YAML frontmatter block (computer, hostname, generated timestamp, maccat version) followed by one `##` section per source, each a uniform `Name | Version | ID` table. The output stays deterministic and stably sorted, so two unchanged runs diff cleanly.
+
+It can also work in reverse: `maccat reinstall` turns a catalog back into a reviewable [`reinstall.sh`](#reinstall-from-a-catalog) — a never-auto-executed script that reinstalls the deterministic sources (Homebrew, Mac App Store, VS Code/Cursor extensions) and lists everything else as a manual checklist. Legacy plain-text (`.txt`) catalogs from before v3.0.0 are upgraded to the new format with [`maccat convert`](#convert-a-legacy-catalog).
+
+> **Format change in v3.0.0:** catalogs moved from plain text (`.txt`) to Markdown (`.md`). `reinstall` consumes `.md` only; run `convert` on any older `.txt` catalog first.
 
 ## Overview
 
-This tool generates comprehensive text-based catalogs of your installed software and tooling from multiple sources:
+This tool generates comprehensive Markdown (`.md`) catalogs of your installed software and tooling from multiple sources — **22 sections** in total:
 
 **Applications**
 
@@ -18,20 +22,21 @@ This tool generates comprehensive text-based catalogs of your installed software
 **AI coding CLI tooling** (name + version + ID where available)
 
 - **Claude Code** — plugins, MCP servers, and skills/agents
-- **Codex** — MCP servers
+- **Codex** — MCP servers and plugins
 - **OpenCode** — plugins, MCP servers, and agents
 - **Gemini CLI** — extensions and MCP servers
 
 **Editor extensions**
 
-- **VS Code** and **Cursor** — installed extensions (human-readable display names resolved)
+- **VS Code**, **Cursor**, and **Zed** — installed extensions (human-readable display names resolved)
 
 **Browser extensions** (across all profiles)
 
-- **Google Chrome** — user-installed extensions (built-in Google components excluded)
+- **Google Chrome**, **Microsoft Edge**, and **Brave** — user-installed extensions (built-in components excluded via per-browser denylists)
 - **Firefox** — user-installed extensions and themes (built-in/system add-ons excluded)
+- **Safari** — user-installed web extensions (via `pluginkit` + per-`.appex` `Info.plist`)
 
-Each catalog is timestamped and named with a **friendly machine label** you choose (see [Machine Identity](#machine-identity)) for easy identification across multiple Macs. Every source **degrades gracefully** — if a tool or browser isn't installed, its section is written with a short "not installed / none found" note and the run continues.
+Each catalog is timestamped and named with a **friendly machine label** you choose (see [Machine Identity](#machine-identity)) for easy identification across multiple Macs. Every source **degrades gracefully** — if a tool or browser isn't installed, its section renders `(none found)` and the run continues.
 
 > **Privacy:** MCP server entries capture **name + transport type only** (e.g. `my-server [stdio]`). Environment values, headers, tokens, and auth-bearing URLs are **never** written to the catalog — the file is git-committed and pushed, so secrets must not leak into it.
 
@@ -124,8 +129,8 @@ python3 maccat.pyz --computer MyMac
 The `reinstall` subcommand reads a catalog back and generates a **`reinstall.sh`** script in the current directory that can rebuild a machine's software from the snapshot. The script is **never run for you** — it's written non-executable (mode `0644`) and printed for you to review and run yourself.
 
 ```bash
-# Use an explicit catalog file
-python3 maccat.pyz reinstall --from /path/to/mac-software-list-[home]-20260616120000.txt
+# Use an explicit catalog file (must be a Markdown .md catalog)
+python3 maccat.pyz reinstall --from /path/to/mac-software-list-[home]-20260616120000.md
 
 # Or omit --from: pick a computer interactively and use its newest catalog
 python3 maccat.pyz reinstall
@@ -152,9 +157,32 @@ maccat prints the absolute path of the generated script:
 
 > **Note:** App Store entries are only auto-installed when the catalog records their numeric ID. Catalogs generated before v2.1.0 don't have it, so those apps fall into the manual checklist instead.
 
+> **Markdown-only (v3.0.0+):** `reinstall` reads the Markdown (`.md`) format exclusively. Handed a legacy `.txt` catalog — or a `.md` file missing valid frontmatter — it exits with a clear error directing you to `maccat convert --from PATH` first. It never silently part-parses an old catalog.
+
 | Subcommand | Description |
 |------------|-------------|
-| `reinstall [--from PATH]` | Generate `reinstall.sh` from a catalog (explicit `--from`, else the computer picker uses the newest catalog; `--computer NAME` selects non-interactively) |
+| `reinstall [--from PATH]` | Generate `reinstall.sh` from a Markdown catalog (explicit `--from`, else the computer picker uses the newest catalog; `--computer NAME` selects non-interactively) |
+| `convert --from PATH` | Upgrade one legacy `.txt` catalog to the new `.md` format in place (see [Convert a legacy catalog](#convert-a-legacy-catalog)) |
+
+### Convert a legacy catalog
+
+The `convert` subcommand upgrades a single legacy plain-text (`.txt`) catalog to the new Markdown (`.md`) format. It reads the `.txt` through the retained legacy parser, rewrites the full contents — every section and every item's name / version / ID — through the same Markdown emitter used by catalog generation, writes the `.md`, removes the old `.txt`, and stages both changes in one commit.
+
+```bash
+# Convert one legacy catalog (writes the .md, removes the .txt, commits both)
+python3 maccat.pyz convert --from /path/to/mac-software-list-[home]-20260616120000.txt
+
+# Do the file operations without committing to git
+python3 maccat.pyz convert --from /path/to/old-catalog.txt --no-commit
+```
+
+- **Frontmatter is synthesized from the current machine** at conversion time: `computer` is parsed from the filename, while `generated` (now), `hostname`, and `maccat_version` reflect the machine running `convert`. The output keeps the **original filename timestamp** (only the extension changes, `.txt` → `.md`).
+- **Safe and non-destructive:** the `.txt` is removed only after the `.md` is written successfully. If the target `.md` already exists, convert errors rather than overwriting it. Missing, unreadable, or unrecognizable input aborts cleanly with a clear error — convert never fabricates data and never executes anything.
+- **Single-file only.** Bulk / folder-wide conversion is not yet supported.
+
+| Subcommand | Description |
+|------------|-------------|
+| `convert --from PATH` | Convert one legacy `.txt` catalog to `.md` (in-place replace + single commit; `--no-commit` does the file ops only) |
 
 ## Machine Identity
 
@@ -198,7 +226,7 @@ python3 maccat.pyz --rename
 
 It pulls the latest changes, presents a menu of known labels, asks for the new label, and then:
 
-- Renames every matching `mac-software-list-[OLD]-...txt` to `[NEW]` across all directories (preserving timestamps).
+- Renames every matching `mac-software-list-[OLD]-...md` to `[NEW]` across all directories (preserving timestamps).
 - Updates the `machine-labels.tsv` entry to the new label.
 - Stages all the moves plus the map change and commits/pushes in **one commit**.
 
@@ -249,84 +277,93 @@ The retention and archive prune still run on disk with `--no-commit` — only th
 
 ## Output
 
-maccat generates a file named:
+maccat generates a Markdown file named:
 
 ```
-mac-software-list-[<machine-label>]-YYYYMMDDHHMMSS.txt
+mac-software-list-[<machine-label>]-YYYYMMDDHHMMSS.md
 ```
 
-For example: `mac-software-list-[My Laptop]-20260601153045.txt`
+For example: `mac-software-list-[My Laptop]-20260601153045.md`
+
+Each file opens with a YAML frontmatter block carrying provenance, followed by a `#` title and one `##` section per source:
+
+```yaml
+---
+computer: "My Laptop"
+hostname: "my-laptop.local"
+generated: "2026-06-01T15:30:45"
+maccat_version: "3.0.0"
+---
+```
 
 ### Catalog Contents
 
-Each catalog contains sections, in this order:
+Each catalog contains **22 sections**, in this order:
 
 **Applications**
 
-1. **Homebrew Packages** — All formulae and casks installed via Homebrew
-2. **App Store Applications** — Apps installed from the Mac App Store
-3. **Setapp Applications** — Apps from the Setapp subscription service
-4. **Web-installed Applications** — Other apps in /Applications
+1. **Homebrew Packages** — all formulae and casks installed via Homebrew
+2. **App Store Applications** — apps installed from the Mac App Store
+3. **Setapp Applications** — apps from the Setapp subscription service
+4. **Web-installed Applications** — other apps in /Applications
 
 **AI coding CLI tooling**
 
 5. **Claude Code Plugins** / **Claude Code MCP Servers** / **Claude Code Skills & Agents**
-6. **Codex MCP Servers**
+6. **Codex MCP Servers** / **Codex Plugins**
 7. **OpenCode Plugins** / **OpenCode MCP Servers** / **OpenCode Agents**
 8. **Gemini CLI Extensions** / **Gemini CLI MCP Servers**
 
-**Editor & browser extensions**
+**Editor extensions**
 
-9. **VS Code Extensions** / **Cursor Extensions**
-10. **Google Chrome Extensions** / **Firefox Extensions** (all profiles)
+9. **VS Code Extensions** / **Cursor Extensions** / **Zed Extensions**
 
-Items within every section are emitted in a uniform `name (version) [id]` format (degrading to `name [id]` or `name` when a field is unavailable) and **stably sorted**, so two consecutive runs on an unchanged machine produce an identical catalog (an empty diff).
+**Browser extensions** (all profiles)
+
+10. **Google Chrome Extensions** / **Microsoft Edge Extensions** / **Brave Browser Extensions** / **Firefox Extensions** / **Safari Extensions**
+
+Every section renders as a `##` heading containing a three-column `Name | Version | ID` table; a missing version or ID renders as an empty cell, and a source with no items renders `(none found)` under its heading. Rows are **stably sorted** and the output is byte-deterministic, so two consecutive runs on an unchanged machine produce an identical catalog (an empty diff). MCP server / plugin / skill entries are **identity-only** (no secrets — see the privacy note above).
 
 ## Example Output
 
-```
-Installed Mac Software List
-------------------------------------
+````markdown
+---
+computer: "My Laptop"
+hostname: "my-laptop.local"
+generated: "2026-06-01T15:30:45"
+maccat_version: "3.0.0"
+---
+# Installed Mac Software List
 
-Homebrew Packages
-------------------------------------
-autoconf
-automake
-bash
-curl
-git
-...
+## Homebrew Packages
+| Name | Version | ID |
+| --- | --- | --- |
+| autoconf | 2.73 |   |
+| awscli | 2.35.7 |   |
+| git | 2.44.0 |   |
 
-App Store Applications
-------------------------------------
-Keynote (14.0) [409183694]
-Numbers (14.0) [409203825]
-Pages (14.0) [409201541]
-Xcode (15.0) [497799835]
-...
+## App Store Applications
+| Name | Version | ID |
+| --- | --- | --- |
+| Amphetamine | 5.3.2 | 937984704 |
+| Bitwarden | 2026.5.0 | 1352778147 |
+| Xcode | 15.0 | 497799835 |
 
-Claude Code MCP Servers
-------------------------------------
-my-server [stdio]
-...
+## Codex Plugins
+(none found)
 
-Claude Code Skills & Agents
-------------------------------------
-brainstorming
-debugging
-...
+## VS Code Extensions
+| Name | Version | ID |
+| --- | --- | --- |
+| Auto Rename Tag | 0.1.10 | formulahendry.auto-rename-tag |
+| Claude Code for VS Code | 2.1.181 | anthropic.claude-code |
 
-VS Code Extensions
-------------------------------------
-Auto Rename Tag (0.1.10) [formulahendry.auto-rename-tag]
-GitLens — Git supercharged (15.0.0) [eamodio.gitlens]
-...
-
-Google Chrome Extensions
-------------------------------------
-Bitwarden Password Manager (2026.5.1) [nngceckbapebfimnlniiiahkandclblb]
-...
-```
+## Google Chrome Extensions
+| Name | Version | ID |
+| --- | --- | --- |
+| Bitwarden Password Manager | 2026.5.1 | nngceckbapebfimnlniiiahkandclblb |
+| Claude | 1.0.77 | fcoeoabgfenejglbffodgkkbkcdhcgfn |
+````
 
 ## Prerequisites
 
@@ -347,7 +384,7 @@ maccat reads on-disk config and manifests for the tools it catalogs — no separ
   brew install jq
   ```
 
-No setup is needed for the AI CLIs (Claude Code, Codex, OpenCode, Gemini), editors (VS Code, Cursor), or browsers (Chrome, Firefox) — maccat auto-detects whichever are installed and silently skips the rest.
+No setup is needed for the AI CLIs (Claude Code, Codex, OpenCode, Gemini), editors (VS Code, Cursor, Zed), or browsers (Chrome, Edge, Brave, Firefox, Safari) — maccat auto-detects whichever are installed and silently skips the rest.
 
 maccat was originally implemented as a Zsh script and ported to Python in v1.0.0.
 
