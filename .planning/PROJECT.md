@@ -10,22 +10,10 @@ user-configured external catalog repo. It's a personal tool for keeping a restor
 history of a machine's full software + tooling state. (Originally a Zsh script, ported to Python
 in v1.0.0; the zsh reference was retired in v2.0.0.)
 
-## Current Milestone: v3.0.0 Markdown Catalog Format
+## Current Milestone
 
-**Goal:** Replace the plain-text catalog format with rendered markdown (`.md`), and add a
-`convert` command to upgrade legacy `.txt` catalogs to the new format.
-
-**Target features:**
-- **Markdown catalog output** — generation emits a `.md` file: YAML frontmatter (computer,
-  hostname, generated timestamp, maccat version) + `#` title + one `##` section per source,
-  each rendering items as a uniform **Name | Version | ID** table. Stays deterministic and
-  stably-sorted; degrades gracefully (blank cells, `(none found)`). Breaking format change.
-- **`.md` plumbing** — retention globs, the `[computer]-TS` filename pattern, and git
-  add/commit discovery all move from `.txt` → `.md`.
-- **`convert --from PATH`** — parses one legacy `.txt` catalog and rewrites it as the new
-  `.md`, deletes the old `.txt`, and stages both in a single commit (honoring `--no-commit`).
-- **Markdown-only reinstall** — `reinstall/parser.py` is updated to parse the new markdown
-  tables (round-trip-locked against the new emitter); legacy catalogs must be `convert`ed first.
+None active — **v3.0.0 Markdown Catalog Format shipped 2026-06-19**. Run `/gsd:new-milestone`
+to start the next one. Candidates are listed under "Next Candidate Milestones" below.
 
 ## Shipped Milestones
 
@@ -105,13 +93,23 @@ in v1.0.0; the zsh reference was retired in v2.0.0.)
   name-fallback chain, and test-coverage gaps; a live `pluginkit` smoke test (Bitwarden) validated
   Safari end-to-end. Recovered from a Phase 29 stale-worktree near-clobber and a mid-run `gsd-sdk`
   npx-cache eviction. 5/5 requirements; audit PASSED. 628 tests.
+- **v3.0.0 Markdown Catalog Format** (2026-06-19) — replaced the plain-text catalog with rendered
+  markdown (`.md`): YAML frontmatter provenance + per-section `Name | Version | ID` tables, via a
+  shared emitter (`catalog/markdown.py::render_markdown_catalog`). The catalog→reinstall round-trip
+  was re-locked against the new format (`reinstall/parser.py::parse_markdown_catalog`), and
+  `maccat reinstall` now consumes `.md` only — refusing legacy `.txt` / frontmatter-less `.md`
+  (extension + content-sniff) with a `convert` directive. New `maccat convert --from PATH` upgrades a
+  legacy `.txt` in place (atomic write-then-unlink, single commit; `--no-commit` = file ops only).
+  Breaking format change; format-only (22 sections unchanged). `__version__` bumped to 3.0.0. Code
+  review caught a frontmatter YAML-injection blocker before it could break the round-trip on
+  colon-containing computer/hostname names. 12/12 requirements; audit PASSED. 702 tests.
 
 ## Current State
 
-Active milestone: **v3.0.0 Markdown Catalog Format** (started 2026-06-18) — reformatting the
-plain-text catalog into rendered markdown (`.md`) and adding a `convert` command for legacy
-`.txt` catalogs. v2.2.0 shipped and archived 2026-06-17; the tool catalogs 22 sections across
-applications, AI-CLI tooling, editors, and five browsers, with a catalog→reinstall loop.
+No active milestone — **v3.0.0 shipped and archived 2026-06-19**; `__version__` is 3.0.0. The tool
+catalogs 22 sections across applications, AI-CLI tooling, editors, and five browsers, now emitting
+**rendered markdown (`.md`)** catalogs with a markdown round-trip reinstall loop and a `convert`
+command for legacy `.txt` catalogs. Next milestone not yet started (run `/gsd:new-milestone`).
 
 ## Next Candidate Milestones
 
@@ -187,17 +185,20 @@ when any source isn't installed.
 - ✓ Catalog Zed installed extensions from `Zed/extensions/index.json` (id + name + version; `dev` entries filtered) (BRW-03) — v2.2.0
 - ✓ Catalog Safari user-installed extensions via `pluginkit` + per-`.appex` `Info.plist` (display name / short version / bundle id), every step never-raising (BRW-04) — v2.2.0
 - ✓ Catalog Codex plugins as a new "Codex Plugins" section — identity-only, never reads plugin bundles (FMT-03); `(none found)` on Codex without a plugin system (CDX-02) — v2.2.0
+- ✓ Markdown catalog output — `.md` with YAML frontmatter (computer/hostname/generated/maccat_version) + per-section `Name | Version | ID` tables; deterministic, identity-only, `(none found)` for empties (MD-01..05) — v3.0.0
+- ✓ `.md` plumbing — filename pattern, retention, archive prune, and git staging all moved `.txt`→`.md` (FILE-01, FILE-02) — v3.0.0
+- ✓ Markdown-only reinstall — `parse_markdown_catalog` inverts the emitter, round-trip re-locked; `reinstall` refuses legacy `.txt`/malformed `.md` with a convert directive (RIN-01, RIN-02) — v3.0.0
+- ✓ `maccat convert --from PATH` — upgrades a legacy `.txt` to `.md` in place via the retained text parser, atomic + single commit, graceful degradation (CONV-01, CONV-02, CONV-03) — v3.0.0
 
 ### Active
 
-**v3.0.0 Markdown Catalog Format** (started 2026-06-18). Requirements defined fresh in
-REQUIREMENTS.md. Scope: markdown catalog generation (`.md`, YAML frontmatter + per-section
-Name|Version|ID tables), `.md` retention/filename/git plumbing, a `convert --from PATH`
-command for legacy `.txt` catalogs (replace + commit), and a markdown-only reinstall parser.
+None — v3.0.0 shipped 2026-06-19. Run `/gsd:new-milestone` to define the next milestone (fresh
+REQUIREMENTS.md).
 
 Candidate future milestones: catalog diffing/change reports (DIFF-01), PKG-04 pipx/PyPI
 distribution, RST-03 brew-tap capture/restore, RST-04 best-effort AI-CLI tooling restore, browser
-enabled/disabled state (CHR-02/FF-02/EDGE-state/BRAVE-state), and Safari content blockers (SAF-02).
+enabled/disabled state (CHR-02/FF-02/EDGE-state/BRAVE-state), Safari content blockers (SAF-02), and
+bulk/folder-wide convert (CONV-bulk).
 
 ### Out of Scope
 
@@ -315,7 +316,8 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-18 — started milestone v3.0.0 Markdown Catalog Format: catalog output moves
-from plain-text `.txt` to rendered markdown `.md` (YAML frontmatter + per-section Name|Version|ID
-tables), with a `convert --from PATH` command for legacy catalogs and a markdown-only reinstall
-parser. Breaking format change (precedent: v2.0.0). Phases continue from Phase 30.*
+*Last updated: 2026-06-19 — shipped milestone v3.0.0 Markdown Catalog Format (Phases 30-32): catalog
+output is now rendered markdown `.md` (YAML frontmatter + per-section Name|Version|ID tables), the
+catalog→reinstall round-trip is re-locked against the new format, and `maccat convert --from PATH`
+upgrades legacy `.txt` catalogs in place. Breaking format change; `__version__` bumped to 3.0.0.
+12/12 requirements, audit PASSED, 702 tests. No active milestone — next via `/gsd:new-milestone`.*

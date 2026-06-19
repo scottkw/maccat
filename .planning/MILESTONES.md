@@ -1,5 +1,45 @@
 # Milestones
 
+## v3.0.0 Markdown Catalog Format (Shipped: 2026-06-19)
+
+**Phases completed:** 3 phases (30-32), 7 plans
+
+**Delivered:** Replaced the plain-text catalog format with rendered markdown (`.md`) — YAML
+frontmatter provenance + per-section `Name | Version | ID` tables — re-locked the
+catalog→reinstall round-trip against the new format, and added `maccat convert --from PATH`
+to upgrade legacy `.txt` catalogs in place. Breaking format change (precedent: v2.0.0);
+format-only — all 22 sections and the data they collect are unchanged. `__version__` bumped
+2.1.0 → 3.0.0 at release.
+
+**Key accomplishments:**
+
+- **Phase 30 (MD-01..05, FILE-01/02):** shared markdown emitter in `catalog/markdown.py`
+  (`render_markdown_catalog`) — double-quoted YAML frontmatter (computer/hostname/generated/
+  maccat_version), `# Installed Mac Software List` title, one `##` section per source rendering a
+  uniform 3-col table; `(none found)` for empty/degraded; byte-deterministic (FMT-04),
+  identity-only (FMT-03). `.txt`→`.md` moved across filename/retention/archive/git + the reinstall
+  picker glob. `maccat generate` now emits `.md` via `CatalogWriter.write_raw`.
+
+- **Phase 31 (RIN-01/02):** `parse_markdown_catalog` in `reinstall/parser.py` inverts the emitter
+  (frontmatter-skip + ` | `-split table rows + backslash-aware cell unescape); the parser↔emitter
+  round-trip re-locked by a contract test (replacing the v2.1.0 plain-text lock). `maccat reinstall`
+  consumes `.md` only and refuses legacy `.txt` AND frontmatter-less `.md` (extension + content-sniff)
+  with a `maccat convert --from` directive and non-zero exit. Legacy `parse_catalog` retained for convert.
+
+- **Phase 32 (CONV-01/02/03):** `maccat convert --from PATH` reads a legacy `.txt` via the retained
+  `parse_catalog`, bridges to the emitter (skipping the leading H1 section), writes the `.md`, removes
+  the `.txt` (only after a successful write — atomicity), and stages both in one commit via
+  `git_commit_convert`; `--no-commit` does file ops only. Frontmatter synthesized from the current
+  machine (computer from filename; generated=now(); hostname; version); output filename preserves the
+  original timestamp. Graceful degradation: aborts only on missing/unreadable/unrecognizable input.
+
+**Quality:** 702 tests passing, ruff + mypy --strict clean, stdlib-only (no new deps). Each phase ran
+adversarial code review + fix — most notably a Phase 30 blocker (YAML frontmatter injection on
+colon-containing computer/hostname names that would have broken the Phase 31 round-trip), caught and
+fixed before it shipped.
+
+---
+
 ## v2.2.0 Broader Coverage (Shipped: 2026-06-17)
 
 **Phases completed:** 3 phases (27-29), 5 plans
@@ -14,13 +54,16 @@ machine's real tooling. All additive; existing sections + the reinstall pipeline
   (identity-only, FMT-03; CLI-then-config.toml-header detection; `(none found)` on the installed
   plugin-less Codex v0.46.0). New `ZedCollector` reads `~/Library/Application Support/Zed/extensions/index.json`
   (`name (version) [id]`, dev-filtered). Added a section-title uniqueness test (reused by 28/29).
+
 - **Phase 28 (BRW-01, BRW-02):** extracted `ChromiumBaseCollector` (3 real Chromium browsers justify
   it) — Chrome became a thin subclass with **byte-identical** output; Edge + Brave are thin subclasses
   (Brave's 20-ID denylist; Edge baseline + documented gap). Profile-enumeration presence detection
   (no spurious section from a NativeMessagingHosts-only base dir).
+
 - **Phase 29 (BRW-04):** new `SafariCollector` via `pluginkit -mAvv -p com.apple.Safari.web-extension`
   + per-`.appex` `Info.plist` (`CFBundleDisplayName` / `CFBundleShortVersionString` /
   `CFBundleIdentifier`), per-extension never-raising; live-gated smoke test validates real output.
+
 - **Quality:** code-review + auto-fix loop on every phase (fixed never-raising gaps in codex/zed and
   the Safari name-fallback chain); 628 tests pass, ruff + mypy --strict clean; reinstall pipeline
   needed ZERO changes (all 5 new sections → manual checklist automatically); audit PASSED (5/5).

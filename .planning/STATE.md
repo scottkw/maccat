@@ -2,33 +2,33 @@
 gsd_state_version: 1.0
 milestone: v3.0.0
 milestone_name: Markdown Catalog Format
-status: executing
-stopped_at: v3.0.0 ROADMAP created — 3 phases (30-32), coarse granularity, 12/12 requirements
-last_updated: "2026-06-18T23:20:48.547Z"
-last_activity: 2026-06-18 -- Phase 32 execution started
+status: Awaiting next milestone
+stopped_at: v3.0.0 shipped — 3 phases (30-32), 12/12 requirements, audit PASSED, tagged v3.0.0
+last_updated: "2026-06-19T00:31:52.085Z"
+last_activity: 2026-06-19 — Milestone v3.0.0 completed and archived
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 7
-  completed_plans: 5
-  percent: 67
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-18)
+See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** A single run produces one complete, restorable snapshot of a machine's software *and* tooling extensions — accurate enough to rebuild the environment from, degrading gracefully when any source isn't installed.
-**Current focus:** Phase 32 — convert-command
+**Current focus:** None — v3.0.0 shipped 2026-06-19; planning next milestone (`/gsd:new-milestone`).
 
 ## Current Position
 
-Phase: 32 (convert-command) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 32
-Last activity: 2026-06-18 -- Phase 32 execution started
+Phase: Milestone v3.0.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-19 — Milestone v3.0.0 completed and archived
 
 ## Performance Metrics
 
@@ -131,10 +131,4 @@ Resume file: None.
 
 ## Operator Next Steps
 
-1. **Plan Phase 30** — `/gsd:plan-phase 30` (Markdown Emitter & `.md` Plumbing). This is the keystone
-   phase; the emitter it produces anchors the round-trip for Phases 31 and 32.
-
-2. Then execute 30 → 31 → 32 in numeric order.
-
-**Note (carried from v2.2.0):** tag `v2.2.0` push status — confirm whether v2.2.0 was published
-before starting v3.0.0 release work. v3.0.0 is a breaking format change (major bump).
+- Start the next milestone with /gsd-new-milestone
