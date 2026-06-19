@@ -325,6 +325,72 @@ to the manual checklist (zero `reinstall/` changes).
   recovery (surgical reconstruction on main); one `gsd-sdk` npx-cache reinstall. 628 tests green;
   ruff + mypy --strict clean.
 
+## Milestone: v3.0.0 — Markdown Catalog Format
+
+**Shipped:** 2026-06-19
+**Phases:** 3 (30-32) | **Plans:** 7
+
+### What Was Built
+A breaking catalog format change from plain-text to rendered markdown. A shared emitter
+(`catalog/markdown.py::render_markdown_catalog`) renders double-quoted YAML frontmatter +
+per-section `Name | Version | ID` tables; `.txt`→`.md` moved across the filename pattern,
+retention/archive globs, git staging, and the reinstall picker. `parse_markdown_catalog`
+(`reinstall/parser.py`) inverts the emitter and the round-trip was re-locked by a contract test;
+`maccat reinstall` now consumes `.md` only, refusing legacy `.txt` and frontmatter-less `.md`
+(extension + content-sniff) with a `convert` directive. New `maccat convert --from PATH` upgrades a
+legacy `.txt` in place (atomic write-then-unlink, single commit). The legacy `parse_catalog` was
+retained as the convert reader. `__version__` bumped 2.1.0 → 3.0.0 at release.
+
+### What Worked
+- **The recurring stale-worktree failure mode was finally caught structurally, not by vigilance.**
+  In v2.1.0 it caused a venv repoint; in v2.2.0 a near-clobber caught only at merge. This milestone,
+  both Phase 32 executors forked from a stale base (`d58f381`, pre-Phase 30) — and the executor's
+  own HEAD-assertion + base-correction preamble detected it and `git reset --hard`'d to the correct
+  base before doing any work. The guard the v2.2.0 retro asked for did its job twice.
+- Adversarial code review again paid for itself with a genuine blocker: a YAML frontmatter injection
+  in the Phase 30 emitter (unquoted `computer`/`hostname` → invalid YAML on any colon-containing
+  value) that the phase verifier missed because it only tested clean inputs — and which would have
+  broken the Phase 31 round-trip in production. Caught and fixed (double-quote all scalars) before
+  Phase 31 was even planned.
+- The blocking-anti-pattern handoff worked: the worktree editable-`.pth` pollution diagnosed in
+  v2.1.0 was carried as a `.continue-here.md` blocking constraint and enforced as a `pip install -e .`
+  step before every post-merge test gate — no collection-error reruns this milestone.
+- One executor (31-01) recognized that its plan's `.txt`-refusal contract couldn't be tested without
+  also doing 31-02's CLI wiring, and completed both via Rule-2 deviations — the orchestrator verified
+  31-02's acceptance criteria directly rather than re-dispatching over committed work.
+
+### What Was Inefficient
+- The local stale `dist/maccat.pyz` (a gitignored CI/release artifact) failed a version-match test
+  after the `__version__` bump, prompting an unnecessary local rebuild — CI builds the `.pyz` in a
+  separate step *after* pytest, so those tests skip in CI and the bump never threatened it. A few
+  minutes spent before recognizing the artifact was irrelevant to the release.
+- The milestone-complete CLI auto-extracted placeholder "One-liner:" accomplishments from SUMMARYs
+  that lacked a clean one-liner field; the MILESTONES.md entry had to be rewritten by hand.
+
+### Patterns Established
+- **Synthesize-from-current-machine for format upgrades** — convert stamps the conversion's own
+  context (now() + current hostname) into frontmatter while preserving the original filename
+  timestamp; the deliberate filename-ts ≠ frontmatter-generated split is documented so it isn't
+  "fixed" later.
+- **Two-parser coexistence** — a legacy reader (`parse_catalog`, for convert input) and a new reader
+  (`parse_markdown_catalog`, for reinstall) live in one module without conflation, each enforcing its
+  own extension contract.
+
+### Key Lessons
+- A phase verifier that tests only well-formed inputs will pass a format emitter that breaks on
+  adversarial-but-legal values (colons, non-UTF-8 bytes); the adversarial code-review pass is the net
+  that catches what goal-backward verification on happy-path fixtures does not.
+- Know which artifacts the release pipeline owns. A local gitignored build artifact should not gate a
+  source-level change — let CI build it.
+
+### Cost Observations
+- Model mix: Opus orchestration; Sonnet subagents (researcher/planner/checker/executor/reviewer/
+  verifier) throughout. Largely autonomous discuss→plan→execute per phase, with user input on
+  smart-discuss grey areas and the release version/tag decision.
+- Notable: 3 per-phase code-review auto-fix loops (1 blocker + 7 warnings total, all fixed +
+  regression-tested); stale-worktree base auto-corrected twice by the executor guard. 702 tests green;
+  ruff + mypy --strict clean.
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Verification | Notable |
@@ -338,3 +404,4 @@ to the manual checklist (zero `reinstall/` changes).
 | v2.0.0 | 3 | 8 | 3/3 passed | Single `--computer` flag; versioned catalog; retired the zsh reference + parity gate; plan-checker killed a false-premise plan; review caught a Critical never-raises bug; recovered from an executor API crash |
 | v2.1.0 | 3 | 4 | 3/3 passed | `maccat reinstall` (catalog→reviewable reinstall.sh); review caught a real `set -Eeuo pipefail` BLOCKER unit tests missed + a broken `--computer` flag; runtime-execution tests + two-point dispatch established; worktree editable-`.pth` pollution diagnosed & captured |
 | v2.2.0 | 3 | 5 | 3/3 passed | 5 new sections (Edge/Brave/Zed/Safari + Codex plugins), 17→22 sections; rule-of-three `ChromiumBaseCollector` extraction with Chrome byte-parity; live `pluginkit` smoke test gated Safari; stale-worktree near-clobber caught at merge & reconstructed on main; `gsd-sdk` npx-cache eviction recovered |
+| v3.0.0 | 3 | 7 | 3/3 passed | Breaking `.txt`→`.md` markdown catalog format; shared emitter + re-locked reinstall round-trip + `convert` command; review caught a frontmatter YAML-injection blocker the verifier's happy-path fixtures missed; the stale-worktree base failure mode was finally auto-corrected by the executor's HEAD-assertion guard (twice); `__version__`→3.0.0 |
