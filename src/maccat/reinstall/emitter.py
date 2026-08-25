@@ -4,13 +4,16 @@ This module makes no process calls: it builds the script text entirely in Python
 returns a str. The caller (Phase 26) writes the string to disk and sets mode 0o644;
 it is never auto-executed.
 
-Injection-safety design (two-function gate):
+Injection-safety design (three-function gate — one per destination context):
 - quote_for_script(): the SOLE path catalog-derived values enter shell command position.
   Wraps shlex.quote(), which neutralizes all shell metacharacters.
 - safe_comment_value(): the SOLE path catalog-derived values enter # comment context.
   Strips embedded newlines — shlex.quote() preserves newlines inside single-quotes, and
   a newline in a # cataloged: comment would break the comment line and expose the text
   after the newline as a live shell command.
+- safe_banner_value(): the SOLE path catalog-derived values enter double-quoted echo
+  banner context. Backslash-escapes the four characters bash still interprets inside
+  double quotes and flattens newlines.
 """
 from __future__ import annotations
 
@@ -45,6 +48,32 @@ def safe_comment_value(value: str) -> str:
     This is the ONLY path a catalog value may reach comment (non-command) context.
     """
     return value.replace("\n", " ").replace("\r", " ")
+
+
+def safe_banner_value(value: str) -> str:
+    """Escape a catalog value for bash double-quoted `echo "..."` banner context.
+
+    This is the ONLY path a catalog value may reach double-quoted echo banner
+    context.  Inside double quotes bash still interprets exactly four characters
+    — backslash, `$`, backtick and `"` — so each is backslash-escaped here.
+    Carriage returns and newlines become a single space (matching
+    safe_comment_value's posture) to keep the banner on one line: a raw newline
+    would end the echo statement and expose the remainder as a live command.
+
+    quote_for_script() is deliberately NOT used here.  shlex.quote() wraps any
+    space-containing title in SINGLE quotes, so `=== VS Code Extensions ===`
+    would emit different bytes for every normal banner and disturb the
+    emitter/parser round-trip contract.  Escaping (rather than stripping) is
+    chosen so a title that legitimately carries one of these characters still
+    renders faithfully in the generated script's output.
+
+    Escape order matters: the backslash MUST be escaped first, or the
+    backslashes introduced by the other three replacements get double-escaped.
+    """
+    escaped = value.replace("\\", "\\\\")
+    for char in ('"', "$", "`"):
+        escaped = escaped.replace(char, f"\\{char}")
+    return escaped.replace("\n", " ").replace("\r", " ")
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +211,7 @@ def _editor_ext_block(section: ParsedSection, *, editor: str) -> str:
     keeps the renderer's structure parallel with the brew/mas blocks rather than
     duplicating the per-line `command -v` guard at the section level.
     """
-    lines: list[str] = [f'echo "=== {section.title} ==="']
+    lines: list[str] = [f'echo "=== {safe_banner_value(section.title)} ==="']
     for item in section.items:
         if item.id is None:
             lines.append(f"echo {shlex.quote(_checklist_display(item))}")
@@ -260,7 +289,9 @@ def emit_reinstall_script(
         Guaranteed to pass bash -n (syntax check).
         Every catalog-derived value in command position is shlex.quote()-wrapped
         via quote_for_script().  Values in # comment context pass through
-        safe_comment_value() to strip embedded newlines.
+        safe_comment_value() to strip embedded newlines.  The one catalog value
+        interpolated into a double-quoted echo banner (the editor-extension
+        section title) passes through safe_banner_value().
         No process calls are made — this function is pure text construction.
     """
     header = "\n".join(

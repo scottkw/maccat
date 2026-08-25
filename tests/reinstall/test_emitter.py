@@ -18,6 +18,7 @@ from maccat.reinstall.emitter import (
     _editor_ext_block,
     emit_reinstall_script,
     quote_for_script,
+    safe_banner_value,
     safe_comment_value,
 )
 from maccat.reinstall.parser import ParsedCatalog, ParsedItem, ParsedSection
@@ -930,19 +931,25 @@ class TestBannerInjection:
         assert block.splitlines()[0] == 'echo "=== Cursor Extensions ==="'
 
     def test_command_substitution_in_title_does_not_execute(self) -> None:
+        # The payload words appear in the title itself, so "not in stdout" would be
+        # self-contradictory. Proof of non-execution is that the substitution SYNTAX
+        # survives verbatim: an evaluated title collapses to "VS Code SUBBED TICKED".
         title = "VS Code $(echo SUBBED) `echo TICKED` Extensions"
         block = _editor_ext_block(_make_section(title, []), editor="code")
         result = _run_block(block)
         assert result.stdout == f"=== {title} ===\n", result.stdout
-        assert "SUBBED" not in result.stdout
-        assert "TICKED" not in result.stdout
+        assert "$(echo SUBBED)" in result.stdout
+        assert "`echo TICKED`" in result.stdout
 
     def test_quote_breakout_in_title_does_not_execute(self) -> None:
+        # Executed, this title would break the banner into three lines
+        # ("=== VS Code", "INJECTED", "Extensions ==="). One literal line proves
+        # the quote never closed early.
         title = 'VS Code" ; echo INJECTED ; echo "Extensions'
         block = _editor_ext_block(_make_section(title, []), editor="code")
         result = _run_block(block)
         assert result.stdout == f"=== {title} ===\n", result.stdout
-        assert "INJECTED" not in result.stdout
+        assert len(result.stdout.splitlines()) == 1
         assert_bash_n_clean(f"#!/usr/bin/env bash\nset -Eeuo pipefail\n{block}\n")
 
     def test_newline_in_title_stays_on_one_line(self) -> None:
