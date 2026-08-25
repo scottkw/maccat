@@ -4,7 +4,7 @@
 
 **`maccat`** — a single-file Python (`.pyz`) CLI that catalogs everything installed on a macOS
 machine — applications plus the extensions, plugins, MCP servers, and skills/agents of the
-user's AI coding CLIs, editors, and browsers — into a timestamped, per-machine plain-text
+user's AI coding CLIs, editors, and browsers — into a timestamped, per-machine markdown
 snapshot, auto-archives old catalogs, and auto-commits/pushes to git. Runs against a
 user-configured external catalog repo. It's a personal tool for keeping a restorable, diffable
 history of a machine's full software + tooling state. (Originally a Zsh script, ported to Python
@@ -240,15 +240,17 @@ bulk/folder-wide convert (CONV-bulk).
   `Extensions/*/manifest.json`, Firefox profile `extensions.json`) where no CLI exists.
 - Browser extensions store the human-readable name in localized manifest fields (Chrome
   `_locales`) — extracting a clean name + version + ID will require care, surfaced in research.
-- Existing codebase map lives in `.planning/codebase/` (refreshed 2026-06-12).
+- Existing codebase map lives in `.planning/codebase/` (refreshed 2026-08-25).
 
 ## Constraints
 
-- **Tech stack**: Pure Zsh shell script, no new runtime/deps — keep the tool single-file and
-  dependency-free beyond optional CLIs it probes
-- **Compatibility**: macOS-only (Zsh, BSD `date`, macOS filesystem layout)
-- **Output format**: Plain-text sections appended to the existing per-machine catalog file —
-  must not break existing sections or the archive/git flow
+- **Tech stack**: Python >= 3.11, **stdlib only — zero runtime dependencies**. Distributed as a
+  single-file zipapp (`dist/maccat.pyz`). Dev-only tooling: pytest, ruff, mypy --strict.
+- **Compatibility**: macOS-only — collectors read `/Applications`, `~/Library/Application Support/...`,
+  and `/usr/bin/pluginkit`; CI runs on `macos-latest`
+- **Output format**: Rendered **markdown** catalog (v3.0.0). The emitter (`catalog/format.py`) and
+  the reinstall parser (`reinstall/parser.py`) form a lossless round-trip contract — the central
+  invariant. Never drift one without the other. Legacy `.txt` catalogs are read-only via `convert`.
 - **Detail level**: name + version + ID per extension/plugin where each is obtainable
 - **Behavior**: graceful degradation is mandatory — a missing tool or browser must warn-and-continue
 
