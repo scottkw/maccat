@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v3.0.0
 status: Awaiting next milestone
 stopped_at: v3.0.0 shipped — 3 phases (30-32), 12/12 requirements, audit PASSED, tagged v3.0.0
-last_updated: "2026-08-25T19:50:17.915Z"
+last_updated: "2026-08-25T20:14:43.811Z"
 last_activity: 2026-08-25
 last_activity_desc: "Completed quick task 260825-k49: Catalog only user-installed Homebrew formulae using brew leaves instead of all dependencies"
-state_head: 47997ac98c6ab61103952cf36cef1b66c52a64c2
+state_head: 7e371b2c14c316a4b1ff3a9c33409091f146fd03
 progress:
   total_phases: 0
   completed_phases: 0
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 Phase: Milestone v3.0.0 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-08-25 - Remapped .planning/codebase/ against the Python package and regenerated CLAUDE.md (the maps and CLAUDE.md had described the retired zsh script since 2026-06-12)
+Last activity: 2026-08-25 - Released v3.1.0: version reconciled to 3.1.0 in both authoritative locations, reinstall-script banner injection closed, dead code triaged (degraded_result + CollectorResult.warnings deleted; available() kept)
 
 ## Performance Metrics
 
@@ -113,6 +113,7 @@ None.
 |---|-------------|------|--------|-----------|
 | 260825-k49 | Catalog only user-installed Homebrew formulae using brew leaves instead of all dependencies | 2026-08-25 | a3e24d5 | [260825-k49-catalog-only-user-installed-homebrew-for](./quick/260825-k49-catalog-only-user-installed-homebrew-for/) |
 | 2 | Remap codebase docs and regenerate CLAUDE.md for the Python port | 2026-08-25 | 47997ac | — |
+| 3 | Release v3.1.0: version bump, emitter banner hardening, dead-code triage | 2026-08-25 | 7e371b2 | — |
 
 ## Deferred Items
 
