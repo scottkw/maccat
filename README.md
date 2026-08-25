@@ -292,7 +292,7 @@ Each file opens with a YAML frontmatter block carrying provenance, followed by a
 computer: "My Laptop"
 hostname: "my-laptop.local"
 generated: "2026-06-01T15:30:45"
-maccat_version: "3.0.0"
+maccat_version: "3.1.0"
 ---
 ```
 
@@ -331,7 +331,7 @@ Every section renders as a `##` heading containing a three-column `Name | Versio
 computer: "My Laptop"
 hostname: "my-laptop.local"
 generated: "2026-06-01T15:30:45"
-maccat_version: "3.0.0"
+maccat_version: "3.1.0"
 ---
 # Installed Mac Software List
 
