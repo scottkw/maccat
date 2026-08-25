@@ -11,8 +11,9 @@ files_modified:
   - src/maccat/reinstall/emitter.py
   - tests/reinstall/test_emitter.py
   - src/maccat/collectors/base.py
+  - src/maccat/collectors/vscode.py
+  - src/maccat/collectors/cursor.py
   - src/maccat/cli.py
-  - tests/test_cli.py
 autonomous: true
 requirements: [release-v3-1-0-version-bump, emitter-banner-hardening, dead-code-triage]
 
@@ -31,8 +32,8 @@ must_haves:
     - "For every metacharacter-free section title the emitted reinstall.sh bytes are unchanged — the full 712-test suite still passes"
     - "`Collector.available()` still exists and still returns True by default; the orchestrator still calls every collector's `collect()` unconditionally"
     - "`Collector.degraded_result` no longer exists on the class"
-    - "A warning appended to `CollectorResult.warnings` is printed to stderr by the orchestrator instead of being discarded"
-    - "Catalog file bytes are unaffected by the warnings change — warnings go to stderr only"
+    - "`CollectorResult` no longer carries a `warnings` field, and `_collect_editor_extensions` returns a plain item list rather than a tuple"
+    - "VS Code and Cursor still emit identical catalog sections and identical stderr text — every existing `print(..., file=sys.stderr)` call is untouched"
   artifacts:
     - path: "src/maccat/__init__.py"
       provides: "`__version__ = \"3.1.0\"`"
@@ -43,20 +44,22 @@ must_haves:
     - path: "tests/reinstall/test_emitter.py"
       provides: "Banner byte-stability lock plus adversarial banner-title execution tests"
     - path: "src/maccat/collectors/base.py"
-      provides: "Documented `available()` rationale, documented `warnings` contract, `degraded_result` removed"
+      provides: "Documented `available()` rationale; `degraded_result` and the `warnings` field both removed"
+    - path: "src/maccat/collectors/vscode.py"
+      provides: "`_collect_editor_extensions` returning a plain `list[str]`; stderr prints unchanged"
+    - path: "src/maccat/collectors/cursor.py"
+      provides: "Updated call site matching the simplified helper signature"
     - path: "src/maccat/cli.py"
-      provides: "Collector loop that drains `result.warnings` to stderr and documents why it does not gate on `available()`"
-    - path: "tests/test_cli.py"
-      provides: "Stub-collector test proving warnings reach stderr"
+      provides: "Collector loop documenting why it does not gate on `available()`"
   key_links:
     - from: "_editor_ext_block banner"
       to: "safe_banner_value()"
       via: "f-string interpolation of the sanitized title inside the double-quoted echo argument"
       pattern: "safe_banner_value"
-    - from: "cli.py collector loop"
-      to: "CollectorResult.warnings"
-      via: "for-loop printing each warning to sys.stderr"
-      pattern: "result.warnings"
+    - from: "VSCodeCollector.collect / CursorCollector.collect"
+      to: "_collect_editor_extensions"
+      via: "single-value assignment replacing the (items, warnings) tuple unpack"
+      pattern: "_collect_editor_extensions"
     - from: ".github/workflows/release.yml"
       to: "src/maccat/__init__.py and pyproject.toml"
       via: "anchored sed patterns ^__version__ = \".*\" and ^version = \".*\""
@@ -76,14 +79,15 @@ Four independent changes:
    `reinstall/emitter.py` without changing a single emitted byte for normal titles.
 3. **Dead-code triage, part 1** — delete `Collector.degraded_result()` (genuinely dead) and
    document why `Collector.available()` is deliberately NOT called by the orchestrator.
-4. **Dead-code triage, part 2** — make `CollectorResult.warnings` a live channel by draining it
-   to stderr in the orchestrator loop.
+4. **Dead-code triage, part 2** — delete `CollectorResult.warnings` and its vestigial plumbing.
+   It is dead in **both** directions (zero producers, zero consumers) and redundant with the
+   direct `print(..., file=sys.stderr)` pattern the collectors already use.
 
 Purpose: ship a coherent version number, remove a latent shell-injection class before a routing
 change makes it live, and stop three findings from being re-reported as "dead code" next time the
 codebase map is regenerated.
-Output: a version-consistent tree, one new emitter helper, one deleted method, one wired warning
-channel — with the full suite, ruff and mypy --strict all still green.
+Output: a version-consistent tree, one new emitter helper, two deleted dead members and their
+plumbing — with the full suite, ruff and mypy --strict all still green.
 </objective>
 
 <execution_context>
@@ -153,23 +157,33 @@ Today the injection is unreachable only because routing is exact-match through
 emergent property of the routing table, not a local property of the function — any future move to
 prefix/suffix/regex matching makes it live. Close it now.
 
-## CORRECTION to the brief — verified by grep, affects how Task 4's test is written
+## `CollectorResult.warnings` is dead in BOTH directions — verified twice, delete it
 
-The brief states `CollectorResult.warnings` "is populated by `collectors/vscode.py:134` and
-`collectors/cursor.py:30`". Those two lines only **pass through** the list. Grepping
-`warnings.append` across `src/` and `tests/` returns **zero hits** — `_collect_editor_extensions`
-declares `warnings: list[str] = []`, never appends to it, and returns it empty.
+The original brief called this a "swallowed-failure bug" and asked for a stderr drain. That was
+wrong, and the coordinator has confirmed the correction independently. The evidence:
 
-The degradation messages the brief is worried about (`NOTE: Cursor not installed…`,
+- `grep -rn "warnings.append\|warnings +=" src/ tests/` → **zero hits**. No producer.
+- `grep -rn "\.warnings" src/ tests/` → **zero read sites**. No consumer.
+- `_collect_editor_extensions` declares `warnings: list[str] = []` at `vscode.py:33` and returns
+  that same empty list through **all five** return points (`vscode.py:80, 88, 99, 102, 117`).
+- `vscode.py:134` and `cursor.py:30` merely **pass the empty list through** into `CollectorResult`.
+
+The degradation messages the brief was worried about (`NOTE: Cursor not installed…`,
 `WARNING: code CLI returned empty list…`) are **already printed directly to stderr** at
 `vscode.py:81-84` and `vscode.py:88-91`. Nothing is being silently swallowed today.
 
-**Consequence for the executor:** the channel has zero producers, so a test asserting
-`VSCodeCollector` emits warnings would fail. Task 4's test MUST use a stub collector.
-The fix is still worth doing — it converts an always-discarded field into a live, documented,
-tested channel so a future collector can report degradation without inventing its own print — but
-do **not** rewrite vscode.py's existing direct stderr prints into `warnings.append` calls. That
-would relocate working, already-tested output and is out of scope for the smallest correct diff.
+**Therefore: delete, do not wire.** A drain for a channel nothing feeds is speculative
+infrastructure, and a test built on a stub collector would only be testing the stub. The
+established, working mechanism for collector degradation in this codebase is the direct
+`print(..., file=sys.stderr)` call, used by both `vscode.py` and `homebrew.py`. The `warnings`
+field is redundant with that mechanism, so it belongs in the deletion bucket alongside
+`degraded_result()`.
+
+**Chesterton's Fence check passed:** the fence's purpose is knowable (a structured degradation
+channel), and it is fully served by an existing, tested mechanism. Removing it loses no capability.
+
+**Do not** convert the existing stderr prints into anything else. They work, they are covered by
+`tests/collectors/test_vscode.py`, and relocating tested output is out of scope.
 
 ## Chesterton's Fence — the three findings have three different outcomes
 
@@ -183,7 +197,11 @@ the notice sections that absent-tool collectors must still emit (HomebrewCollect
 `Collector.degraded_result()` — **DELETE.** Zero call sites in `src/`, zero references in `tests/`
 (grep-confirmed: the only hit is the definition itself). The single deletion in this plan.
 
-`CollectorResult.warnings` — **KEEP and wire.** See the correction above.
+`CollectorResult.warnings` — **DELETE, with its plumbing.** Zero producers AND zero consumers;
+redundant with the direct stderr prints the collectors already use. See the section above.
+
+Two of the three findings are deletions, one is a keep-and-document. Do not collapse them into a
+single policy.
 
 ## Scope guard
 
@@ -349,67 +367,60 @@ would add no information.
   <done>`Collector` no longer exposes `degraded_result`; `Collector().available()` still returns True and every collector still runs; `tests/collectors/` passes unmodified; ruff is clean.</done>
 </task>
 
-<task type="auto" tdd="true">
-  <name>Task 4: Surface collector warnings on stderr, then run the full regression gate</name>
-  <files>tests/test_cli.py, src/maccat/collectors/base.py, src/maccat/cli.py</files>
-  <behavior>
-    Write these tests FIRST in `tests/test_cli.py` as a new `TestCollectorWarnings` class, confirm
-    the first one FAILS against the current code, then implement until they pass.
-
-    Both tests define a **stub** collector locally — the channel has no producers in `src/` today
-    (see the correction in this plan's context), so do not build these on `VSCodeCollector` or
-    `CursorCollector`; they would return an empty warnings list and the test would be vacuous.
-
-    - Test (RED): a stub `Collector` subclass whose `collect()` returns
-      `CollectorResult(sections=[], warnings=["code CLI returned empty list"])`. Patch
-      `maccat.collectors.get_registry` with a `MagicMock(return_value=[stub])` via the existing
-      `_patch_run_dependencies` helper's return dict (override the `get_registry` mock after
-      calling it), set `sys.argv` to `["maccat", "--computer", "MyMac", "--no-commit"]`, call
-      `run()`, and assert with `capsys` that the captured **stderr** contains the warning text.
-      Today it is discarded, so this fails.
-
-    - Test: a stub collector returning `warnings=[]` and one ordinary section produces no
-      `WARNING:` text on stderr — the drain must be silent when there is nothing to report.
-
-    - Test (catalog bytes unaffected): with the warning-emitting stub registered, the written
-      `mac-software-list-*.md` file contains none of the warning text — warnings are a stderr-only
-      channel and must never reach the catalog.
-
-    Follow the file's existing conventions: `disposable_catalog_repo` fixture,
-    `_patch_run_dependencies(monkeypatch, disposable_catalog_repo)`, `monkeypatch.setattr(sys,
-    "argv", ...)`, and `from maccat.cli import run` inside the test body.
-  </behavior>
+<task type="auto">
+  <name>Task 4: Delete the dead warnings field and its plumbing, then run the full regression gate</name>
+  <files>src/maccat/collectors/base.py, src/maccat/collectors/vscode.py, src/maccat/collectors/cursor.py</files>
   <action>
-    In `src/maccat/cli.py`, extend the collector loop (currently lines 352-355) so that after
-    extending `all_sections` with `result.sections`, it iterates `result.warnings` and prints each
-    one to `sys.stderr`. Format each line in the collectors' established house style — two leading
-    spaces and a `WARNING: ` prefix — so orchestrator-drained warnings are visually identical to the
-    ones `homebrew.py` and `vscode.py` already print directly. `sys` is already imported at the top
-    of the module; add no new import.
+    This task is a pure deletion — no behaviour change, so it adds no tests. The existing suite is
+    the gate: VS Code and Cursor must produce identical catalog sections and identical stderr output
+    afterwards.
 
-    The prefix is added by the orchestrator, not the collector: a collector appends the bare message
-    text only. Record that contract as a comment on the `warnings` field of `CollectorResult` in
-    `src/maccat/collectors/base.py` — a collector appends a plain degradation message here and the
-    orchestrator prints it to stderr with the standard prefix; the field is not written to the
-    catalog file.
+    In `src/maccat/collectors/base.py`, remove the `warnings` field from `CollectorResult`
+    (line 21), leaving `sections: list[Section]` as the dataclass's only field. `field` is imported
+    solely for that line's `default_factory` (grep-confirmed: the only two hits in the file are the
+    import on line 4 and the field on line 20), so narrow the `dataclasses` import to `dataclass`
+    alone — leaving it would fail ruff as an unused import. Keep `Section` and its `raw` default
+    untouched, and keep `CollectorResult` in `__all__`.
 
-    Do not touch `vscode.py` or `cursor.py`. Their existing direct `print(..., file=sys.stderr)`
-    calls at `vscode.py:81-84` and `vscode.py:88-91` already work and are already covered by
-    `tests/collectors/test_vscode.py`; converting them into `warnings.append` calls would relocate
-    tested output, risk double-printing, and exceeds the smallest correct diff.
+    In `src/maccat/collectors/vscode.py`, simplify `_collect_editor_extensions` to return just the
+    item list:
+      - change its return annotation from the two-tuple to `list[str]`;
+      - delete the local `warnings` declaration (line 33);
+      - update all **five** return points (lines 80, 88, 99, 102, 117) to return the list alone —
+        the three early exits return a bare empty list;
+      - rewrite the docstring's "Returns (items, warnings)" sentence to describe the single return
+        value.
+    Keep the function's name, its parameters (including `section_title`), its `__all__` entry, and
+    the Path A / Path B structure exactly as they are.
 
-    Do not change anything that reaches `render_markdown_catalog` — the catalog bytes must be
-    identical to a run without this change.
+    Update the two call sites to a single-value assignment instead of a tuple unpack, and drop the
+    `warnings=` argument from both `CollectorResult(...)` constructions: `vscode.py:131,134` and
+    `cursor.py:27,30`.
 
-    Finally, run the full regression gate and confirm all three commands are green before finishing.
+    Leave every existing `print(..., file=sys.stderr)` call exactly as written — `vscode.py:81-84`
+    (the not-installed NOTE) and `vscode.py:88-91` (the empty-CLI WARNING). Those are the intended
+    degradation mechanism, they are already covered by `tests/collectors/test_vscode.py`, and this
+    task must not relocate, reword, or convert them.
+
+    Do not touch any other collector, do not change `TITLE` on either class, and do not alter
+    anything reaching `render_markdown_catalog` — the catalog bytes must be identical to a run
+    before this change.
+
+    Reassurance, not an instruction: `tests/collectors/test_cursor.py:97` asserts the literal string
+    `_collect_editor_extensions` appears in the Cursor module source. Because the helper keeps its
+    name and `cursor.py` keeps importing it, that test passes unchanged.
+
+    Finally, run the full regression gate and confirm every command below is green before finishing.
   </action>
   <verify>
-    <automated>cd /Users/ken/dev/maccat &amp;&amp; ./venv/bin/python -m pytest tests/test_cli.py -q 2>&amp;1 | tail -1</automated>
+    <automated>cd /Users/ken/dev/maccat &amp;&amp; ./venv/bin/python -c "import sys, dataclasses; sys.path.insert(0,'src'); from maccat.collectors.base import CollectorResult, Collector; assert [f.name for f in dataclasses.fields(CollectorResult)] == ['sections'], [f.name for f in dataclasses.fields(CollectorResult)]; assert not hasattr(CollectorResult(sections=[]), 'warnings'); assert not hasattr(Collector, 'degraded_result'); assert Collector().available() is True; print('DELETIONS_OK')"</automated>
+    <automated>cd /Users/ken/dev/maccat &amp;&amp; ./venv/bin/python -c "import sys; sys.path.insert(0,'src'); from pathlib import Path; from maccat.collectors.vscode import _collect_editor_extensions as f; r = f(Path('/nonexistent-ext-dir'), 'definitely-not-a-real-cli', 'VS Code Extensions'); assert isinstance(r, list), type(r); assert r == [], r; print('HELPER_RETURNS_LIST_OK')"</automated>
+    <automated>cd /Users/ken/dev/maccat &amp;&amp; ./venv/bin/python -m pytest tests/collectors/test_vscode.py tests/collectors/test_cursor.py -q 2>&amp;1 | tail -1</automated>
     <automated>cd /Users/ken/dev/maccat &amp;&amp; ./venv/bin/python -m pytest -q 2>&amp;1 | tail -1</automated>
     <automated>cd /Users/ken/dev/maccat &amp;&amp; ./venv/bin/ruff check src tests</automated>
     <automated>cd /Users/ken/dev/maccat &amp;&amp; PYTHONPATH=src ./venv/bin/mypy --strict src/maccat</automated>
   </verify>
-  <done>A warning appended to `CollectorResult.warnings` appears on stderr with the standard two-space `WARNING:` prefix; an empty warnings list produces no output; the catalog file never contains warning text; the full suite passes with no fewer than the 712 baseline tests, ruff is clean, and mypy --strict reports no issues.</done>
+  <done>`CollectorResult` has exactly one field (`sections`) and no `warnings` attribute; `_collect_editor_extensions` returns a plain `list[str]` from all five return points and both call sites match; every pre-existing stderr print is byte-identical; the full suite passes with no fewer than the 712 baseline tests, ruff is clean (no unused `field` import), and mypy --strict reports no issues.</done>
 </task>
 
 </tasks>
@@ -420,7 +431,7 @@ would add no information.
 | Boundary | Description |
 |----------|-------------|
 | catalog `.md` file → reinstall emitter | Section titles and item fields parsed from a file that may have come from a shared remote cross into generated shell text the user then executes |
-| collector → stderr | Degradation messages cross from library code into the operator's terminal |
+| collector → stderr | Degradation messages cross from library code into the operator's terminal (via direct `print(..., file=sys.stderr)` — the sole mechanism after Task 4) |
 | git tag → package version | The release workflow rewrites both version files from `GITHUB_REF_NAME` |
 
 ## STRIDE Threat Register
@@ -429,7 +440,7 @@ would add no information.
 |-----------|----------|-----------|----------|-------------|-----------------|
 | T-kqd-01 | Elevation of Privilege | `reinstall/emitter.py::_editor_ext_block` banner | high | mitigate | Task 2: the sole interpolated banner routes its catalog-derived title through `safe_banner_value`, escaping backslash, `$`, backtick and `"` and flattening newlines. Locked by execution tests asserting no substitution runs, plus a byte-stability test proving normal titles are untouched. |
 | T-kqd-02 | Tampering | emitter/parser round-trip contract | medium | mitigate | The chosen escaping helper is the identity function for every metacharacter-free title, so no existing emitted byte changes. Gated by the full 712-test suite including `tests/reinstall/test_parser_contract.py`. |
-| T-kqd-03 | Information Disclosure | `CollectorResult.warnings` → catalog file | low | mitigate | Task 4 routes warnings to stderr only, with an explicit test asserting the written `.md` contains no warning text. |
+| T-kqd-03 | Information Disclosure | `CollectorResult.warnings` → catalog file | low | mitigate | Task 4 deletes the field outright, so there is no second, unaudited path by which collector-internal text could ever reach the catalog. The one surviving degradation channel is direct stderr, which never touches the `.md`. |
 | T-kqd-04 | Denial of Service (data loss) | `cli.py` collector loop | medium | accept | `available()` is deliberately left unwired: gating the loop on it would drop the notice sections absent-tool collectors emit. Rationale is recorded in the `available()` docstring and at the loop so the decision is not silently reversed. |
 | T-kqd-05 | Repudiation | version metadata | low | mitigate | Task 1 makes the two authoritative locations agree, so a catalog's `maccat_version` stamp and the installed distribution metadata give one answer to "what generated this file". Release-workflow sed compatibility is asserted by an anchored `grep -cE` gate. |
 | T-kqd-SC | Tampering | package installs | n/a | accept | No pip/npm/cargo dependency is added — stdlib plus existing dev deps only, so no package-legitimacy gate applies. |
@@ -442,7 +453,7 @@ Run from `/Users/ken/dev/maccat`:
 2. `grep -cE '^version = ".*"$' pyproject.toml` → `1` and `grep -cE '^__version__ = ".*"$' src/maccat/__init__.py` → `1` (release workflow sed patterns still match exactly one line each)
 3. `grep -c 'maccat_version: "3.1.0"' README.md` → `2`; `grep -c 'v3\.0\.0' README.md` → `3` (historical prose preserved)
 4. `grep -c '3\.0\.0' tests/helpers/test_plist_version.py` → `2` (plist fixture untouched)
-5. `./venv/bin/python -c "import sys; sys.path.insert(0,'src'); from maccat.collectors.base import Collector; assert not hasattr(Collector,'degraded_result'); assert Collector().available() is True"`
+5. `./venv/bin/python -c "import sys, dataclasses; sys.path.insert(0,'src'); from maccat.collectors.base import Collector, CollectorResult; assert not hasattr(Collector,'degraded_result'); assert Collector().available() is True; assert [f.name for f in dataclasses.fields(CollectorResult)] == ['sections']"`
 6. `./venv/bin/python -m pytest -q` → at least 712 passed, 0 failed
 7. `./venv/bin/ruff check src tests` → All checks passed
 8. `PYTHONPATH=src ./venv/bin/mypy --strict src/maccat` → Success
@@ -456,7 +467,8 @@ Run from `/Users/ken/dev/maccat`:
 - `safe_banner_value` exists, is used at the one interpolated banner, and is the identity for metacharacter-free titles
 - A hostile section title neither executes a command nor breaks bash syntax in the generated script
 - `Collector.degraded_result` is gone; `Collector.available()` survives with its rationale documented in both `base.py` and at the `cli.py` loop
-- Warnings appended to `CollectorResult.warnings` reach stderr and never reach the catalog file
+- `CollectorResult` has `sections` as its only field; `_collect_editor_extensions` returns a plain `list[str]`; the `field` import is gone from `base.py`
+- Every pre-existing `print(..., file=sys.stderr)` call in the collectors is byte-identical — VS Code and Cursor emit the same sections and the same stderr text as before
 - Full suite green (>= 712 passed), ruff clean, mypy --strict clean
 - No git tag created, nothing pushed, ROADMAP.md untouched
 </success_criteria>
