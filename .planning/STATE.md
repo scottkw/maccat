@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 Phase: Milestone v3.0.0 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-06-19 — Milestone v3.0.0 completed and archived
+Last activity: 2026-08-25 - Completed quick task 260825-k49: Catalog only user-installed Homebrew formulae using brew leaves instead of all dependencies
 
 ## Performance Metrics
 
@@ -105,6 +105,12 @@ None.
 
 - **Breaking change:** existing `.txt` catalogs on disk become non-reinstallable until `convert`ed.
   FILE-01 retention now targets `.md` — a stray legacy `.txt` must be left untouched, not pruned.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260825-k49 | Catalog only user-installed Homebrew formulae using brew leaves instead of all dependencies | 2026-08-25 | a3e24d5 | [260825-k49-catalog-only-user-installed-homebrew-for](./quick/260825-k49-catalog-only-user-installed-homebrew-for/) |
 
 ## Deferred Items
 
