@@ -74,7 +74,12 @@ class HomebrewCollector(Collector):
         formulae = self._run(["brew", "list", "--formula", "--versions"])
         leaves = self._run(["brew", "leaves"])
         casks = self._run(["brew", "list", "--cask", "--versions"])
-        leaf_names = {tokens[0] for line in leaves if (tokens := line.split())}
+        # ``brew leaves`` prints tap formulae fully qualified
+        # (``auth0/auth0-cli/auth0``) while ``brew list --versions`` prints the bare
+        # name, so compare on the last path segment or every tapped leaf is dropped.
+        leaf_names = {
+            tokens[0].rsplit("/", 1)[-1] for line in leaves if (tokens := line.split())
+        }
         if leaf_names:
             formulae = [
                 line

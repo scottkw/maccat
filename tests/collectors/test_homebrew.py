@@ -133,6 +133,13 @@ class TestHomebrewLeavesFilter:
         items = self._collect("", "", "docker 4.30.0\niterm2 3.5.0\n")
         assert items == ["docker (4.30.0)", "iterm2 (3.5.0)"]
 
+    def test_tap_qualified_leaf_matches_bare_formula_name(self) -> None:
+        """``brew leaves`` qualifies tap formulae; ``brew list --versions`` does not."""
+        items = self._collect(
+            "auth0 1.4.0\nlibgit2 1.7.2\n", "auth0/auth0-cli/auth0\n", ""
+        )
+        assert items == ["auth0 (1.4.0)"]
+
     def test_subprocess_call_sequence_contract(self) -> None:
         """collect() issues exactly these three commands, in this order."""
         with (
