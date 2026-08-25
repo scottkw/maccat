@@ -350,6 +350,10 @@ def run() -> None:
     # 10. Generate catalog (zsh:2471-2490 generate_catalog)
     # ------------------------------------------------------------------
     all_sections: list[Section] = []
+    # Every collector's collect() runs unconditionally — availability is each
+    # collector's own internal concern (see Collector.available()). Do NOT start
+    # skipping "unavailable" collectors here: absent-tool collectors must still
+    # emit their notice section or the fixed 22-section set breaks.
     for collector in get_registry():
         result = collector.collect()
         all_sections.extend(result.sections)

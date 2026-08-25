@@ -27,9 +27,16 @@ class Collector:
         raise NotImplementedError
 
     def available(self) -> bool:
-        """Override to gate on tool presence or directory existence."""
-        return True
+        """Override to gate on tool presence or directory existence.
 
-    def degraded_result(self, title: str) -> CollectorResult:
-        """Standard empty-section result. items=[] causes flush_section → '  (none found)'."""
-        return CollectorResult(sections=[Section(title=title, items=[])])
+        Deliberately NOT called by the orchestrator. The three collectors that
+        use it (homebrew.py, mas.py, setapp.py) call it from INSIDE their own
+        collect(); webapps.py relies on this True default.
+
+        The cli.py registry loop must not gate on this. A collector whose tool
+        is absent still has to emit its section — HomebrewCollector emits a
+        section whose single item is the "Homebrew is not installed." notice —
+        so gating centrally would silently drop those notice sections and
+        destabilise the fixed 22-section catalog set.
+        """
+        return True
