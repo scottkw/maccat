@@ -1,7 +1,7 @@
 """Collector ABC, Section, and CollectorResult — base types for all maccat source collectors."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 __all__ = ["Collector", "CollectorResult", "Section"]
 
@@ -17,7 +17,6 @@ class Section:
 @dataclass
 class CollectorResult:
     sections: list[Section]
-    warnings: list[str] = field(default_factory=list)
 
 
 class Collector:

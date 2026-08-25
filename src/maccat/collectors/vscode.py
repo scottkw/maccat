@@ -22,15 +22,14 @@ def _collect_editor_extensions(
     ext_dir: Path,
     cli_name: str,
     section_title: str,
-) -> tuple[list[str], list[str]]:
-    """Shared logic for VS Code and Cursor. Returns (items, warnings).
+) -> list[str]:
+    """Shared logic for VS Code and Cursor. Returns the emitted item lines.
 
     Path A: CLI --list-extensions --show-versions (preferred)
     Path B: extensions.json fallback (when CLI absent or returns empty)
     """
     ext_json = ext_dir / "extensions.json"
     items: list[str] = []
-    warnings: list[str] = []
 
     # Path A — CLI (preferred)
     cli_lines: list[str] = []
@@ -77,7 +76,7 @@ def _collect_editor_extensions(
             line = emit_item(display_name, version, id_)
             if line:
                 items.append(line)
-        return items, warnings
+        return items
 
     # Path B — extensions.json fallback
     if not ext_json.is_file():
@@ -85,7 +84,7 @@ def _collect_editor_extensions(
             f"  NOTE: {cli_name.capitalize()} not installed or no extensions found.",
             file=sys.stderr,
         )
-        return [], warnings
+        return []
 
     # CLI present but returned empty — warn and fall back
     if shutil.which(cli_name):
@@ -96,10 +95,10 @@ def _collect_editor_extensions(
     try:
         entries = json.loads(ext_json.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return [], warnings
+        return []
     # CAT-06: non-list top level degrades (jq `.[]`); skip non-dict entries.
     if not isinstance(entries, list):
-        return [], warnings
+        return []
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -114,7 +113,7 @@ def _collect_editor_extensions(
         line = emit_item(display_name, version, id_)
         if line:
             items.append(line)
-    return items, warnings
+    return items
 
 
 class VSCodeCollector(Collector):
@@ -128,8 +127,5 @@ class VSCodeCollector(Collector):
     _EXT_DIR = Path.home() / ".vscode/extensions"
 
     def collect(self) -> CollectorResult:
-        items, warnings = _collect_editor_extensions(self._EXT_DIR, "code", self.TITLE)
-        return CollectorResult(
-            sections=[Section(title=self.TITLE, items=items)],
-            warnings=warnings,
-        )
+        items = _collect_editor_extensions(self._EXT_DIR, "code", self.TITLE)
+        return CollectorResult(sections=[Section(title=self.TITLE, items=items)])

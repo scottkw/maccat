@@ -24,8 +24,5 @@ class CursorCollector(Collector):
     _EXT_DIR = Path.home() / ".cursor/extensions"
 
     def collect(self) -> CollectorResult:
-        items, warnings = _collect_editor_extensions(self._EXT_DIR, "cursor", self.TITLE)
-        return CollectorResult(
-            sections=[Section(title=self.TITLE, items=items)],
-            warnings=warnings,
-        )
+        items = _collect_editor_extensions(self._EXT_DIR, "cursor", self.TITLE)
+        return CollectorResult(sections=[Section(title=self.TITLE, items=items)])
