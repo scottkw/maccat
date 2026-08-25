@@ -14,20 +14,34 @@ from maccat.collectors.mas import MasCollector
 # ---------------------------------------------------------------------------
 
 
+def _brew_mocks(
+    formulae: str, leaves: str, casks: str, leaves_rc: int = 0
+) -> list[MagicMock]:
+    """Three subprocess.run results in collect()'s fixed call order.
+
+    Order: ``brew list --formula --versions``, ``brew leaves``,
+    ``brew list --cask --versions``.
+    """
+    mocks = []
+    for stdout, returncode in ((formulae, 0), (leaves, leaves_rc), (casks, 0)):
+        mock = MagicMock()
+        mock.returncode = returncode
+        mock.stdout = stdout
+        mocks.append(mock)
+    return mocks
+
+
 class TestHomebrewCollector:
     def test_homebrew_collect_formulae_and_casks(self) -> None:
         """brew available — formulae+cask lines emitted as 'name (version)', raw=True."""
-        mock_formula = MagicMock()
-        mock_formula.returncode = 0
-        mock_formula.stdout = "git 2.44.0\nnode 18.0.0\n"
-
-        mock_cask = MagicMock()
-        mock_cask.returncode = 0
-        mock_cask.stdout = "docker 4.30.0\n"
-
         with (
             patch("shutil.which", return_value="/usr/local/bin/brew"),
-            patch("subprocess.run", side_effect=[mock_formula, mock_cask]),
+            patch(
+                "subprocess.run",
+                side_effect=_brew_mocks(
+                    "git 2.44.0\nnode 18.0.0\n", "git\nnode\n", "docker 4.30.0\n"
+                ),
+            ),
         ):
             result = HomebrewCollector().collect()
 
@@ -73,6 +87,65 @@ class TestHomebrewCollector:
             result = HomebrewCollector().collect()
 
         assert result.sections[0].title == "Homebrew Packages"
+
+
+class TestHomebrewLeavesFilter:
+    """Formulae are intersected with ``brew leaves`` (top-level only); casks are not."""
+
+    def _collect(
+        self, formulae: str, leaves: str, casks: str, leaves_rc: int = 0
+    ) -> list[str]:
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/brew"),
+            patch(
+                "subprocess.run",
+                side_effect=_brew_mocks(formulae, leaves, casks, leaves_rc),
+            ),
+        ):
+            result = HomebrewCollector().collect()
+        section = result.sections[0]
+        assert section.raw is True
+        return section.items
+
+    def test_dependency_formulae_are_dropped(self) -> None:
+        """A formula absent from ``brew leaves`` (libgit2) is excluded."""
+        items = self._collect(
+            "git 2.44.0\nnode 18.0.0\nlibgit2 1.7.2\n",
+            "git\nnode\n",
+            "docker 4.30.0\n",
+        )
+        assert items == ["git (2.44.0)", "node (18.0.0)", "docker (4.30.0)"]
+
+    def test_multi_version_leaf_keeps_every_version(self) -> None:
+        """Filtering does not disturb the multi-version 'name (v1 v2)' shape (VER-02)."""
+        items = self._collect("python@3.11 3.11.1 3.11.2\n", "python@3.11\n", "")
+        assert items == ["python@3.11 (3.11.1 3.11.2)"]
+
+    def test_order_follows_brew_list_not_brew_leaves(self) -> None:
+        """Output order is ``brew list --formula --versions`` order (VER-06)."""
+        items = self._collect("aaa 1.0\nbbb 2.0\nccc 3.0\n", "ccc\nbbb\naaa\n", "")
+        assert items == ["aaa (1.0)", "bbb (2.0)", "ccc (3.0)"]
+
+    def test_casks_are_never_filtered_by_the_leaf_set(self) -> None:
+        """``brew leaves`` covers formulae only — casks pass through untouched."""
+        items = self._collect("", "", "docker 4.30.0\niterm2 3.5.0\n")
+        assert items == ["docker (4.30.0)", "iterm2 (3.5.0)"]
+
+    def test_subprocess_call_sequence_contract(self) -> None:
+        """collect() issues exactly these three commands, in this order."""
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/brew"),
+            patch(
+                "subprocess.run", side_effect=_brew_mocks("git 2.44.0\n", "git\n", "")
+            ) as mock_run,
+        ):
+            HomebrewCollector().collect()
+
+        assert [call.args[0] for call in mock_run.call_args_list] == [
+            ["brew", "list", "--formula", "--versions"],
+            ["brew", "leaves"],
+            ["brew", "list", "--cask", "--versions"],
+        ]
 
 
 class TestHomebrewVersionParsing:
