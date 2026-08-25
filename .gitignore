@@ -38,3 +38,6 @@ office/
 machine-labels.tsv
 mac-software-list-*.txt
 *-[*].txt
+
+# GSD run-scoped local state (isolation sentinel) — machine-local, never shared
+.gsd/
