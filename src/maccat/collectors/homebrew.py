@@ -16,6 +16,14 @@ class HomebrewCollector(Collector):
     Uses ``brew list --formula --versions`` / ``--cask --versions`` so each line
     is ``name version [version2 ...]``. Every installed version is preserved,
     space-joined inside the parens (VER-01/VER-02), e.g. ``python@3.11 (3.11.1 3.11.2)``.
+
+    Formulae are intersected with ``brew leaves`` so only top-level
+    (user-installed) formulae are cataloged — transitive dependencies are
+    dropped, since Homebrew re-resolves them on install. ``brew leaves`` prints
+    names only, so it is used purely as a filter over the versioned list, which
+    stays the source of both line content and ordering. Casks are listed in
+    full: ``brew leaves`` covers formulae only.
+
     Raw-write: returns Section(raw=True); orchestrator writes via write_lines(),
     NOT flush_section() (ordering from ``brew`` is preserved for determinism, VER-06).
     """
@@ -62,8 +70,17 @@ class HomebrewCollector(Collector):
                     )
                 ]
             )
+        # Call order is a test contract — do not reorder.
         formulae = self._run(["brew", "list", "--formula", "--versions"])
+        leaves = self._run(["brew", "leaves"])
         casks = self._run(["brew", "list", "--cask", "--versions"])
+        leaf_names = {tokens[0] for line in leaves if (tokens := line.split())}
+        if leaf_names:
+            formulae = [
+                line
+                for line in formulae
+                if (tokens := line.split()) and tokens[0] in leaf_names
+            ]
         items = [
             entry
             for line in formulae + casks
