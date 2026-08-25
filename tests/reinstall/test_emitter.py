@@ -15,6 +15,7 @@ import pytest
 
 from maccat.reinstall.emitter import (
     SECTION_SOURCE_MAP,
+    _editor_ext_block,
     emit_reinstall_script,
     quote_for_script,
     safe_comment_value,
@@ -894,3 +895,77 @@ class TestRuntimeExecution:
             f"script aborted (exit {result.returncode}); stderr:\n{result.stderr}"
         )
         assert self._SENTINEL in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Banner injection safety (safe_banner_value)
+# ---------------------------------------------------------------------------
+
+
+def _run_block(block: str) -> subprocess.CompletedProcess[str]:
+    """Execute an emitted block under bash. Skip if bash absent."""
+    if not shutil.which("bash"):
+        pytest.skip("bash not available")
+    return subprocess.run(["bash", "-c", block], capture_output=True, text=True)
+
+
+class TestBannerInjection:
+    """The section-title banner is the one interpolated catalog value in echo context."""
+
+    def test_vscode_banner_bytes_are_stable(self) -> None:
+        """A normal title must render byte-identically — the round-trip contract."""
+        section = _make_section(
+            "VS Code Extensions",
+            [_make_item("Python", "2024.1.0", id_="ms-python.python")],
+        )
+        block = SECTION_SOURCE_MAP["VS Code Extensions"](section)
+        assert block.splitlines()[0] == 'echo "=== VS Code Extensions ==="'
+
+    def test_cursor_banner_bytes_are_stable(self) -> None:
+        section = _make_section(
+            "Cursor Extensions",
+            [_make_item("Python", "2024.1.0", id_="ms-python.python")],
+        )
+        block = SECTION_SOURCE_MAP["Cursor Extensions"](section)
+        assert block.splitlines()[0] == 'echo "=== Cursor Extensions ==="'
+
+    def test_command_substitution_in_title_does_not_execute(self) -> None:
+        title = "VS Code $(echo SUBBED) `echo TICKED` Extensions"
+        block = _editor_ext_block(_make_section(title, []), editor="code")
+        result = _run_block(block)
+        assert result.stdout == f"=== {title} ===\n", result.stdout
+        assert "SUBBED" not in result.stdout
+        assert "TICKED" not in result.stdout
+
+    def test_quote_breakout_in_title_does_not_execute(self) -> None:
+        title = 'VS Code" ; echo INJECTED ; echo "Extensions'
+        block = _editor_ext_block(_make_section(title, []), editor="code")
+        result = _run_block(block)
+        assert result.stdout == f"=== {title} ===\n", result.stdout
+        assert "INJECTED" not in result.stdout
+        assert_bash_n_clean(f"#!/usr/bin/env bash\nset -Eeuo pipefail\n{block}\n")
+
+    def test_newline_in_title_stays_on_one_line(self) -> None:
+        block = _editor_ext_block(_make_section("VS Code\nrm -rf /", []), editor="code")
+        assert "\n" not in block.splitlines()[0]
+        assert len(block.splitlines()) == 1
+        assert_bash_n_clean(f"#!/usr/bin/env bash\nset -Eeuo pipefail\n{block}\n")
+
+    def test_safe_banner_value_is_identity_for_plain_titles(self) -> None:
+        plain = "VS Code Extensions 2 - v1.0"
+        assert safe_banner_value(plain) == plain
+
+    def test_safe_banner_value_escapes_backslash_first(self) -> None:
+        assert safe_banner_value("a\\b") == "a\\\\b"
+        # A backslash already preceding a metacharacter must not be double-escaped
+        # into an unescaped metacharacter.
+        assert safe_banner_value('\\"') == '\\\\\\"'
+
+    @pytest.mark.parametrize("char", ['"', "$", "`"])
+    def test_safe_banner_value_escapes_double_quote_context_metachars(
+        self, char: str
+    ) -> None:
+        assert safe_banner_value(f"a{char}b") == f"a\\{char}b"
+
+    def test_safe_banner_value_flattens_newlines(self) -> None:
+        assert safe_banner_value("a\nb\rc") == "a b c"
