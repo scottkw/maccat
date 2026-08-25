@@ -1,195 +1,190 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-06-12
+**Analysis Date:** 2026-08-25
 
-## Shell Environment
-
-**Interpreter:** `zsh` — declared via `#!/bin/zsh` shebang (not `bash`)
-
-**Safety flags:** `set -e` is **not used**. The script relies on conditional checks and explicit
-`exit 1` calls for error handling rather than automatic exit-on-error. This is a deliberate
-tradeoff that allows warnings to be printed without aborting execution (e.g., missing optional
-tools like `mas`).
+This project is a **Python 3.11+ package** (`src/maccat/`, 42 source files) with zero
+runtime dependencies (stdlib only). Any ZSH-era guidance elsewhere in the repo
+(`CLAUDE.md`, `README.md` history, `update-list.sh`) is **obsolete** for convention
+purposes — `update-list.sh` survives only as a *behavioral reference spec* cited in
+docstrings, not as the implementation.
 
 ## Naming Patterns
 
+**Files:**
+- `snake_case.py`, one module per concern: `src/maccat/retention.py`, `src/maccat/naming.py`, `src/maccat/gitops.py`
+- One collector per source, named after the source: `src/maccat/collectors/homebrew.py`, `src/maccat/collectors/vscode.py`, `src/maccat/collectors/firefox.py`
+- Small pure helpers live in `src/maccat/helpers/`: `json_io.py`, `plist_version.py`, `vsc_name.py`, `chrome_name.py`
+
 **Functions:**
-- `snake_case` with descriptive verb-noun pairs: `display_usage`, `parse_arguments`,
-  `get_target_location`, `archive_old_catalogs`, `generate_catalog`, `git_pull`,
-  `git_commit_and_push`, `write_section`
+- `snake_case`, verb-first: `parse_catalog_filename`, `retain_newest_per_host`, `prune_old_archives`, `emit_item`, `flush_section`
+- Leading underscore for module-private helpers and constants: `_build_parser` (`src/maccat/cli.py:24`), `_default_config_path` (`src/maccat/config.py:34`), `_collect_editor_extensions` (`src/maccat/collectors/vscode.py:23`)
 
-**Global variables (SCREAMING_SNAKE_CASE):**
-- `SCRIPT_DIR`, `ARCHIVE_AGE_DAYS`, `AUTO_COMMIT`, `TARGET_LOCATION`, `CURRENT_DATE`,
-  `CURRENT_MACHINE`, `OUTPUT_FILENAME`, `OUTPUT_FILE`
+**Variables:**
+- `snake_case` locals; trailing underscore to dodge builtins/keywords — `id_` is used throughout (`src/maccat/catalog/format.py:16`, `src/maccat/collectors/vscode.py:65`)
+- Module-level constants are `UPPER_SNAKE`: `TITLE` (`src/maccat/collectors/homebrew.py:10`), `_FILENAME_RE` (`src/maccat/naming.py:17`)
+- Class-level section titles are underscore-prefixed class attributes: `ClaudeCollector._PLUGINS_TITLE`, `VSCodeCollector.TITLE`
 
-**Local variables (snake_case):**
-- Declared with `local` keyword inside functions: `target_dir`, `full_path`,
-  `archive_path`, `cutoff_date`, `archived_count`, `filename`, `timestamp`,
-  `commit_message`
+**Types:**
+- `PascalCase` dataclasses: `Section`, `CollectorResult` (`src/maccat/collectors/base.py`), `CatalogFilename` (`src/maccat/naming.py:24`), `ParsedCatalog` / `ParsedItem` / `ParsedSection` (`src/maccat/reinstall/parser.py`)
+- Collectors are `<Source>Collector`: `HomebrewCollector`, `MasCollector`, `VSCodeCollector`, `CursorCollector`, `ClaudeCollector`
 
-**Output files:**
-- Pattern: `mac-software-list-[hostname]-YYYYMMDDHHMMSS.txt`
-- Hostname is wrapped in square brackets in the filename
+**Section titles are a hard uniqueness contract.** All 22 collector title constants must
+be unique — enforced by `tests/collectors/test_section_titles.py` because
+`reinstall/emitter.py` routes on title strings.
 
-## Variable Quoting
+## Code Style
 
-- Variables are consistently double-quoted when there is any chance of spaces or
-  empty values: `"$1"`, `"$TARGET_LOCATION"`, `"$archive_path"`, `"$file"`.
-- Paths constructed from variables are always quoted: `"${full_path}/archive"`,
-  `"${SCRIPT_DIR}/${target_dir}"`.
-- Parameter expansion uses braces for concatenation contexts:
-  `"${TARGET_LOCATION}/${OUTPUT_FILENAME}"`, `"${SCRIPT_DIR}/${TARGET_LOCATION}"`.
-- Bare `$var` (no quotes) is used only for arithmetic comparisons:
-  `[[ $archived_count -eq 0 ]]`, `[[ $# -gt 0 ]]`.
+**Formatting:**
+- No formatter is configured (no black, no `ruff format` config). Style is hand-maintained.
+- **Line length: 100** (`[tool.ruff] line-length = 100` in `pyproject.toml`)
+- 4-space indent, double quotes throughout.
 
-## Control Flow Patterns
+**Linting:**
+- `ruff >= 0.15`, configured in `pyproject.toml`:
+  - `src = ["src"]`
+  - `[tool.ruff.lint] select = ["E", "F", "I", "UP"]` — pycodestyle errors, pyflakes, isort, pyupgrade
+- Run: `./venv/bin/ruff check src tests` (currently clean)
+- Unavoidable unused imports get an inline justification, not a blanket ignore:
+  `import maccat.collectors.claude as claude_mod  # noqa: F401 — used via ClaudeCollector class`
+  (`tests/collectors/test_section_titles.py:13`)
 
-**Argument parsing:**
-```zsh
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --personal) TARGET_LOCATION="personal"; shift ;;
-        --no-commit) AUTO_COMMIT=false; shift ;;
-        *) echo "ERROR: Invalid option '$1'"; exit 1 ;;
-    esac
-done
-```
+**Type checking:**
+- `mypy` in **strict mode**: `[tool.mypy] strict = true`, `python_version = "3.11"`
+- Run: `PYTHONPATH=src ./venv/bin/mypy --strict src/maccat` (currently clean, 42 files)
+- Strict mode applies to `src/maccat` only — `tests/` is not type-checked by CI, though
+  test files are still fully annotated by convention (`def test_x(self, tmp_path: Path) -> None:`)
 
-**Capability detection (prefer `command -v` over `which`):**
-```zsh
-if command -v brew &>/dev/null; then
-    brew list --formula >> "$OUTPUT_FILE"
-else
-    echo "Homebrew is not installed." >> "$OUTPUT_FILE"
-fi
-```
+**Modern typing syntax (required by `UP` rules + `from __future__ import annotations`):**
+- `str | None`, not `Optional[str]` (`src/maccat/catalog/format.py:16`)
+- `list[str]`, `dict[str, str]`, `tuple[list[str], list[str]]` — never `typing.List`
+- Walrus in comprehension filters is idiomatic here:
+  `[entry for line in formulae if (entry := self._parse_brew_versions_line(line))]`
+  (`src/maccat/collectors/homebrew.py:98`)
 
-**Directory existence guard:**
-```zsh
-if [[ ! -d "$archive_path" ]]; then
-    mkdir -p "$archive_path"
-fi
-```
+## Import Organization
 
-**File glob with null-glob guard:**
-```zsh
-for file in "${full_path}"/mac-software-list-*.txt; do
-    [[ -e "$file" ]] || continue
-    ...
-done
-```
+**`from __future__ import annotations` is the first import in every non-`__init__` module.**
+The only files without it are the five `__init__.py` package markers.
+
+**Order (ruff `I` / isort enforced):**
+1. `from __future__ import annotations`
+2. Stdlib (`json`, `os`, `re`, `shutil`, `subprocess`, `sys`, `pathlib`, `dataclasses`, `datetime`, `tomllib`)
+3. Third party (tests only: `pytest`, `_pytest.capture`)
+4. First-party `maccat.*` — always **absolute**, never relative (`from maccat.collectors.base import Collector`)
+
+**Path aliases:** none. There is no `src`-relative import trick; `PYTHONPATH=src` or an
+editable install provides the package root.
+
+**Deferred imports are a deliberate pattern (41 occurrences).** `maccat.*` imports inside
+function bodies keep interpreter startup safe and cheap — see the module docstring at
+`src/maccat/cli.py:11-13` and the lazy loading in `src/maccat/collectors/__init__.py`.
+Follow this in `cli.py`, `identity.py`, and collector registries; use top-level imports
+everywhere else.
+
+**`__all__` is declared in 15 modules** that export a public surface
+(`src/maccat/collectors/base.py:5`, `src/maccat/collectors/vscode.py:19`).
 
 ## Error Handling
 
-**Strategy:** Graceful degradation — missing optional tools produce a WARNING message
-to stdout and a note in the output file, but do not abort the script.
+Two distinct policies — pick by whether the operation is destructive:
 
-**Fatal errors** use `exit 1` with an `ERROR:` prefix:
-- Invalid CLI argument in `parse_arguments`
-- Invalid interactive choice in `get_target_location`
+**1. Warn-and-continue (graceful degradation) — the default for all collection.**
+Every collector must survive a missing tool, missing file, or malformed JSON without
+raising. Patterns:
+- Gate on presence: `def available(self) -> bool: return shutil.which("brew") is not None` (`src/maccat/collectors/homebrew.py:32`)
+- Non-zero subprocess exit → return `[]`, never raise (`HomebrewCollector._run`, `src/maccat/collectors/homebrew.py:35-42`)
+- Narrow, explicit `except` tuples — never bare `except`:
+  `except (json.JSONDecodeError, OSError, UnicodeDecodeError): return default` (`src/maccat/helpers/json_io.py:29`)
+- Parsers return `None` instead of raising: `parse_catalog_filename` (`src/maccat/naming.py:35`)
+- Missing source → `Collector.degraded_result(title)` produces an empty section, which
+  renders as `  (none found)` (`src/maccat/collectors/base.py:31`)
+- Defensive `isinstance` guards before dict/list traversal of external JSON
+  (`src/maccat/collectors/vscode.py:57-68`)
 
-**Non-fatal warnings** use `echo "  WARNING: ..."` and `return` (not `exit`):
-- git pull/push/commit failures
-- `cd` failure in git functions
-- Unparseable filename timestamp in `archive_old_catalogs`
+**2. Fail loudly — for config and destructive operations.**
+- `raise SystemExit("ERROR: ...")` with an actionable multi-line message
+  (`src/maccat/config.py:131`, `:196`, `:269`, `:421`)
+- `sys.exit("ERROR: ...")` in `src/maccat/convert.py:61,65,70,79`
+- Destructive ops **hard refuse** rather than guess: `rename_machine` raises `SystemExit`
+  when the destination folder exists (`src/maccat/identity.py`)
 
-**Git operations** are wrapped in `if cmd; then ... else ... fi` to allow the script
-to complete even when the network is unavailable.
+**Never silently swallow into a default when data loss is possible.** The Homebrew
+`brew leaves` path illustrates the required trade-off explicitly: when the filter list is
+unusable, it warns and over-reports rather than emitting an empty list —
+"Over-reporting is recoverable; a silently empty formula list is data loss."
+(`src/maccat/collectors/homebrew.py:88-95`)
 
-**Exit code capture after piped commands:**
-```zsh
-mas list 2>/dev/null | awk '{print $2, $3}' >> "$OUTPUT_FILE"
-if [[ $? -ne 0 ]]; then
-    echo "Could not retrieve App Store list." >> "$OUTPUT_FILE"
-fi
-```
-Note: this `$?` check captures the exit code of `awk`, not `mas`, due to piping. This
-is a known subtle bug (see CONCERNS.md).
+## Logging
 
-## Output Conventions
+**Framework:** none. `logging` is not imported anywhere. All user-facing output is `print()`
+(126 call sites).
 
-**Section headers** are written via the `write_section` helper:
-```zsh
-write_section() {
-    echo "\n$1" >> "$OUTPUT_FILE"
-    echo "------------------------------------" >> "$OUTPUT_FILE"
-}
-```
+**Stream discipline:**
+- Collector diagnostics go to **stderr**: `print("  WARNING: brew not found.", file=sys.stderr)` (`src/maccat/collectors/homebrew.py:69`)
+- Orchestration/progress and git status go to **stdout**: `print("  WARNING: git not found. Skipping git operations.")` (`src/maccat/gitops.py:27`)
 
-**Progress messages** go to stdout with 2-space indentation:
-- `echo "  Collecting Homebrew formulae..."`
-- `echo "  WARNING: ..."`
-- `echo "  NOTE: ..."`
+**Message prefixes (two-space indent is part of the contract, tests assert on it):**
+- `  WARNING: ...` — degraded but continuing
+- `  NOTE: ...` — source simply absent (`src/maccat/collectors/vscode.py:82`)
+- `ERROR: ...` — fatal, paired with `SystemExit` / `sys.exit`
 
-**Decorative banners** use `=` (80 chars) for top-level and `-` (78 chars) for subsections:
-```zsh
-echo "=============================================================================="
-echo "------------------------------------------------------------------------------"
-```
+## Comments
 
-## Output Redirection
+**Module docstrings are mandatory and substantive.** Every module opens with a docstring
+naming its responsibility and, where relevant, its zsh-parity reference line numbers
+(`src/maccat/naming.py:1-13`, `src/maccat/catalog/format.py:1-9`, `src/maccat/retention.py:1-14`).
 
-- Catalog data → `>> "$OUTPUT_FILE"` (append to the output file)
-- Progress/status → stdout (implicit, no redirection)
-- Suppressed stderr → `2>/dev/null` for noisy commands (`git rev-parse`, `mas list`,
-  `git add` on optional paths)
-- Combined stdout+stderr → `2>&1` only for commands where output is shown to the user
-  (`git pull`, `git push`)
+**Requirement IDs are cited inline.** Codes like `CAT-06`, `FMT-01`, `VER-01/02/05/06`,
+`CFG-01..06`, `PKG-03`, `TEST-03`, `WR-03` appear in docstrings and comments to tie code to
+requirements. Preserve and extend this — reviewers and tests grep for them.
 
-## Function Documentation Style
+**Comment the non-obvious constraint, not the mechanics.** The valuable comments here are
+guardrails against future "cleanups":
+- `# Call order is a test contract — do not reorder.` (`src/maccat/collectors/homebrew.py:76`)
+- `CRITICAL: Do NOT use Python built-in sort here — it diverges from LC_ALL=C sort -f` (`src/maccat/catalog/format.py:6`)
+- `IMPORTANT: Do NOT use this for VS Code NLS key lookup` (`src/maccat/helpers/json_io.py:21`)
+- Tap-name mismatch rationale in `src/maccat/collectors/homebrew.py:80-82`
 
-Every function has a structured comment block immediately above its definition:
+**Docstring style:** Google-ish `Args:` / `Returns:` sections on non-trivial functions
+(`src/maccat/naming.py:38-46`, `src/maccat/retention.py:26-35`). Examples-as-tables for
+format functions (`emit_item`, `json_get`). Dataclass fields carry per-attribute docstrings
+(`src/maccat/naming.py:27-32`).
 
-```
-# ------------------------------------------------------------------------------
-# FUNCTION: function_name
-# ------------------------------------------------------------------------------
-# One-sentence description.
-#
-# Arguments:
-#   $1 - Description
-#
-# Sets/Returns:
-#   GLOBAL_VAR - What it sets
-# ------------------------------------------------------------------------------
-```
+## Function Design
 
-Top-level script sections use `=` dividers; subsections within functions use `-` dividers.
+**Size:** small and single-purpose. The one large function, `_collect_editor_extensions`
+(~95 lines, `src/maccat/collectors/vscode.py`), is documented as a two-path algorithm
+(Path A CLI / Path B JSON fallback) and shared by VS Code + Cursor rather than duplicated.
 
-## String Extraction
+**Parameters:** positional for 1–3 args; explicit types on every parameter and return
+(strict mypy). Defaults are simple immutables (`default: str = ""`).
 
-Timestamps are extracted from filenames using a pipeline (no `sed` or `awk` extension syntax):
-```zsh
-local timestamp=$(echo "$filename" | grep -oE '[0-9]{14}\.txt$' | cut -c1-8)
-```
+**Return values:**
+- Pure functions return values; no output params.
+- Multi-value returns use plain tuples with a documented shape: `-> tuple[list[str], list[str]]  # (items, warnings)`
+- Optionality is `X | None` and the docstring states "never raises" when that is the contract.
 
-## Arithmetic
+**Subprocess calls always pass `shell=False`, `capture_output=True`, `text=True`**
+(`src/maccat/collectors/homebrew.py:40`, `src/maccat/collectors/vscode.py:40`). Never build
+shell strings.
 
-Counter increments use the `(( ))` arithmetic compound command:
-```zsh
-((archived_count++))
-```
+## Module Design
 
-## Path Handling
+**Exports:** explicit `__all__` in 15 modules; underscore prefix marks everything else private.
 
-The script resolves its own location at startup using zsh's `:A:h` parameter flags
-(resolves symlinks then takes the directory component):
-```zsh
-SCRIPT_DIR="${0:A:h}"
-```
-All subsequent paths are built from `$SCRIPT_DIR` to make the script location-independent.
+**Barrel files:** `src/maccat/collectors/__init__.py`, `catalog/__init__.py`,
+`helpers/__init__.py`, `reinstall/__init__.py` exist as package markers with lazy/deferred
+import behavior — they are not eager re-export barrels.
 
-## Style Patterns to Follow
+**Dataclasses over dicts** for structured data (7 `@dataclass` uses). Use
+`@dataclass(frozen=True)` when the value must be hashable/immutable (`CatalogFilename`),
+`field(default_factory=list)` for mutable defaults (`CollectorResult.warnings`).
 
-- Use `local` for all function-scoped variables — do not use globals inside functions
-  unless the variable is intended to persist after the function returns.
-- Use `[[ ]]` (double brackets) for all conditionals, not `[ ]`.
-- Prefer `command -v` over `which` for tool detection.
-- Always check that a directory exists before writing into it.
-- Include a null-glob guard (`[[ -e "$file" ]] || continue`) in filename glob loops.
-- Use `return` to exit a function on non-fatal errors; use `exit 1` only for fatal
-  user-input errors.
+**Adding a new collector:** subclass `Collector` in `src/maccat/collectors/base.py`, define a
+unique `TITLE`, override `available()` if the source is optional, implement `collect() ->
+CollectorResult`, and add its title constant to the uniqueness list in
+`tests/collectors/test_section_titles.py`.
 
 ---
 
-*Convention analysis: 2026-06-12*
+*Convention analysis: 2026-08-25*
