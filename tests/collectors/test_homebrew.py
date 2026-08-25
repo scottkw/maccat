@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from _pytest.capture import CaptureFixture
+
 from maccat.collectors.homebrew import HomebrewCollector
 from maccat.collectors.mas import MasCollector
 
@@ -146,6 +148,49 @@ class TestHomebrewLeavesFilter:
             ["brew", "leaves"],
             ["brew", "list", "--cask", "--versions"],
         ]
+
+
+class TestHomebrewLeavesDegradation:
+    """An unusable ``brew leaves`` must over-report, never silently drop formulae."""
+
+    def _collect(
+        self, formulae: str, leaves: str, casks: str, leaves_rc: int = 0
+    ) -> list[str]:
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/brew"),
+            patch(
+                "subprocess.run",
+                side_effect=_brew_mocks(formulae, leaves, casks, leaves_rc),
+            ),
+        ):
+            return HomebrewCollector().collect().sections[0].items
+
+    def test_leaves_nonzero_exit_emits_full_formula_list(self) -> None:
+        """``brew leaves`` failing must not empty the section — nothing is dropped."""
+        items = self._collect("git 2.44.0\nlibgit2 1.7.2\n", "", "", leaves_rc=1)
+        assert items == ["git (2.44.0)", "libgit2 (1.7.2)"]
+
+    def test_leaves_failure_warns_on_stderr(self, capsys: CaptureFixture[str]) -> None:
+        """The degradation is announced, not silent."""
+        self._collect("git 2.44.0\nlibgit2 1.7.2\n", "", "", leaves_rc=1)
+        stderr = capsys.readouterr().err
+        assert stderr.strip()
+        assert "leaves" in stderr
+
+    def test_leaves_empty_stdout_behaves_like_failure(
+        self, capsys: CaptureFixture[str]
+    ) -> None:
+        """Exit 0 with no names collapses to the same empty leaf set — same fallback."""
+        items = self._collect("git 2.44.0\nlibgit2 1.7.2\n", "", "")
+        assert items == ["git (2.44.0)", "libgit2 (1.7.2)"]
+        assert "leaves" in capsys.readouterr().err
+
+    def test_no_warning_when_no_formulae_installed(
+        self, capsys: CaptureFixture[str]
+    ) -> None:
+        """Empty formulae means the filter is a no-op — nothing worth warning about."""
+        assert self._collect("", "", "docker 4.30.0\n") == ["docker (4.30.0)"]
+        assert capsys.readouterr().err == ""
 
 
 class TestHomebrewVersionParsing:

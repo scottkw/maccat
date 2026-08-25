@@ -81,6 +81,15 @@ class HomebrewCollector(Collector):
                 for line in formulae
                 if (tokens := line.split()) and tokens[0] in leaf_names
             ]
+        elif formulae:
+            # _run() collapses both a non-zero exit and empty stdout to [], so this
+            # one branch covers both failure modes. Over-reporting is recoverable;
+            # a silently empty formula list is data loss.
+            print(
+                "  WARNING: brew leaves returned nothing; "
+                "cataloging all formulae including dependencies.",
+                file=sys.stderr,
+            )
         items = [
             entry
             for line in formulae + casks
